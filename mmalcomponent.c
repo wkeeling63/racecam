@@ -691,11 +691,11 @@ MMAL_STATUS_T connect_ports(MMAL_PORT_T *output_port, MMAL_PORT_T *input_port, M
    MMAL_STATUS_T status;
 
    status =  mmal_connection_create(connection, output_port, input_port, MMAL_CONNECTION_FLAG_TUNNELLING | MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT);
-   printf("connect status %d\n", status);
+//   printf("connect status %d\n", status);
    if (status == MMAL_SUCCESS)
    {
       status =  mmal_connection_enable(*connection);
-      printf("enable status %d\n", status);
+//      printf("enable status %d\n", status);
       if (status != MMAL_SUCCESS)
          mmal_connection_destroy(*connection);
    }

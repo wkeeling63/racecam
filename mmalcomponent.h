@@ -37,7 +37,8 @@ typedef struct
    RASPIVID_STATE *pstate;              /// pointer to our state in case required in callback
 //   int *abort_ptr;                           /// Set to 1 in callback if an error occurs to attempt to abort the capture
 //   AVFormatContext *fctx;   //  not needed use pstate            /// pointer to ffmpeg format context required in callback
-//   AVPacket *vpckt;     // needed??????
+   AVPacket *vpckt;
+//   GtkWidget *window;  // define genric ptr    
    u_char *vbuf;
    int vbuf_ptr;
    sem_t *mutex;   
@@ -113,7 +114,7 @@ struct RASPIVID_STATE_S
 
    int bCapturing;                     /// State of capture/pause
 
-   int frame;  //needed????
+   int frame;  
    int64_t starttime;
    int64_t lasttime;
 

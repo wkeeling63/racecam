@@ -42,11 +42,62 @@
 // write target time in micro seconds 250000=.25 second
 #define TARGET_TIME 250000
 
+ /* typedef struct FLVFileposition {
+        int64_t keyframe_position;
+        double keyframe_timestamp;
+        struct FLVFileposition *next;
+    } FLVFileposition;
+
+typedef struct FLVContext {
+       AVClass *av_class;
+       int     reserved;
+       int64_t duration_offset;
+       int64_t filesize_offset;
+       int64_t duration;
+       int64_t delay;      ///< first dts delay (needed for AVC & Speex)
+   
+       int64_t datastart_offset;
+       int64_t datasize_offset;
+       int64_t datasize;
+       int64_t videosize_offset;
+       int64_t videosize;
+       int64_t audiosize_offset;
+       int64_t audiosize;
+   
+       int64_t metadata_size_pos;
+       int64_t metadata_totalsize_pos;
+       int64_t metadata_totalsize;
+       int64_t keyframe_index_size;
+   
+       int64_t lasttimestamp_offset;
+       double lasttimestamp;
+       int64_t lastkeyframetimestamp_offset;
+       double lastkeyframetimestamp;
+       int64_t lastkeyframelocation_offset;
+       int64_t lastkeyframelocation;
+   
+       int acurframeindex;
+       int64_t keyframes_info_offset;
+   
+       int64_t filepositions_count;
+       FLVFileposition *filepositions;
+       FLVFileposition *head_filepositions;
+   
+       AVCodecParameters *audio_par;
+       AVCodecParameters *video_par;
+       double framerate;
+       AVCodecParameters *data_par;
+   
+       int flags;
+   } FLVContext; */
+  
 typedef struct{
   GtkWidget *label;
-  char *val;
-  char *min;
-  char *max;
+  float *val;
+  char *format;
+  float *min;
+  float *max;
+  float incv;
   } limit;
   
 typedef struct{
@@ -66,14 +117,19 @@ typedef struct{
 typedef struct{
   float *val;
   ovrl *ol;
+  float *min;
+  float *max;
+  float *xymin;
+  float *xymax;
+  float incv;
   } draw;
   
 struct {
-  char url[64];    // rtmp://a.rtmp.youtube.com/live2/g9td-pva2-fwgy-suv1-9gkz
+  char url[64];    // rtmp://a.rtmp.youtube.com/live2/<key>
   char write_url;
   char file[64];
   char write_file;
-  char file_keep;      
+  float file_keep;      
   char adev[18];  // dmic_sv
   short int main_size;  // 2: 854x480 1: 1280x720 0: 1920x1080
   float ovrl_size;
@@ -84,14 +140,15 @@ struct {
   char foh;
   char fov;
   char channels;
-  char qmin;
-  char qcur;
-  char qmax;
-  char fps;
-  char ifs;
+  float qmin;
+  float qcur;
+  float qmax;
+  float fps;
+  float ifs;
   char cam;
   } iparms;
-  
+
+GtkWidget *stop_win, *stop_button, *message1, *message2;
 
 GtkWidget *m_layout;
 static const char *m_kbd_path = "/usr/local/bin/matchbox-keyboard";
@@ -184,22 +241,12 @@ static void hvs_input_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 
 static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
-
 	MMAL_BUFFER_HEADER_T *new_buffer;
 	static int64_t framecnt=0;
 	static int64_t pts = -1;
 	
 	PORT_USERDATA *pData = (PORT_USERDATA *)port->userdata;
   RASPIVID_STATE *pstate = pData->pstate;
-//	int *ap = pData->abort_ptr;
-//	if (buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG) fprintf(stderr, "config buffer\n");
-//	fprintf(stderr, "buffer size %d %d\n", buffer->length, buffer->flags);
-//	fprintf(stderr, "Callback %lld ",  get_microseconds64()/1000-start_time);
-/*	if (*ap) 
-		{
-		fprintf(stderr, "Abort flag for callback\n");
-		return;
-		} */
 
 	if (pData)
 		{
@@ -214,14 +261,14 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 				}
 			else
 				{			
-//				AVPacket *packet=pData->vpckt;
-        static AVPacket packet;
-        av_init_packet(&packet);
+				AVPacket *packet=pData->vpckt;
+//        static AVPacket packet;
+//        av_init_packet(&packet);
         
-				int status;
+				int status=0;
 				if (buffer->pts != MMAL_TIME_UNKNOWN && buffer->pts != pData->pstate->lasttime)
 					{
-					if (pData->pstate->frame == 0)
+					if (pData->pstate->frame == 0) 
 						pData->pstate->starttime = buffer->pts;
 					pData->pstate->lasttime = buffer->pts;
 					pts = buffer->pts - pData->pstate->starttime;
@@ -231,48 +278,45 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 					{
 					if (buffer->flags & MMAL_BUFFER_HEADER_FLAG_KEYFRAME)
 						{
-						packet.flags=AV_PKT_FLAG_KEY+AV_PKT_FLAG_TRUSTED;
+						packet->flags=AV_PKT_FLAG_KEY+AV_PKT_FLAG_TRUSTED;
 						}
 					else
 						{
-						packet.flags=AV_PKT_FLAG_TRUSTED;
+						packet->flags=AV_PKT_FLAG_TRUSTED;
 						}
 					if (pData->vbuf_ptr == 0)
 						{
-						packet.data=buffer->data;
-						packet.size=buffer->length;
+						packet->data=buffer->data;
+						packet->size=buffer->length;
 						} 
 					else
 						{
 						memcpy(pData->vbuf+pData->vbuf_ptr, buffer->data+buffer->offset, buffer->length);
 						pData->vbuf_ptr += buffer->length;
-						packet.data=pData->vbuf;
-						packet.size=pData->vbuf_ptr;
+						packet->data=pData->vbuf;
+						packet->size=pData->vbuf_ptr;
 						pData->vbuf_ptr=0;
 						}
-					packet.dts = packet.pts = pts/1000;
+					packet->dts = packet->pts = pts/1000;
 					if (buffer->flags & MMAL_BUFFER_HEADER_FLAG_CONFIG)
 						{
-						if (packet.side_data) {
-							av_packet_free_side_data(&packet);}
+						if (packet->side_data) {av_packet_free_side_data(packet);}
 						uint8_t *side_data = NULL;
-						side_data = av_packet_new_side_data(&packet, AV_PKT_DATA_NEW_EXTRADATA, buffer->length);
+						side_data = av_packet_new_side_data(packet, AV_PKT_DATA_NEW_EXTRADATA, buffer->length);
 						if (!side_data) {
 							fprintf(stderr, "%s\n", AVERROR(ENOMEM));
               exit(127);
-		//					prg_exit(EXIT_FAILURE);
 							}
 						memcpy(side_data, buffer->data+buffer->offset, buffer->length);
 						}
 					int64_t wstart = get_microseconds64();
 					sem_wait(pData->mutex);
-					if (pstate->urlctx.fmtctx) status=av_write_frame(pstate->urlctx.fmtctx, &packet);
-          if (pstate->filectx.fmtctx) status+=av_write_frame(pstate->filectx.fmtctx, &packet);
-					sem_post(pData->mutex);
+					if (pstate->urlctx.fmtctx) status=av_write_frame(pstate->urlctx.fmtctx, packet);
+          if (pstate->filectx.fmtctx) status+=av_write_frame(pstate->filectx.fmtctx, packet);					sem_post(pData->mutex);
 					pData->wvariance = pData->wvariance + (get_microseconds64() - wstart)-pData->wtargettime;
 					if (status)
 						{
-						fprintf(stderr, "frame write error or flush %d\n", status);
+						fprintf(stderr, "video frame write error or flush %d %s\n", status, av_err2str(status));
 						bytes_written = 0;
 						}
 					else 
@@ -287,7 +331,6 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 					if (buffer->length >  BUFFER_SIZE - pData->vbuf_ptr) 
 						{
 						fprintf(stderr, "save vbuf to small\n");
-			//			*ap = 1;
 						}
 					else
 						{
@@ -296,14 +339,13 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 						bytes_written = buffer->length;	
 						}
 					}
-        av_packet_unref(&packet);
+//        av_packet_unref(&packet);
 				}
 
 				mmal_buffer_header_mem_unlock(buffer);
 				if (bytes_written != buffer->length)
 					{
 					vcos_log_error("Failed to write buffer data (%d from %d)- aborting", bytes_written, buffer->length);
-	//				*ap = 1;
 					}
 			}
 		}
@@ -344,8 +386,6 @@ void parms_to_state(RASPIVID_STATE *state)
     
 	state->common_settings.ovl.width = state->common_settings.width*iparms.ovrl_size;
 	state->common_settings.ovl.height = state->common_settings.height*iparms.ovrl_size;
-//  printf("%d %d %d %d %f\n", state->common_settings.width, state->common_settings.height,
-//    state->common_settings.ovl.width, state->common_settings.ovl.height, iparms.ovrl_size); 
 	state->common_settings.ovl.x = state->common_settings.width*iparms.ovrl_x;
 	state->common_settings.ovl.y = state->common_settings.height*iparms.ovrl_y;
 	state->common_settings.cameraNum = iparms.cam;
@@ -356,8 +396,7 @@ void parms_to_state(RASPIVID_STATE *state)
   state->quantisationMin=iparms.qmin;
   state->quantisationMax=iparms.qmax;
   state->framerate=iparms.fps;
-  state->intraperiod=iparms.ifs;
-  
+  state->intraperiod=iparms.fps*iparms.ifs;
 }
 
 void adjust_q(RASPIVID_STATE *state)
@@ -377,7 +416,6 @@ void adjust_q(RASPIVID_STATE *state)
       {
       param.value--;
       atmaxQ = MMAL_FALSE;
- //     fprintf(stdout, "%s Quantization %d\n", get_time_str(datestr), param.value);
       fprintf(stdout, "Quantization %d\n", param.value);
       status = mmal_port_parameter_set(state->encoder_component->output[0], &param.hdr);
       if (status != MMAL_SUCCESS) {vcos_log_error("Unable to reset QP");}
@@ -388,7 +426,6 @@ void adjust_q(RASPIVID_STATE *state)
       if (write_variance > 0 && param.value < state->quantisationMax)
         {
         param.value++;
- //       fprintf(stdout, "%s Quantization %d\n", get_time_str(datestr), param.value);
         fprintf(stdout, "Quantization %d\n", param.value);
         status = mmal_port_parameter_set(state->encoder_component->output[0], &param.hdr);
         if (status != MMAL_SUCCESS) {vcos_log_error("Unable to reset QP");}
@@ -398,7 +435,6 @@ void adjust_q(RASPIVID_STATE *state)
         {
         if (param.value == state->quantisationMax && !(atmaxQ))
           {
-   //       fprintf(stdout, "%s At max Quantization %d\n", get_time_str(datestr), param.value);	
           fprintf(stdout, "At max Quantization %d\n", param.value);
           atmaxQ = MMAL_TRUE;
           }
@@ -455,7 +491,6 @@ int allocate_fmtctx(char *dest, FORMAT_CTX *fctx)
 {
   int status=0;
 	AVDictionary *options = NULL;
-	
 //  setup format context and io context
 	avformat_alloc_output_context2(&fctx->fmtctx, NULL, "flv", NULL);
 	if (!fctx->fmtctx) 
@@ -468,7 +503,6 @@ int allocate_fmtctx(char *dest, FORMAT_CTX *fctx)
         fprintf(stderr, "Could not copy url.\n");
         return -1;
 		}
-//  printf("fmtctx1\n");
 // Setup  H264 codec
 	AVCodec *h264_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
 	if (!h264_codec)
@@ -476,7 +510,6 @@ int allocate_fmtctx(char *dest, FORMAT_CTX *fctx)
 		fprintf(stderr, "H264 codec id not found!\n");
 		return -1;
 		}	
-//  printf("fmtctx2\n");
 	AVStream *h264_video_strm = avformat_new_stream(fctx->fmtctx, NULL);
 	if (!h264_video_strm) 
 		{
@@ -512,7 +545,6 @@ int allocate_fmtctx(char *dest, FORMAT_CTX *fctx)
 	fctx->vidctx->sample_rate = iparms.fps;
 	fctx->vidctx->gop_size = iparms.ifs;                  
 	fctx->vidctx->pix_fmt = AV_PIX_FMT_YUV420P; 
-//	printf("fmtctx3\n");
 	status = avcodec_parameters_from_context(h264_video_strm->codecpar, fctx->vidctx);
 	if (status < 0) 
 		{
@@ -532,7 +564,8 @@ int allocate_fmtctx(char *dest, FORMAT_CTX *fctx)
 		
 	if ((status = av_dict_set(&options, "rtmp_live", "live", 0)) < 0) {
         fprintf(stderr, "rtmp live option: %s\n", av_err2str(status));}
-//  printf("fmtctx4\n");
+    	
+  if (memcmp(dest, "file:", 5)) options=NULL;
   if ((status = avio_open2(&fctx->ioctx, dest, AVIO_FLAG_WRITE, NULL, &options)))
 		{
 		fprintf(stderr, "Could not open output file '%s' (error '%s')\n", dest, av_err2str(status));
@@ -561,7 +594,6 @@ int allocate_fmtctx(char *dest, FORMAT_CTX *fctx)
 		fprintf(stderr, "Could not alloc an encoding context\n");
 		return -1;
 		}
-//  printf("pre aac codec %d\n", iparms.channels);
 	fctx->audctx->channels       = iparms.channels;
 	fctx->audctx->channel_layout = av_get_default_channel_layout(iparms.channels);
 	fctx->audctx->sample_rate    = DEFAULT_SPEED;
@@ -589,56 +621,49 @@ int allocate_fmtctx(char *dest, FORMAT_CTX *fctx)
     
 //  write flv header 
 	fctx->fmtctx->start_time_realtime=get_microseconds64();  // flv_frmtctx->start_time_realtime=0;  // 0 should user system clock
-	status = avformat_init_output(fctx->fmtctx, &options);  // null if AVDictionary is unneeded????
+/*	status = avformat_init_output(fctx->fmtctx, &options);  // null if AVDictionary is unneeded????
 	if (status < 0)
 		{
 		fprintf(stderr, "Write ouput header failed! STATUS %d\n", status);
 		return -1;
-		} 
+		}  */
 
-	status = avformat_write_header(fctx->fmtctx, &options);  // null if AVDictionary is unneeded????
+	status = avformat_write_header(fctx->fmtctx, NULL);  // null if AVDictionary is unneeded????
 	if (status < 0)
 		{
 		fprintf(stderr, "Write ouput header failed! STATUS %d\n", status);
 		return -1;
 		}
+//  av_dump_format(fctx->fmtctx, 0, "stdout", 1);
   return 0;
 }
 
 int free_fmtctx(FORMAT_CTX *fctx)
 {
-	int status;
-/*	if (aac_codec_ctx)
-		{
-		AVPacket packet;
-		av_init_packet(&packet); 
-		packet.data = NULL;
-		packet.size = 0;
-		avcodec_send_frame(aac_codec_ctx, NULL); 
-		avcodec_receive_packet(aac_codec_ctx, &packet);
-		do 	{
-			packet.pts = packet.dts = get_microseconds64()/1000-start_time;
-			av_write_frame(flv_frmtctx, &packet);
-			status = avcodec_receive_packet(aac_codec_ctx, &packet);
-			} 
-		while (!status);
-		} */
+  int status=0;
 
-//	if (raw_codec_ctx) {avcodec_free_context(&raw_codec_ctx);}
-	if (fctx->vidctx) {avcodec_free_context(&fctx->vidctx);}
-	if (fctx->audctx) {avcodec_free_context(&fctx->audctx);}
+	if (fctx->vidctx) {
+    printf("free vidctx\n"); 
+    avcodec_free_context(&fctx->vidctx);}
+	if (fctx->audctx) {
+    printf("free audctx\n"); 
+    avcodec_free_context(&fctx->audctx);}
 		
 	if (fctx->fmtctx)
 		{
 		if (fctx->ioctx && fctx->ioctx->seekable == 1)
 			{
+//      printf("writing trailer\n");
 			status = av_write_trailer(fctx->fmtctx);  
 			if (status < 0) {fprintf(stderr, "Write ouput trailer failed! STATUS %d\n", status);}
 			}  
+//    printf("free format ctx\n");
 		avformat_free_context(fctx->fmtctx);
+    fctx->fmtctx=NULL;
 		}
 	if (fctx->ioctx)
 		{	
+    printf("closing io ctx\n");
 		status = avio_close(fctx->ioctx);	
 		if (status < 0)
 			{
@@ -646,6 +671,7 @@ int free_fmtctx(FORMAT_CTX *fctx)
 			return -1; 
 			}
 		} 
+  printf("free format ctx %p\n", fctx->fmtctx);
 	return 0;
 }
 
@@ -731,6 +757,10 @@ void free_audio_encode(AENCODE_CTX *actx)
 	if (actx->fifo) {av_audio_fifo_free(actx->fifo);}
 
 	if (actx->swrctx) {swr_init(actx->swrctx);}
+  
+  if (actx->rawctx) {
+    printf("free actx rawctx\n");  
+    avcodec_free_context(&actx->rawctx);}
 }
 
 int create_video_stream(RASPIVID_STATE *state)
@@ -753,19 +783,17 @@ int create_video_stream(RASPIVID_STATE *state)
 		state->common_settings.ovl.width > max_width || state->common_settings.ovl.height > max_height)
     {
 		fprintf(stdout, "Resolution larger than sensor %dX%d\n", max_width, max_height);
-		return -128;
+		return -1;
     }
 		
   state->camera_parameters.stereo_mode.mode = MMAL_STEREOSCOPIC_MODE_NONE;
 
 	if (!cam) {cam2 = 1;}
-  
-//  printf("main camera %d\n", cam);
 
 	if ((status = create_camera_component(state)) != MMAL_SUCCESS)
 		{
 		vcos_log_error("%s: Failed to create main camera %d component", __func__, cam);
-		return -128;
+		return -1;
 		}
 		
 	int save_width=state->common_settings.width, save_height=state->common_settings.height;
@@ -774,13 +802,11 @@ int create_video_stream(RASPIVID_STATE *state)
 	state->common_settings.cameraNum = cam2;
 	state->camera_parameters.vflip = iparms.fov;
 	state->camera_parameters.hflip = iparms.foh;
-  
-//  printf("overlay camera %d %d %d\n", cam2, state->common_settings.width, state->common_settings.height);
-   
+     
 	if ((status = create_camera_component(state)) != MMAL_SUCCESS)
 		{
 		vcos_log_error("%s: Failed to create overlay camera %d component", __func__, cam2);
-		return -128;
+		return -1;
 		}
 
 	state->common_settings.width = save_width;
@@ -793,7 +819,7 @@ int create_video_stream(RASPIVID_STATE *state)
 		{
 		vcos_log_error("%s: Failed to create hvs component", __func__);
 		destroy_camera_component(state);
-		return -128;
+		return -1;
 		} 
    
   camera_video_port   = state->camera_component->output[MMAL_CAMERA_VIDEO_PORT];
@@ -803,19 +829,19 @@ int create_video_stream(RASPIVID_STATE *state)
   hvs_ovl_input_port  = state->hvs_component->input[1];
   hvs_text_input_port  = state->hvs_component->input[2];
   hvs_output_port     = state->hvs_component->output[0];
-    
+     
   if ((status = connect_ports(camera_video_port, hvs_main_input_port, &state->hvs_main_connection)) != MMAL_SUCCESS)
     {
 		vcos_log_error("%s: Failed to connect camera video port to hvs input", __func__); 
 		state->hvs_main_connection = NULL;
-		return -128;
+		return -1;
     }
 	
 	if ((status = connect_ports(camera2_video_port, hvs_ovl_input_port, &state->hvs_ovl_connection)) != MMAL_SUCCESS)
     {
 		vcos_log_error("%s: Failed to connect camera2 video port to hvs input", __func__); 
 		state->hvs_ovl_connection = NULL;
-		return -128;
+		return -1;
     } 
 	
 	hvs_text_input_port->buffer_num = hvs_text_input_port->buffer_num_min+1;
@@ -825,8 +851,9 @@ int create_video_stream(RASPIVID_STATE *state)
 	if ((status = mmal_port_enable(hvs_text_input_port, hvs_input_callback)) != MMAL_SUCCESS)
     {
 		vcos_log_error("%s: Failed to enable hvs text input", __func__); 
-		return -128;
+		return -1;
     } 	
+    
 	return 0;
 }
 
@@ -836,7 +863,6 @@ int allocate_alsa(AENCODE_CTX *actx)
 	snd_pcm_uframes_t buffer_size = 0;
   snd_pcm_uframes_t chunk_size = 0;
   snd_pcm_uframes_t buffer_frames = 0;
-//  snd_pcm_stream_t stream = SND_PCM_STREAM_CAPTURE;
   size_t bits_per_sample, bits_per_frame;
   size_t chunk_bytes;
   struct {
@@ -852,22 +878,17 @@ int allocate_alsa(AENCODE_CTX *actx)
 	hwparams = rhwparams;
 
 	int err;
-  
-//  printf("alsa1\n");
+
 	snd_pcm_info_t *info;
 
-//  printf("alsa2\n");
 	snd_pcm_info_alloca(&info);
-  
-//  printf("alsa3\n");
-//  err = snd_pcm_open(&actx->pcmhnd, iparms.adev, stream, 0);
+
   err = snd_pcm_open(&actx->pcmhnd, iparms.adev, SND_PCM_STREAM_CAPTURE, 0);
 	if (err < 0) {
 		fprintf(stdout, "%s open error: %s\n", iparms.adev, snd_strerror(err));
 		return -1;
 	}
 
-//	printf("alsa4\n");
   snd_pcm_hw_params_alloca(&params);
 	err = snd_pcm_hw_params_any(actx->pcmhnd, params);
 	if (err < 0) 
@@ -876,7 +897,6 @@ int allocate_alsa(AENCODE_CTX *actx)
     return -1;
 		}
 
-//	printf("alsa5\n");
   err = snd_pcm_hw_params_set_access(actx->pcmhnd, params, SND_PCM_ACCESS_RW_INTERLEAVED);
 
 	if (err < 0) 
@@ -884,27 +904,21 @@ int allocate_alsa(AENCODE_CTX *actx)
 		fprintf(stderr, "Access type not available\n");
     return -1;
 		}
-//  printf("alsa6\n");
 	err = snd_pcm_hw_params_set_format(actx->pcmhnd, params, hwparams.format);
-  printf("%d\n", err);
 	if (err < 0) 
 		{
 		fprintf(stderr, "Sample format non available\n");
     return -1;
 		}
-//  printf("alsa7\n");
 	err = snd_pcm_hw_params_set_channels(actx->pcmhnd, params, hwparams.channels);
 	if (err < 0) 
 		{
 		fprintf(stderr, "Channels count non available\n");
     return -1;
 		}
-
-//  printf("alsa8\n");
 	err = snd_pcm_hw_params_set_rate_near(actx->pcmhnd, params, &hwparams.rate, 0);
 	assert(err >= 0);
 
-//  printf("alsa9\n");
 	err = snd_pcm_hw_params(actx->pcmhnd, params);
 	if (err < 0) 
 		{
@@ -937,8 +951,7 @@ int allocate_alsa(AENCODE_CTX *actx)
 		fprintf(stderr, "not enough memory\n");
     return -1;
 		}
-
-//	buffer_frames = buffer_size;	/* for position test */
+  return 0;
 }
 
 int free_alsa(AENCODE_CTX *actx)
@@ -952,43 +965,18 @@ int free_alsa(AENCODE_CTX *actx)
 
 int toggle_stream(RASPIVID_STATE *state, int status)
 {
-//  printf("%p\n", state); 
-//  snd_pcm_t *hnd=state->encodectx.pcmhnd;
-//  printf("here %d %d\n", hnd, status);
   if (state->encodectx.pcmhnd && status)
     {
-//    printf("start ALSA\n");
     snd_pcm_drop(state->encodectx.pcmhnd);
     snd_pcm_prepare(state->encodectx.pcmhnd);
     snd_pcm_start(state->encodectx.pcmhnd);
     } 
-//  printf("here1\n");
   int run=0;
-    if (status) run = START;
-//  printf("here2\n");
+  if (status) run = START;
+
 	mmal_port_parameter_set_boolean(state->camera_component->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, run);
 	mmal_port_parameter_set_boolean(state->camera2_component->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, run);
 
-  // empty and write FIFO queue 
-//  printf("here3\n");
-  if (state->encodectx.audctx && (!status))
-		{
-    int rc=1;
-		AVPacket packet;
-		av_init_packet(&packet); 
-		packet.data = NULL;
-		packet.size = 0;
-		avcodec_send_frame(state->encodectx.audctx, NULL); 
-		avcodec_receive_packet(state->encodectx.audctx, &packet);
-		do 	{
-			packet.pts = packet.dts = get_microseconds64()/1000-state->encodectx.start_time;
-      if (state->urlctx.fmtctx) av_write_frame(state->urlctx.fmtctx, &packet);
-			if (state->filectx.fmtctx) av_write_frame(state->filectx.fmtctx, &packet);
-			rc = avcodec_receive_packet(state->encodectx.audctx, &packet);
-			} 
-		while (!rc);
-		}
-//  printf("here4\n");
 }
 
 void destroy_video_stream(RASPIVID_STATE *state)
@@ -1018,12 +1006,10 @@ void destroy_video_stream(RASPIVID_STATE *state)
 
 	destroy_hvs_component(state);
 	destroy_camera_component(state);
-	
-//	pstate=NULL;
-      
+
 	return;
 }
-int write_audio(RASPIVID_STATE *state) //(u_char **data_in, int flush, sem_t *mutex)
+int write_audio(RASPIVID_STATE *state)
 {
 	int status; 
   AVFrame *infrm = state->encodectx.infrm;
@@ -1035,27 +1021,18 @@ int write_audio(RASPIVID_STATE *state) //(u_char **data_in, int flush, sem_t *mu
   SwrContext *resample_ctx = state->encodectx.swrctx;
   AVCodecContext *aac_codec_ctx = state->encodectx.audctx;
   sem_t *mutex = state->callback_data.mutex;
-//	int min_samples=infrm->nb_samples; 
 	AVPacket packet;
 	int64_t save_pts=0, calc_pts;
 
-//	if (flush) {min_samples=1;}
-
 	while (av_audio_fifo_size(fifo) >= infrm->nb_samples)
- // 	while (av_audio_fifo_size(fifo) >= min_samples)
 	{
-	outfrm->pts = outfrm->pkt_dts = save_pts = get_microseconds64()/1000-start_time;
-//    calc_pts = (double) audio_samples * 1000 / DEFAULT_SPEED;
+  outfrm->pts = outfrm->pkt_dts = save_pts = get_microseconds64()/1000-state->encodectx.start_time;
 	status = av_audio_fifo_read(fifo, (void **)infrm->data, infrm->nb_samples);
 	if (status < 0) 
 		{
 		fprintf(stderr, "fifo read failed! %d %s\n", status, av_err2str(status));
 		return -1;
 		}
-/*	else
-		{
-		audio_samples+=status;
-		} */
 	
 	status = swr_convert_frame(resample_ctx, outfrm, infrm);
 	if (status) {fprintf(stderr, "Frame convert %d (error '%s')\n", status, av_err2str(status));}
@@ -1108,7 +1085,7 @@ int write_audio(RASPIVID_STATE *state) //(u_char **data_in, int flush, sem_t *mu
 				sem_post(mutex); 
 				if (status < 0) 
 					{
-					fprintf(stderr, "Could not write frame (error '%s')\n", av_err2str(status));
+					fprintf(stderr, "Could not audio write frame (error '%s')\n", av_err2str(status));
 					goto cleanup;
 					}
 				}
@@ -1121,6 +1098,28 @@ cleanup:
 	return status;
 }
 
+void flush_audio(RASPIVID_STATE *state)
+{
+  state->encodectx.infrm->nb_samples=1;
+  write_audio(state);
+  int rc=0, write=0;
+	if (state->encodectx.audctx)
+		{
+		AVPacket packet;
+		av_init_packet(&packet); 
+		packet.data = NULL;
+		packet.size = 0;
+		avcodec_send_frame(state->encodectx.audctx, NULL); 
+		rc = avcodec_receive_packet(state->encodectx.audctx, &packet);
+		while (!rc) {
+			packet.pts = packet.dts = get_microseconds64()/1000-state->encodectx.start_time;
+      if (state->urlctx.fmtctx) write = av_write_frame(state->urlctx.fmtctx, &packet);
+      if (state->filectx.fmtctx) write += av_write_frame(state->filectx.fmtctx, &packet);
+      if (write) printf("Flush audio write status %d\n", write);
+			rc = avcodec_receive_packet(state->encodectx.audctx, &packet);
+			};
+		} 
+}
 void xrun(snd_pcm_t *handle)
 {
 	snd_pcm_status_t *status;
@@ -1129,9 +1128,7 @@ void xrun(snd_pcm_t *handle)
 	if ((res = snd_pcm_status(handle, status))<0) 
 		{
 		fprintf(stderr, "status error: %s\n", snd_strerror(res));
-// add backup clean exit code
     exit(126);
-//		prg_exit(EXIT_FAILURE);
 		}
 	
 	if (snd_pcm_status_get_state(status) == SND_PCM_STATE_XRUN) 
@@ -1140,27 +1137,23 @@ void xrun(snd_pcm_t *handle)
 			{
 			fprintf(stderr, "xrun: prepare error: %s\n", snd_strerror(res));
       exit(125);
-//			prg_exit(EXIT_FAILURE);
 			}
 		return;		/* ok, data should be accepted again */
 		} 
 		if (snd_pcm_status_get_state(status) == SND_PCM_STATE_DRAINING) 
 			{
-	//		if (stream == SND_PCM_STREAM_CAPTURE) 
 				{
 				fprintf(stderr, "capture stream format change? attempting recover...\n");
 				if ((res = snd_pcm_prepare(handle))<0) 
 					{
 					fprintf(stderr, "xrun(DRAINING): prepare error: %s\n", snd_strerror(res));
           exit(124);
-//					prg_exit(EXIT_FAILURE);
 					}
 				return;
 				}
 			}
 		fprintf(stderr, "read/write error, state = %s\n", snd_pcm_state_name(snd_pcm_status_get_state(status)));
     exit(128);
-//		prg_exit(EXIT_FAILURE);
 }
 /* I/O suspend handler */
 void suspend(snd_pcm_t *handle)
@@ -1171,9 +1164,7 @@ void suspend(snd_pcm_t *handle)
 	if (res < 0) {
 		if ((res = snd_pcm_prepare(handle)) < 0) {
 			fprintf(stderr, "suspend: prepare error: %s\n", snd_strerror(res));
-// add backup clean exit code
       exit(122);
-//			prg_exit(EXIT_FAILURE);
 		}
 	}
 }
@@ -1181,30 +1172,21 @@ void suspend(snd_pcm_t *handle)
  *  read function
  */
 int read_pcm(RASPIVID_STATE *state)
-//static ssize_t read_pcm(u_char *data, u_char **data_out,size_t rcount)
 {
   snd_pcm_status_t *pcm_status;
 	snd_pcm_status_alloca(&pcm_status);
   snd_pcm_t *handle = state->encodectx.pcmhnd;
   u_char *data_in = state->encodectx.pcmbuf;
-//  data_out[2]  u_char *data_out = state->encodectx->rlbufs;
   AVAudioFifo *fifo = state->encodectx.fifo;
-	ssize_t r; //, size;
+	ssize_t r; 
 	size_t result = 0;
-//	size_t count = rcount;  //256
-//	u_char *data_in=data;
-/*	if (count != chunk_size) 
-		{
-		count = chunk_size;
-		} */
   size_t count=256;
 	
 
 	while (count > 0) 
 		{
 		r = snd_pcm_readi(handle, data_in, count);
-//    fprintf(stderr, "read/write error, state = %s\n", snd_pcm_state_name(snd_pcm_status_get_state(pcm_status)));
-//    printf("read %d\n", r);
+
 		if (r == -EAGAIN || (r >= 0 && (size_t)r < count)) 
 			{
 			fprintf(stderr, "wait\n");
@@ -1221,30 +1203,23 @@ int read_pcm(RASPIVID_STATE *state)
 		else if (r < 0) 
 			{
 			fprintf(stderr, "read error: %s\n", snd_strerror(r));
-  // add backup clean exit code
-      exit(121);
-  //  	prg_exit(EXIT_FAILURE);	
+      exit(121);	
 			}
 			if (r > 0) 
 				{
 				result += r;
 				count -= r;
-		//		data += r * bits_per_frame / 8;
 				data_in += r * 8;
 				}
 		}
-//	size = r * bits_per_frame / 8;
-
 
 	size_t i;   
 	int s, x, lr=0;
-//  u_char *lptr=data_out[0], *rptr=data_out[1];
 	u_char *lptr=state->encodectx.rlbufs;
   u_char *rptr=state->encodectx.rlbufs;
   rptr+=1024;
   u_char *data_out[2] = {lptr,rptr};
 
-//	x=chunk_bytes/4;
   x=512;
 	for (i=0; i < x; ++i) {
 		for (s=0;s < 4; ++s) {
@@ -1259,8 +1234,7 @@ int read_pcm(RASPIVID_STATE *state)
 			else {lr=1;}}
 
 	int status;		
-  
-//	status=av_audio_fifo_write(fifo, (void **)data_out, r);
+
   status=av_audio_fifo_write(fifo, (void **)data_out, r);
 	if (status < 0)
 		{
@@ -1271,7 +1245,6 @@ int read_pcm(RASPIVID_STATE *state)
 			{
 			fprintf(stderr, "fifo did not write all! to write %d written %d\n", r, status);
 			}
-//	return rcount;
   write_audio(state);
   return result;
 }
@@ -1296,32 +1269,36 @@ void *gps_thread(void *argp)
 void *record_thread(void *argp)
 {
   RASPIVID_STATE *state = (RASPIVID_STATE *)argp;
+  parms_to_state (state);
+  state->callback_data.pstate = state;
+  state->encodectx.start_time = get_microseconds64()/1000;
+  state->recording=1;
+  	
+  AVPacket video_packet;
+	av_init_packet(&video_packet);
+	video_packet.stream_index=0;
+	video_packet.duration=0;
+	video_packet.pos=-1;
+  state->callback_data.vpckt=&video_packet;
+
      
-//  printf("here\n");
   GPS_T gps_data;
   pthread_t gps_tid;
   pthread_create(&gps_tid, NULL, gps_thread, (void *)&gps_data);
-  printf("hereA\n");
- // int64_t write_target_time=0;
- // state->callback_data.wtargettime=&write_target_time;
-//  printf("%d %d\n", state->callback_data.wtargettime, state->framerate);
+  // set wtargettime ????? correct ????
   state->callback_data.wtargettime = TARGET_TIME/state->framerate;
-//  printf("hereB\n");
   // allocate video buffer
 	state->callback_data.vbuf = (u_char *)malloc(BUFFER_SIZE);
 	if (state->callback_data.vbuf == NULL) 
 		{
 		fprintf(stderr, "not enough memory vbuf\n");
-    exit(121);
-//		prg_exit(EXIT_FAILURE);
+    goto err_gps;
 		}
   // allocate mutex
-//  printf("hereC\n");
 	sem_t def_mutex;
 	sem_init(&def_mutex, 0, 1);
 	state->callback_data.mutex=&def_mutex;
   
-//  printf("here1\n");
   int length;
   char str[64];
   //	if file *allocate_fmtctx (file, ctx)
@@ -1338,8 +1315,11 @@ void *record_thread(void *argp)
     strftime(str+length, 20,"%Y-%m-%d_%H:%M:%S", time_fmt);
     length=strlen(str);
     strcpy(str+length, ".flv");
-    printf("%s\n", str);
-    allocate_fmtctx(str, &state->filectx);
+    if (allocate_fmtctx(str, &state->filectx))
+      {
+      printf("Allocate %s context failed\n", str);
+      goto err_file;
+      }
     }
   //	if url allocate_fmtctx (url, ctx)  
   if (iparms.write_url)
@@ -1348,51 +1328,40 @@ void *record_thread(void *argp)
     length=strlen(str);
     strcpy(str+length, iparms.url);
     printf("%s\n", str);
-    allocate_fmtctx(str, &state->urlctx);
+    if (allocate_fmtctx(str, &state->urlctx))
+      {
+      printf("Allocate %s context failed\n", str);
+      goto err_url;
+      }
     }
   //	allocate_audio_encode(encodectx)
-//  printf("here2\n");
-  if (state->filectx.audctx) {state->encodectx.audctx=state->filectx.audctx; printf("1\n");}
-  if (state->urlctx.audctx) {state->encodectx.audctx=state->urlctx.audctx; printf("2\n");}
-  allocate_audio_encode(&state->encodectx);
-//  printf("here2a\n");
+  if (state->filectx.audctx) {state->encodectx.audctx=state->filectx.audctx;}
+  if (state->urlctx.audctx) {state->encodectx.audctx=state->urlctx.audctx;}
+  if (allocate_audio_encode(&state->encodectx)) goto err_aencode;
   //	allocate_alsa(encodectx)
-  allocate_alsa(&state->encodectx);
-//  printf("here3\n");
+  if (allocate_alsa(&state->encodectx)) goto err_alsa;
   //	create_video_stream(state)
-//  printf("here4\n");
-  create_video_stream(state);
+  if (create_video_stream(state)) goto err_vstream;
   //	create_encoder(state)
-//  printf("here5\n");
-  create_encoder_component(state);
+  if (create_encoder_component(state)) goto err_encoder;
+//  g_signal_emit_by_name(stop_ptr, "clicked");
+//  printf("after emit\n");
+//  goto err_encoder;
   //	connect encoder
-  printf("here6\n");
-  MMAL_STATUS_T status;
-//  if ((status = connect_ports(state->hvs_component->output[0], 
-//    state->encoder_component->input[0], &state->encoder_connection)) != MMAL_SUCCESS)
-//    mmal_log_dump_port(state->hvs_component->output[0]);
-//    mmal_log_dump_format(state->hvs_component->output[0]->format);
-//    mmal_log_dump_port(state->encoder_component->input[0]);
-//    mmal_log_dump_format(state->encoder_component->input[0]->format);
-//  status = mmal_port_format_commit(state->hvs_component->output[0]);
-//  printf("commit hvs out %d\n", status);
-//  status = mmal_port_format_commit(state->encoder_component->input[0]);//
-//  printf("commit encoder in %d\n", status);
-   
+  MMAL_STATUS_T status; 
   status = connect_ports(state->hvs_component->output[0], state->encoder_component->input[0], &state->encoder_connection);
-  printf("status %d\n", status);
   if (status != MMAL_SUCCESS)
     {
 		vcos_log_error("%s: Failed to connect hvs to encoder input", __func__); 
 		state->encoder_connection = NULL;
+ // change to goto label   
     exit(120);
-//		return -128;  // add return type if needed
+
     }  
   // Set up our userdata - this is passed though to the callback where we need the information.
 	state->encoder_component->output[0]->userdata = (struct MMAL_PORT_USERDATA_T *)&state->callback_data;
 
     // Enable the encoder output port and tell it its callback function
-  printf("here6a\n"); 
 	status = mmal_port_enable(state->encoder_component->output[0], encoder_buffer_callback);
 	if (status) 
 		{
@@ -1410,7 +1379,7 @@ void *record_thread(void *argp)
 		if (mmal_port_send_buffer(state->encoder_component->output[0], buffer)!= MMAL_SUCCESS)
 			vcos_log_error("Unable to send a buffer to encoder output port (%d)", q);
 		}
-  
+ 
   //	toggle_stream
   toggle_stream(state, START);
     
@@ -1422,48 +1391,70 @@ void *record_thread(void *argp)
       adjust_q(state);
       // send_text
       send_text(gps_data.speed, state);
+ /*     // run time message
+      printf("message\n");
+      if (message1)
+        {
+        int64_t raw_time=(get_microseconds64()/1000)-state->encodectx.start_time;
+  //      printf("%lld\n", raw_time);
+  //      printf("in if\n");
+        char buf[9];
+        int hours=0, mins=0, secs=0;
+        raw_time = raw_time/1000;
+        secs = raw_time % 60;
+        raw_time = (raw_time-secs)/60;
+        mins = raw_time%60;
+        hours = (raw_time-mins)/60;       
+        sprintf(buf, "%2d:%02d:%02d", hours, mins, secs);
+        printf("%s\n", buf);
+        gtk_label_set_text (GTK_LABEL(message1), buf);
+        gtk_widget_show_all(stop_win);
+        }  */
       
- //     vcos_sleep(100);
+  //    vcos_sleep(50);
       }
       
   // toggle_stream(state, int)
-//  printf("here7\n");
   toggle_stream(state, START);
+
   //	disconnect encoder
   if (state->encoder_component)
 		check_disable_port(state->encoder_component->output[0]);
 	if (state->encoder_connection)
 		mmal_connection_destroy(state->encoder_connection);
   // write_audio
-//  printf("here8\n");
-  state->encodectx.infrm->nb_samples=1;
-  write_audio(state);
+  flush_audio(state);
+err_encoder:
   // destroy_encoder
-//  printf("here9\n");
   destroy_encoder_component(state);
+err_vstream:
   // destroy_video_stream
-//  printf("here10\n");
   destroy_video_stream(state);
+err_alsa:
   // free_alsa
-//  printf("here11\n");
   free_alsa(&state->encodectx);
+err_aencode:
   // free_audio_encode 
-//  printf("here12\n");
   free_audio_encode(&state->encodectx);
+err_url:  
   // if url free_fmtctx (url_ctx)
   if (state->urlctx.fmtctx) free_fmtctx(&state->urlctx);
+err_file:
   // if file free_fmtctx (file_ctx)
   if (state->filectx.fmtctx) free_fmtctx(&state->filectx);
-
-
+  // free  vbuf 
+  free(state->callback_data.vbuf);
+  sem_destroy(&def_mutex);
+err_gps:
  	gps_data.active=0;
 	pthread_join(gps_tid, NULL);
+  av_packet_unref(&video_packet);
 }
 
 int read_parms(void)
   {
   FILE *parm_file;
-  parm_file=fopen("racecam.parms", "rb");
+  parm_file=fopen("/home/pi/racecam.ini", "rb");
   if (parm_file)
     {
     size_t cnt=0;
@@ -1481,7 +1472,7 @@ int read_parms(void)
 int write_parms(void)
   {
   FILE *parm_file;
-  parm_file=fopen("racecam.parms", "wb");
+  parm_file=fopen("/home/pi/racecam.ini", "wb");
   size_t cnt=0;
   cnt=fwrite(&iparms, 1, sizeof(iparms), parm_file);
   if (cnt!=sizeof(iparms)) return 1;
@@ -1495,9 +1486,9 @@ void inc_val_lbl(GtkWidget *widget, gpointer data)
   limit *lmt=data;
   if (*lmt->val < *lmt->max)
     {
-    (*lmt->val)++;
+    (*lmt->val)+=lmt->incv;
     char buf[3];
-    sprintf(buf, "%2d", *lmt->val);
+    sprintf(buf, lmt->format, *lmt->val);
     gtk_label_set_text (GTK_LABEL(lmt->label), buf);
     }
 }
@@ -1507,9 +1498,9 @@ void dec_val_lbl(GtkWidget *widget, gpointer data)
   limit *lmt=data;
   if (*lmt->val > *lmt->min)
     {
-    (*lmt->val)--;
+    (*lmt->val)-=lmt->incv;
     char buf[3];
-    sprintf(buf, "%2d", *lmt->val);
+    sprintf(buf, lmt->format, *lmt->val);
     gtk_label_set_text (GTK_LABEL(lmt->label), buf);
     }
 }
@@ -1553,49 +1544,71 @@ void check_res2(GtkWidget *widget, gpointer data)
 void check_mono(GtkWidget *widget, gpointer data)
 {
   if(gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(data))) iparms.channels=1;
-  printf("%d channel m\n", iparms.channels);  
 }
 
 void check_stereo(GtkWidget *widget, gpointer data)
 {
   if(gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(data))) iparms.channels=2; 
-  printf("%d channel s\n", iparms.channels); 
 }
 
 void draw_it(ovrl *ol)
 {
   GtkWidget *widget=ol->draw_area;
-  static float last_size=0;
-  if (last_size==0) last_size=*ol->size;
   gdk_draw_rectangle (pixmap, widget->style->black_gc, TRUE, 0, 0, *ol->x, *ol->y); 		
-  float xy_adj=(last_size-(*ol->size))/2;
-  *ol->o_x += xy_adj;
-  *ol->o_y += xy_adj;
   int ox=(*ol->x)*(*ol->o_x);
   int oy=(*ol->y)*(*ol->o_y);
   int ow=(*ol->x)*(*ol->size);
   int oh=(*ol->y)*(*ol->size);
   gdk_draw_rectangle (pixmap, widget->style->white_gc, TRUE, ox, oy, ow, oh); 
   gtk_widget_queue_draw_area (widget, 0, 0, *ol->x, *ol->y); 
-  last_size=*ol->size;
 }
 
-void inc_flt(GtkWidget *widget, gpointer data)
+void inc_size(GtkWidget *widget, gpointer data)
 {
   draw *dptr=data;
-  if (*dptr->val < 1) 
+  if (*dptr->val < *dptr->max) 
     {
-    *dptr->val +=.01;
+    *dptr->val += dptr->incv;
+    *dptr->ol->o_x -= dptr->incv/2;
+    if (*dptr->ol->o_x < *dptr->xymin) *dptr->ol->o_x += *dptr->xymin-*dptr->ol->o_x;  
+    if ((*dptr->ol->o_x+*dptr->val) > *dptr->xymax) *dptr->ol->o_x += (*dptr->xymax-*dptr->val)-*dptr->ol->o_x;
+    *dptr->ol->o_y -= dptr->incv/2;
+    if (*dptr->ol->o_y < *dptr->xymin) *dptr->ol->o_y += *dptr->xymin-*dptr->ol->o_y;  
+    if ((*dptr->ol->o_y+*dptr->val) > *dptr->xymax) *dptr->ol->o_y += (*dptr->xymax-*dptr->val)-*dptr->ol->o_y;
     draw_it(dptr->ol);
     }
 }
 
-void dec_flt(GtkWidget *widget, gpointer data)
+void dec_size(GtkWidget *widget, gpointer data)
 {
   draw *dptr=data; 
-  if (*dptr->val > 0) 
+  if (*dptr->val > *dptr->min) 
     {
-    *dptr->val -=.01;
+    *dptr->val -= dptr->incv;
+    *dptr->ol->o_x += dptr->incv/2;
+    *dptr->ol->o_y += dptr->incv/2;
+    draw_it(dptr->ol);
+    }
+}
+
+void inc_xy(GtkWidget *widget, gpointer data)
+{
+  draw *dptr=data;
+  if (*dptr->val < (*dptr->max-*dptr->ol->size)) 
+    {
+    *dptr->val += dptr->incv;
+    if(*dptr->val > (*dptr->max-*dptr->ol->size)) *dptr->val += (*dptr->max-*dptr->ol->size)-*dptr->val;
+    draw_it(dptr->ol);
+    }
+}
+
+void dec_xy(GtkWidget *widget, gpointer data)
+{
+  draw *dptr=data;
+  if (*dptr->val > *dptr->min) 
+    {
+    *dptr->val -= dptr->incv;
+    if(*dptr->val < *dptr->min) *dptr->val += *dptr->min-*dptr->val;
     draw_it(dptr->ol);
     }
 }
@@ -1621,6 +1634,7 @@ void done_clicked(GtkWidget *widget, gpointer data)
 
 void stop_clicked(GtkWidget *widget, gpointer data)
 {
+  message1=NULL;
   gtk_widget_destroy(data);
   gtk_main_quit ();
 }
@@ -1674,24 +1688,27 @@ void setup_clicked(GtkWidget *widget, gpointer data)
 {
     
   char num_buf[3];
-  char fps_min=20, fps_max=60, q_min=25, q_max=40, ifs_min=2, ifs_max=99, fk_min=1, fk_max=25;
-  short int sample_x=448, sample_y=252;
-  limit fk_lmt = {0, &iparms.file_keep, &fk_min, &fk_max};
-  limit fps_lmt = {0, &iparms.fps, &fps_min, &fps_max};
-  limit ifs_lmt = {0, &iparms.ifs, &ifs_min, &ifs_max};
-  limit qmin_lmt = {0, &iparms.qmin, &q_min, &iparms.qcur};
-  limit qcur_lmt = {0, &iparms.qcur, &iparms.qmin, &iparms.qmax};
-  limit qmax_lmt = {0, &iparms.qmax, &iparms.qcur, &q_max};
+  char intf[6]="%2.0f"; 
+  char fltf[6]="%1.1f";
+  float fps_min=20, fps_max=60, q_min=25, q_max=40, ifs_min=.1, ifs_max=2, fk_min=1, fk_max=25;
+  limit fk_lmt = {0, &iparms.file_keep, intf, &fk_min, &fk_max, 1};
+  limit fps_lmt = {0, &iparms.fps, intf, &fps_min, &fps_max, 1};
+  limit ifs_lmt = {0, &iparms.ifs, fltf, &ifs_min, &ifs_max, .1};
+  limit qmin_lmt = {0, &iparms.qmin, intf, &q_min, &iparms.qcur, 1};
+  limit qcur_lmt = {0, &iparms.qcur, intf, &iparms.qmin, &iparms.qmax, 1};
+  limit qmax_lmt = {0, &iparms.qmax, intf, &iparms.qcur, &q_max, 1};
   check url_check = {0, &iparms.write_url};
   check file_check = {0, &iparms.write_file};
   check fmh_check = {0, &iparms.fmh};
   check fmv_check = {0, &iparms.fmv};
   check foh_check = {0, &iparms.foh};
   check fov_check = {0, &iparms.fov};
+  short int sample_x=448, sample_y=252;
+  float size_min=.1, size_max=.5, xymin=.005, xymax=.999;
   ovrl da_ovrl = {0, &sample_x, &sample_y, &iparms.ovrl_size, &iparms.ovrl_x, &iparms.ovrl_y};
-  draw dsize = {&iparms.ovrl_size, &da_ovrl};
-  draw dx = {&iparms.ovrl_x, &da_ovrl};
-  draw dy = {&iparms.ovrl_y, &da_ovrl};
+  draw dsize = {&iparms.ovrl_size, &da_ovrl, &size_min, &size_max, &xymin, &xymax, .01};
+  draw dx = {&iparms.ovrl_x, &da_ovrl, &xymin, &xymax, &xymin, &xymax, .05};
+  draw dy = {&iparms.ovrl_y, &da_ovrl, &xymin, &xymax, &xymin, &xymax, .05};
    
   gtk_widget_hide(data);
   /* setup window */
@@ -1764,7 +1781,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_REMOVE, GTK_ICON_SIZE_BUTTON));
   gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, FALSE, 0);
   
-  sprintf(num_buf, "%2d", iparms.file_keep);
+  sprintf(num_buf, "%2.0f", iparms.file_keep);
   fk_lmt.label = gtk_label_new (num_buf);
   gtk_box_pack_start (GTK_BOX(hbox), fk_lmt.label, FALSE, FALSE, 0);
     
@@ -1838,7 +1855,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_REMOVE, GTK_ICON_SIZE_BUTTON));
   gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, TRUE, 2);
   
-  sprintf(num_buf, "%2d", iparms.fps);
+  sprintf(num_buf, "%2.0f", iparms.fps);
   fps_lmt.label = gtk_label_new (num_buf);
   gtk_box_pack_start (GTK_BOX(hbox), fps_lmt.label, FALSE, TRUE, 2);
   
@@ -1848,14 +1865,14 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, TRUE, 2);
   
   /* setup window I frames */
-  gtk_box_pack_start (GTK_BOX(hbox), gtk_label_new (" I frames "), FALSE, TRUE, 2);
+  gtk_box_pack_start (GTK_BOX(hbox), gtk_label_new ("Key in secs"), FALSE, TRUE, 2);
   
   wptr = gtk_button_new();
   g_signal_connect(wptr, "clicked", G_CALLBACK(dec_val_lbl), &ifs_lmt);
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_REMOVE, GTK_ICON_SIZE_BUTTON));
   gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, TRUE, 2);
   
-  sprintf(num_buf, "%2d", iparms.ifs);
+  sprintf(num_buf, "%1.1f", iparms.ifs);
   ifs_lmt.label = gtk_label_new (num_buf);
   gtk_box_pack_start (GTK_BOX(hbox), ifs_lmt.label, FALSE, TRUE, 2);
   
@@ -1864,7 +1881,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_ADD, GTK_ICON_SIZE_BUTTON));
   gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, TRUE, 2);
   
-  /* setup window Quantization */ 
+  /* setup Quantization */ 
   hbox = gtk_hbox_new(FALSE, 0);
   gtk_box_pack_start (GTK_BOX(vbox), hbox, FALSE, TRUE, 2);
   
@@ -1875,7 +1892,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_REMOVE, GTK_ICON_SIZE_BUTTON));
   gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, TRUE, 2);
   
-  sprintf(num_buf, "%2d", iparms.qmin);
+  sprintf(num_buf, "%2.0f", iparms.qmin);
   qmin_lmt.label = gtk_label_new (num_buf);
   gtk_box_pack_start (GTK_BOX(hbox), qmin_lmt.label, FALSE, TRUE, 2);
   
@@ -1891,7 +1908,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_REMOVE, GTK_ICON_SIZE_BUTTON));
   gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, TRUE, 2);
   
-  sprintf(num_buf, "%2d", iparms.qcur);
+  sprintf(num_buf, "%2.0f", iparms.qcur);
   qcur_lmt.label = gtk_label_new (num_buf);
   gtk_box_pack_start (GTK_BOX(hbox), qcur_lmt.label, FALSE, TRUE, 2);
   
@@ -1907,7 +1924,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_REMOVE, GTK_ICON_SIZE_BUTTON));
   gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, TRUE, 2);
   
-  sprintf(num_buf, "%2d", iparms.qmax);
+  sprintf(num_buf, "%2.0f", iparms.qmax);
   qmax_lmt.label = gtk_label_new (num_buf);
   gtk_box_pack_start (GTK_BOX(hbox), qmax_lmt.label, FALSE, TRUE, 2);
   
@@ -1956,34 +1973,34 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   
   wptr = gtk_button_new();
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_REMOVE, GTK_ICON_SIZE_BUTTON));
-  g_signal_connect(wptr, "clicked", G_CALLBACK(dec_flt), &dsize);
+  g_signal_connect(wptr, "clicked", G_CALLBACK(dec_size), &dsize);
   gtk_table_attach_defaults (GTK_TABLE (table), wptr, 1, 2, 0, 1);
   
   wptr = gtk_button_new();
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_ADD, GTK_ICON_SIZE_BUTTON));
-  g_signal_connect(wptr, "clicked", G_CALLBACK(inc_flt), &dsize);
+  g_signal_connect(wptr, "clicked", G_CALLBACK(inc_size), &dsize);
   gtk_table_attach_defaults (GTK_TABLE (table), wptr, 3, 4, 0, 1);
   
   gtk_table_attach_defaults (GTK_TABLE (table), gtk_label_new ("Overlay move"), 0, 1, 2, 3);
   
   wptr = gtk_button_new();
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_GO_UP, GTK_ICON_SIZE_BUTTON));
-  g_signal_connect(wptr, "clicked", G_CALLBACK(dec_flt), &dy);
+  g_signal_connect(wptr, "clicked", G_CALLBACK(dec_xy), &dy);
   gtk_table_attach_defaults (GTK_TABLE (table), wptr, 2, 3, 1, 2);
   
   wptr = gtk_button_new();
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_GO_BACK, GTK_ICON_SIZE_BUTTON));
-  g_signal_connect(wptr, "clicked", G_CALLBACK(dec_flt), &dx);
+  g_signal_connect(wptr, "clicked", G_CALLBACK(dec_xy), &dx);
   gtk_table_attach_defaults (GTK_TABLE (table), wptr, 1, 2, 2, 3);
   
   wptr = gtk_button_new();
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_GO_FORWARD, GTK_ICON_SIZE_BUTTON));
-  g_signal_connect(wptr, "clicked", G_CALLBACK(inc_flt), &dx);
+  g_signal_connect(wptr, "clicked", G_CALLBACK(inc_xy), &dx);
   gtk_table_attach_defaults (GTK_TABLE (table), wptr, 3, 4, 2, 3);
 
   wptr = gtk_button_new();
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_GO_DOWN, GTK_ICON_SIZE_BUTTON));
-  g_signal_connect(wptr, "clicked", G_CALLBACK(inc_flt), &dy);
+  g_signal_connect(wptr, "clicked", G_CALLBACK(inc_xy), &dy);
   gtk_table_attach_defaults (GTK_TABLE (table), wptr, 2, 3, 3, 4);
   
   /* setup window Switch camera */ 
@@ -2018,16 +2035,24 @@ void stop_window(gpointer data)
   gtk_widget_hide(data);
   /* stop window */
   GtkWidget *wptr = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+  stop_win=wptr;
   gtk_window_set_decorated (GTK_WINDOW(wptr), FALSE); 
-  gtk_window_fullscreen (GTK_WINDOW(wptr));
+//  gtk_window_fullscreen (GTK_WINDOW(wptr));
   /* stop button */
-//  GtkWidget *button = gtk_button_new_with_label ("Stop");
-  GtkWidget *button = gtk_button_new();
-  gtk_button_set_image(GTK_BUTTON(button), gtk_image_new_from_stock(GTK_STOCK_STOP, GTK_ICON_SIZE_DIALOG));
-  g_signal_connect(button, "clicked", G_CALLBACK(stop_clicked), wptr);
-  GtkWidget *vbox = gtk_vbox_new(FALSE, 0);
+//  GtkWidget *stop_button = gtk_button_new_with_label ("Stop");
+  stop_button = gtk_button_new();
+//  GtkWidget *image = gtk_image_new_from_file ("/home/pi/Pictures/stop_sign.png");
+//  gtk_button_set_image(GTK_BUTTON(stop_button), image);
+  gtk_button_set_image(GTK_BUTTON(stop_button), gtk_image_new_from_stock(GTK_STOCK_STOP, GTK_ICON_SIZE_DIALOG));
+  GtkWidget *vbox = gtk_vbox_new(FALSE, 5);
+  gtk_box_pack_start (GTK_BOX(vbox), stop_button, TRUE, TRUE, 0);
+//  message1 = gtk_label_new ("");
+//  gtk_box_pack_start (GTK_BOX(vbox), message1, TRUE, TRUE, 0);
+//  message2 = gtk_label_new ("");
+//  gtk_box_pack_start (GTK_BOX(vbox), message2, TRUE, TRUE, 0);
+
+  g_signal_connect(stop_button, "clicked", G_CALLBACK(stop_clicked), wptr);
   gtk_container_add (GTK_CONTAINER (wptr), vbox);
-  gtk_box_pack_start (GTK_BOX (vbox), button, TRUE, TRUE, 0);
   
   gtk_widget_show_all(wptr);
   
@@ -2052,10 +2077,9 @@ void preview_clicked(GtkWidget *widget, gpointer data)
 		preview_state.preview_connection = NULL;
     goto error;
     } 
-//  printf("%p\n", &preview_state);
+
   toggle_stream(&preview_state, START);
-//  printf("back\n");
-  
+    
   stop_window(data);
 
   toggle_stream(&preview_state, STOP);
@@ -2071,17 +2095,9 @@ error:
 void record_clicked(GtkWidget *widget, gpointer data)
 {
   RASPIVID_STATE record_state;
-//  default_status(&record_state);
-//  printf("record1\n");
-  parms_to_state (&record_state);
-//  printf("record2\n");
-//  printf("%d %d\n", record_state.callback_data.wtargettime, record_state.framerate);
-  record_state.callback_data.pstate = &record_state;
-  record_state.recording=1;
-  
   pthread_t record_tid;
   pthread_create(&record_tid, NULL, record_thread, (void *)&record_state);
-//  printf("record3\n");
+
   stop_window(data);
   
   record_state.recording=0;
@@ -2100,7 +2116,7 @@ int main(int argc, char **argv)
     iparms.cam=iparms.channels=1;
     iparms.ovrl_size=iparms.ovrl_x=iparms.ovrl_y=.5;
     iparms.fps=30;
-    iparms.ifs=45;
+    iparms.ifs=2;
     iparms.qmin=25;
     iparms.qcur=28;
     iparms.qmax=40;
