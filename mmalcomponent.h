@@ -117,6 +117,8 @@ struct RASPIVID_STATE_S
    int frame;  
    int64_t starttime;
    int64_t lasttime;
+   
+   char gps;
 
    MMAL_BOOL_T addSPSTiming;
    int slices;

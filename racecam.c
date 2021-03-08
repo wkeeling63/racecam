@@ -146,6 +146,7 @@ struct {
   float fps;
   float ifs;
   char cam;
+  char gps;
   } iparms;
 
 GtkWidget *stop_win, *stop_button, *message1, *message2;
@@ -399,6 +400,8 @@ void parms_to_state(RASPIVID_STATE *state)
   state->quantisationMax=iparms.qmax;
   state->framerate=iparms.fps;
   state->intraperiod=iparms.fps*iparms.ifs;
+  
+  state->gps=iparms.gps;
 }
 
 void adjust_q(RASPIVID_STATE *state)
@@ -1264,10 +1267,12 @@ void *record_thread(void *argp)
 	video_packet.pos=-1;
   state->callback_data.vpckt=&video_packet;
 
-     
   GPS_T gps_data;
   pthread_t gps_tid;
-  pthread_create(&gps_tid, NULL, gps_thread, (void *)&gps_data);
+  if (state->gps) 
+    {
+    pthread_create(&gps_tid, NULL, gps_thread, (void *)&gps_data);
+    }
   // set wtargettime ????? correct ????
   state->callback_data.wtargettime = TARGET_TIME/state->framerate;
   // allocate video buffer
@@ -1373,7 +1378,10 @@ void *record_thread(void *argp)
       // adjust_Q
       adjust_q(state);
       // send_text
-      send_text(gps_data.speed, state);
+      if (state->gps) 
+        {
+        send_text(gps_data.speed, state);
+        }
  /*     // run time message
       printf("message\n");
       if (message1)
@@ -1429,8 +1437,11 @@ err_file:
   free(state->callback_data.vbuf);
   sem_destroy(&def_mutex);
 err_gps:
- 	gps_data.active=0;
-	pthread_join(gps_tid, NULL);
+    if (state->gps) 
+      {
+      gps_data.active=0;
+      pthread_join(gps_tid, NULL);
+      }
   av_packet_unref(&video_packet);
 }
 
@@ -1686,6 +1697,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   check fmv_check = {0, &iparms.fmv};
   check foh_check = {0, &iparms.foh};
   check fov_check = {0, &iparms.fov};
+  check gps_check = {0, &iparms.gps};
   short int sample_x=448, sample_y=252;
   float size_min=.1, size_max=.5, xymin=.005, xymax=.999;
   ovrl da_ovrl = {0, &sample_x, &sample_y, &iparms.ovrl_size, &iparms.ovrl_x, &iparms.ovrl_y};
@@ -1868,7 +1880,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   hbox = gtk_hbox_new(FALSE, 0);
   gtk_box_pack_start (GTK_BOX(vbox), hbox, FALSE, TRUE, 2);
   
-  gtk_box_pack_start (GTK_BOX(hbox), gtk_label_new ("Quantization Minimum "), FALSE, TRUE, 2);
+  gtk_box_pack_start (GTK_BOX(hbox), gtk_label_new ("Quantization Min "), FALSE, TRUE, 2);
   
   wptr = gtk_button_new();
   g_signal_connect(wptr, "clicked", G_CALLBACK(dec_val_lbl), &qmin_lmt);
@@ -1900,7 +1912,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_ADD, GTK_ICON_SIZE_BUTTON));
   gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, TRUE, 2);
     
-  gtk_box_pack_start (GTK_BOX(hbox), gtk_label_new (" Maximum "), FALSE, TRUE, 2);
+  gtk_box_pack_start (GTK_BOX(hbox), gtk_label_new (" Max "), FALSE, TRUE, 2);
   
   wptr = gtk_button_new();
   g_signal_connect(wptr, "clicked", G_CALLBACK(dec_val_lbl), &qmax_lmt);
@@ -1916,6 +1928,11 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_ADD, GTK_ICON_SIZE_BUTTON)); 
   gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, TRUE, 2);
   
+  gps_check.button=gtk_check_button_new_with_label ("GPS spd");
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gps_check.button), iparms.gps);
+  g_signal_connect(gps_check.button, "toggled", G_CALLBACK(check_status), &gps_check);
+  gtk_box_pack_start (GTK_BOX(hbox), gps_check.button, FALSE, TRUE, 2);
+    
   /* setup window Flip check boxes */ 
   vbox1 = gtk_vbox_new(FALSE, 5);
   hbox = gtk_hbox_new(FALSE, 5);
