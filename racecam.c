@@ -29,6 +29,8 @@
 #include "interface/mmal/util/mmal_connection.h"
 #include "interface/mmal/mmal_parameters_camera.h"
 
+#include <bcm2835.h>
+
 #include "raspiCamUtilities.h"
 #include "mmalcomponent.h"
 #include "GPSUtil.h"
@@ -41,6 +43,11 @@
 #define START 1
 // write target time in micro seconds 250000=.25 second
 #define TARGET_TIME 250000
+
+#define GPIO_MODEM_LED	RPI_BPLUS_GPIO_J8_07 
+#define GPIO_LED			  RPI_BPLUS_GPIO_J8_13 
+#define GPIO_SWT			  RPI_BPLUS_GPIO_J8_15
+#define GPIO_PWR_LED	  RPI_BPLUS_GPIO_J8_16
 
  /* typedef struct FLVFileposition {
         int64_t keyframe_position;
@@ -151,6 +158,8 @@ struct {
 
 GtkWidget *stop_win, *stop_button, *message1, *message2;
 
+char gpio_init=0;
+
 GtkWidget *m_layout;
 static const char *m_kbd_path = "/usr/local/bin/matchbox-keyboard";
 static const char *m_kbd_str;
@@ -205,7 +214,7 @@ unsigned long launch_keyboard(void)
       }
     case -1:
       perror ("### Failed to launch 'matchbox-keyboard --xid', is it installed? ### ");
-      exit(1);
+      exit(-1);
     }
 
   /* Parent */
@@ -306,7 +315,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 						side_data = av_packet_new_side_data(packet, AV_PKT_DATA_NEW_EXTRADATA, buffer->length);
 						if (!side_data) {
 							fprintf(stderr, "%s\n", AVERROR(ENOMEM));
-              exit(127);
+              exit(-4);
 							}
 						memcpy(side_data, buffer->data+buffer->offset, buffer->length);
 						}
@@ -504,6 +513,7 @@ int allocate_fmtctx(char *dest, FORMAT_CTX *fctx, RASPIVID_STATE *state)
   
 	AVDictionary *options = NULL;
 //  setup format context and io context
+
 	avformat_alloc_output_context2(&fctx->fmtctx, NULL, "flv", NULL);
 	if (!fctx->fmtctx) 
 		{
@@ -951,19 +961,20 @@ int free_alsa(AENCODE_CTX *actx)
 	free(actx->rlbufs);
 } 
 
-int toggle_stream(RASPIVID_STATE *state, int status)
+int toggle_stream(RASPIVID_STATE *state, int run_status)
 {
-  if (state->encodectx.pcmhnd && status)
+  if (state->encodectx.pcmhnd && run_status)
     {
     snd_pcm_drop(state->encodectx.pcmhnd);
     snd_pcm_prepare(state->encodectx.pcmhnd);
     snd_pcm_start(state->encodectx.pcmhnd);
     } 
-  int run=0;
-  if (status) run = START;
 
-	mmal_port_parameter_set_boolean(state->camera_component->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, run);
-	mmal_port_parameter_set_boolean(state->camera2_component->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, run);
+  bcm2835_gpio_write(GPIO_LED, run_status);
+  bcm2835_gpio_write(GPIO_MODEM_LED, run_status);
+  
+	mmal_port_parameter_set_boolean(state->camera_component->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, run_status);
+	mmal_port_parameter_set_boolean(state->camera2_component->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, run_status);
 
 }
 
@@ -1116,7 +1127,7 @@ void xrun(snd_pcm_t *handle)
 	if ((res = snd_pcm_status(handle, status))<0) 
 		{
 		fprintf(stderr, "status error: %s\n", snd_strerror(res));
-    exit(126);
+    exit(-2);
 		}
 	
 	if (snd_pcm_status_get_state(status) == SND_PCM_STATE_XRUN) 
@@ -1124,7 +1135,7 @@ void xrun(snd_pcm_t *handle)
 		if ((res = snd_pcm_prepare(handle))<0) 
 			{
 			fprintf(stderr, "xrun: prepare error: %s\n", snd_strerror(res));
-      exit(125);
+      exit(-2);
 			}
 		return;		/* ok, data should be accepted again */
 		} 
@@ -1135,13 +1146,13 @@ void xrun(snd_pcm_t *handle)
 				if ((res = snd_pcm_prepare(handle))<0) 
 					{
 					fprintf(stderr, "xrun(DRAINING): prepare error: %s\n", snd_strerror(res));
-          exit(124);
+          exit(-2);
 					}
 				return;
 				}
 			}
 		fprintf(stderr, "read/write error, state = %s\n", snd_pcm_state_name(snd_pcm_status_get_state(status)));
-    exit(128);
+    exit(-2);
 }
 /* I/O suspend handler */
 void suspend(snd_pcm_t *handle)
@@ -1152,7 +1163,7 @@ void suspend(snd_pcm_t *handle)
 	if (res < 0) {
 		if ((res = snd_pcm_prepare(handle)) < 0) {
 			fprintf(stderr, "suspend: prepare error: %s\n", snd_strerror(res));
-      exit(122);
+      exit(-3);
 		}
 	}
 }
@@ -1192,7 +1203,7 @@ int read_pcm(RASPIVID_STATE *state)
 		else if (r < 0) 
 			{
 			fprintf(stderr, "read error: %s\n", snd_strerror(r));
-      exit(121);	
+      exit(-5);	
 			}
 			if (r > 0) 
 				{
@@ -1342,8 +1353,9 @@ void *record_thread(void *argp)
     {
 		vcos_log_error("%s: Failed to connect hvs to encoder input", __func__); 
 		state->encoder_connection = NULL;
+    goto err_audio;
  // change to goto label   
-    exit(120);
+//    exit(120);
     }
   // Set up our userdata - this is passed though to the callback where we need the information.
 	state->encoder_component->output[0]->userdata = (struct MMAL_PORT_USERDATA_T *)&state->callback_data;
@@ -1406,7 +1418,7 @@ void *record_thread(void *argp)
       }
       
   // toggle_stream(state, int)
-  toggle_stream(state, START);
+  toggle_stream(state, STOP);
 
   //	disconnect encoder
   if (state->encoder_component)
@@ -1414,6 +1426,7 @@ void *record_thread(void *argp)
 	if (state->encoder_connection)
 		mmal_connection_destroy(state->encoder_connection);
   // write_audio
+err_audio:
   flush_audio(state);
 err_encoder:
   // destroy_encoder
@@ -2107,6 +2120,19 @@ void record_clicked(GtkWidget *widget, gpointer data)
 
 int main(int argc, char **argv)
 {
+  if (bcm2835_init()) 
+    {
+    gpio_init = 1;    
+    bcm2835_gpio_fsel(GPIO_SWT, BCM2835_GPIO_FSEL_INPT);
+    bcm2835_gpio_fsel(GPIO_LED, BCM2835_GPIO_FSEL_OUTP);
+    bcm2835_gpio_fsel(GPIO_MODEM_LED, BCM2835_GPIO_FSEL_OUTP);
+    bcm2835_gpio_fsel(GPIO_PWR_LED, BCM2835_GPIO_FSEL_OUTP);
+    bcm2835_gpio_write(GPIO_PWR_LED, HIGH);
+    }
+	else 
+    {
+    printf ("bcm2835 init failed\n");
+    }
   if (read_parms())
     {
     strcpy(iparms.url, "a.rtmp.youtube.com/live2/g9td-pva2-fwgy-suv1-9gkz");
@@ -2161,8 +2187,15 @@ int main(int argc, char **argv)
   gtk_widget_show_all (main_win);
 
   gtk_main ();
+  
+  if (gpio_init) {
+		bcm2835_gpio_write(GPIO_LED, LOW);
+    bcm2835_gpio_write(GPIO_MODEM_LED, LOW);
+    bcm2835_gpio_write(GPIO_PWR_LED, LOW);
+		bcm2835_close();}
 
   kill(-getpid(), 15);
+  
 
   return 0;
 }

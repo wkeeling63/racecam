@@ -36,6 +36,6 @@ set (MMAL_LIBS mmal_core mmal_util mmal_vc_client)
 set (GTK_LIBS gtk-x11-2.0 gdk-x11-2.0 pangocairo-1.0 atk-1.0 cairo gdk_pixbuf-2.0 gio-2.0 pangoft2-1.0 pango-1.0 gobject-2.0 glib-2.0 fontconfig freetype)
 
 #target_link_libraries(PiPIPflv pthread asound avformat avcodec avutil swresample ${MMAL_LIBS} vcos bcm_host bcm2835 cairo)
-target_link_libraries(racecam ${GTK_LIBS} ${MMAL_LIBS} pthread asound avformat avcodec avutil swresample vcos bcm_host)
+target_link_libraries(racecam ${GTK_LIBS} ${MMAL_LIBS} pthread asound avformat avcodec avutil swresample vcos bcm_host bcm2835 cairo)
 
 install(TARGETS racecam RUNTIME DESTINATION bin)
