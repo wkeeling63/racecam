@@ -935,8 +935,7 @@ int allocate_alsa(AENCODE_CTX *actx)
 	bits_per_sample = snd_pcm_format_physical_width(hwparams.format);
 	bits_per_frame = bits_per_sample * hwparams.channels;
 	actx->bufsize = chunk_size * bits_per_frame / 8;
-//  printf("bufsize %d\n", actx->bufsize);
-
+  
 	actx->pcmbuf = (u_char *)malloc(actx->bufsize);
 	if (actx->pcmbuf == NULL) 
 		{
@@ -1263,6 +1262,36 @@ void *gps_thread(void *argp)
    close_gps(gps);
 }
 
+int read_parms(void)
+  {
+  FILE *parm_file;
+  parm_file=fopen("/home/pi/racecam.ini", "rb");
+  if (parm_file)
+    {
+    size_t cnt=0;
+    cnt=fread(&iparms, 1, sizeof(iparms), parm_file);
+    if (cnt!=sizeof(iparms)) return 1;
+    if (fclose(parm_file)) return 1;
+    }
+  else
+    {
+    return 1;
+    } 
+  return 0;
+}
+
+int write_parms(char *mode, size_t size, void *ptr)
+  {
+  FILE *parm_file;
+  parm_file=fopen("/home/pi/racecam.ini", mode);
+  size_t cnt=0;
+  cnt=fwrite(ptr, 1, size, parm_file);
+  if (cnt!=size) return 1;
+  if (fclose(parm_file)) return 1;
+  return 0;
+  }
+  
+
 void *record_thread(void *argp)
 {
   RASPIVID_STATE *state = (RASPIVID_STATE *)argp;
@@ -1445,7 +1474,13 @@ err_url:
   if (state->urlctx.fmtctx) free_fmtctx(&state->urlctx);
 err_file:
   // if file free_fmtctx (file_ctx)
-  if (state->filectx.fmtctx) free_fmtctx(&state->filectx);
+  if (state->filectx.fmtctx) 
+    {
+    char buf[64];
+    strcpy(buf, state->filectx.fmtctx->url+5);
+    if (write_parms("ab", sizeof(buf), buf)) printf("write failed\n");
+    free_fmtctx(&state->filectx);
+    }
   // free  vbuf 
   free(state->callback_data.vbuf);
   sem_destroy(&def_mutex);
@@ -1458,35 +1493,7 @@ err_gps:
   av_packet_unref(&video_packet);
 }
 
-int read_parms(void)
-  {
-  FILE *parm_file;
-  parm_file=fopen("/home/pi/racecam.ini", "rb");
-  if (parm_file)
-    {
-    size_t cnt=0;
-    cnt=fread(&iparms, 1, sizeof(iparms), parm_file);
-    if (cnt!=sizeof(iparms)) return 1;
-    if (fclose(parm_file)) return 1;
-    }
-  else
-    {
-    return 1;
-    } 
-  return 0;
-}
 
-int write_parms(void)
-  {
-  FILE *parm_file;
-  parm_file=fopen("/home/pi/racecam.ini", "wb");
-  size_t cnt=0;
-  cnt=fwrite(&iparms, 1, sizeof(iparms), parm_file);
-  if (cnt!=sizeof(iparms)) return 1;
-  if (fclose(parm_file)) return 1;
-  return 0;
-  }
-  
 
 void inc_val_lbl(GtkWidget *widget, gpointer data)
 {
@@ -1629,12 +1636,12 @@ void cancel_clicked(GtkWidget *widget, gpointer data)
 
 void save_clicked(GtkWidget *widget, gpointer data)
 {
-  if (write_parms()) printf("write failed\n");
+  if (write_parms("r+b", sizeof(iparms), &iparms)) printf("write failed\n");
 }
 
 void done_clicked(GtkWidget *widget, gpointer data)
 {
-  if (write_parms()) printf("write failed\n");
+  if (write_parms("r+b", sizeof(iparms), &iparms)) printf("write failed\n");
   gtk_widget_destroy(data);
   gtk_main_quit ();
 }
@@ -1670,8 +1677,8 @@ static gboolean configure_event(GtkWidget *widget, GdkEventConfigure *event, gpo
     g_object_unref (pixmap);
     
   pixmap = gdk_pixmap_new (widget->window,
-          *ol->x,		//	   widget->allocation.width,
-          *ol->y,		//	   widget->allocation.height,
+          *ol->x,		
+          *ol->y,	
 			   -1);
   draw_it(data);
 
@@ -2118,6 +2125,110 @@ void record_clicked(GtkWidget *widget, gpointer data)
 
 }
 
+int copy_file(FILE *to, FILE *from, int size)
+{
+  char buf[201];
+  size_t cnt=fread(buf, 1, size, from);
+  if (cnt != size)
+    {
+    printf("read failed in copy_file\n");
+    return 1;
+    }
+  else
+    {
+    cnt=fwrite(buf, 1, size, to);
+    if (cnt!=size) 
+      {
+      printf("write failed in copy_file\n");
+      return 1;
+      }
+    }
+  return 0;
+}
+
+int del_file(FILE *file)
+{
+  char buf[64];
+  size_t cnt=fread(buf, 1, 64, file);
+  if (cnt != 64)
+    printf("delete read failed %d\n", cnt);
+  else
+    if (remove(buf)) 
+      printf("remove file %s failed\n", buf);
+  return 0;
+}
+
+int clean_files(void)
+{
+  FILE *init_f1, *init_f2;
+  init_f1=fopen("/home/pi/racecam.ini", "rb");
+  if (!init_f1) 
+    {
+    printf("open ini file for cleanup failed\n");
+    return 1;
+    }
+    
+  if (fseek(init_f1, 0, SEEK_END))
+    {
+    printf("seek end failed\n");
+    return 1;
+    }
+
+  int num_of_files=ftell(init_f1);
+  if (num_of_files<0)
+    {
+    printf("file size check failed\n");
+    return 1;
+    }
+  num_of_files=(num_of_files-sizeof(iparms))/64;
+  if (num_of_files <= iparms.file_keep) goto close_f1;
+  
+  int rc=rename("/home/pi/racecam.ini", "/home/pi/racecam.old");
+  if (rc) 
+    {
+    printf("rename failed\n");
+    return 1;
+    } 
+
+  init_f2=fopen("/home/pi/racecam.ini", "wb");
+  if (!init_f2) goto rename_back;
+
+  if (fseek(init_f1, 0, SEEK_SET))
+    {
+    printf("seek start failed\n");
+    goto rename_back;
+    }
+           
+  if(copy_file(init_f2, init_f1, sizeof(iparms)))
+    printf("copy file failed\n");
+  else
+    {
+    int x=num_of_files-iparms.file_keep;
+    for (x=num_of_files-iparms.file_keep; x ;x--)
+      {
+      del_file(init_f1);
+      }
+    
+    for(x=iparms.file_keep; x; x--)  
+      {
+      copy_file(init_f2, init_f1, 64);
+      }
+    }
+  if (fclose(init_f1)) printf("close failed\n");
+  if (fclose(init_f2)) printf("close failed\n");
+  return 0;
+  
+rename_back:
+  printf("open new ini file for cleanup failed\n");
+  rc=rename("/home/pi/racecam.old", "/home/pi/racecam.init");
+  if (rc) printf("rename back failed\n"); 
+  if (fclose(init_f2)) printf("close failed\n");
+  goto close_f1;
+close_f1:
+    if (fclose(init_f1)) printf("close failed\n");
+    return 1;
+}
+
 int main(int argc, char **argv)
 {
   if (bcm2835_init()) 
@@ -2135,7 +2246,7 @@ int main(int argc, char **argv)
     }
   if (read_parms())
     {
-    strcpy(iparms.url, "a.rtmp.youtube.com/live2/g9td-pva2-fwgy-suv1-9gkz");
+    strcpy(iparms.url, "a.rtmp.youtube.com/live2/<key>");
     strcpy(iparms.file, "filename.flv");
     strcpy(iparms.adev, "dmic_sv");
     iparms.fmh=iparms.fmv=iparms.foh=iparms.fov=iparms.main_size=0;
@@ -2148,7 +2259,7 @@ int main(int argc, char **argv)
     iparms.qmax=40;
     iparms.write_url=iparms.write_file=1;
     iparms.file_keep=18;
-    if (write_parms()) printf("write failed\n");
+    if (write_parms("r+b", sizeof(iparms), &iparms)) printf("write failed\n");
     } 
     
   gtk_init (&argc, &argv);
@@ -2193,6 +2304,8 @@ int main(int argc, char **argv)
     bcm2835_gpio_write(GPIO_MODEM_LED, LOW);
     bcm2835_gpio_write(GPIO_PWR_LED, LOW);
 		bcm2835_close();}
+    
+  clean_files();
 
   kill(-getpid(), 15);
   
