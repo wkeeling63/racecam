@@ -1,4 +1,5 @@
 #include <gtk/gtk.h>
+//  #include <gdk-pixbuf/gdk-pixbuf.h>
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -31,6 +32,7 @@
 
 #include <bcm2835.h>
 
+#include "stop-sign.xpm"
 #include "raspiCamUtilities.h"
 #include "mmalcomponent.h"
 #include "GPSUtil.h"
@@ -158,7 +160,7 @@ struct {
   
 char runtime[9];
 char runmessage[80];
-GtkWidget *stop_win, *message;
+GtkWidget *stop_win=NULL, *message=NULL;
 
 char gpio_init=0;
 
@@ -450,7 +452,7 @@ void adjust_q(RASPIVID_STATE *state)
         {
         if ((param.value == state->quantisationMax || param.value == state->quantisationMin) && !(atQlimit))
           {
-          sprintf(runmessage, "Quantization at limit %d", param.value);
+          sprintf(runmessage, "Quantization %d at limit", param.value);
           atQlimit = MMAL_TRUE;
           }
         *write_variance = 0;
@@ -2029,13 +2031,15 @@ void stop_window(gpointer data, int message_flag)
   gtk_widget_hide(data);
   /* stop window */
   stop_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+  gtk_window_set_default_size (GTK_WINDOW (stop_win), 800, 480);
   gtk_window_set_decorated (GTK_WINDOW(stop_win), FALSE); 
-  gtk_window_fullscreen (GTK_WINDOW(stop_win));
+//  gtk_window_fullscreen (GTK_WINDOW(stop_win));
   /* stop button */
   GtkWidget *wptr = gtk_button_new();
-  GtkWidget *image = gtk_image_new_from_file ("/home/pi/Pictures/stop-sign.png");
+  GdkPixbuf *pixbuf = gdk_pixbuf_new_from_xpm_data (stop_sign);
+  GtkWidget *image = gtk_image_new_from_pixbuf (pixbuf);
   gtk_button_set_image(GTK_BUTTON(wptr), image);
-//  gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_STOP, GTK_ICON_SIZE_DIALOG));
+  
   GtkWidget *vbox = gtk_vbox_new(FALSE, 5);
   gtk_box_pack_start (GTK_BOX(vbox), wptr, TRUE, TRUE, 0);
   if (message_flag)
@@ -2094,10 +2098,11 @@ gint main_func (gpointer data)
     gtk_main_quit ();
     }
   char buf[90];
-  if (*runmessage)
+  sprintf(buf, "%s %s", runtime, runmessage);
+/*  if (*runmessage)
     sprintf(buf, "%s\n%s", runtime, runmessage);
   else
-    sprintf(buf, "%s", runtime);
+    sprintf(buf, "%s", runtime); */
   if (message) gtk_label_set_text (GTK_LABEL(message), buf);
   return 1;
 }
