@@ -130,6 +130,12 @@ typedef struct{
   float *xymax;
   float incv;
   } draw;
+
+/* typedef struct {
+  GtkWidget *wptr;
+  int *record_state;
+  } signal_main; */
+
   
 struct {
   char url[64];    // rtmp://a.rtmp.youtube.com/live2/<key>
@@ -155,8 +161,10 @@ struct {
   char cam;
   char gps;
   } iparms;
-
-GtkWidget *stop_win, *stop_button, *message1, *message2;
+  
+char runtime[9];
+char runmessage[80];
+GtkWidget *stop_win, *message;
 
 char gpio_init=0;
 
@@ -430,7 +438,7 @@ void adjust_q(RASPIVID_STATE *state)
       {
       param.value--;
       atQlimit = MMAL_FALSE;
-      fprintf(stdout, "Quantization %d\n", param.value);
+      sprintf(runmessage, "Quantization %d", param.value);
       status = mmal_port_parameter_set(state->encoder_component->output[0], &param.hdr);
       if (status != MMAL_SUCCESS) {vcos_log_error("Unable to reset QP");}
       *write_variance = 0;
@@ -441,7 +449,7 @@ void adjust_q(RASPIVID_STATE *state)
         {
         param.value++;
         atQlimit = MMAL_FALSE;
-        fprintf(stdout, "Quantization %d\n", param.value);
+        sprintf(runmessage, "Quantization %d", param.value);
         status = mmal_port_parameter_set(state->encoder_component->output[0], &param.hdr);
         if (status != MMAL_SUCCESS) {vcos_log_error("Unable to reset QP");}
         *write_variance = 0;
@@ -450,7 +458,7 @@ void adjust_q(RASPIVID_STATE *state)
         {
         if ((param.value == state->quantisationMax || param.value == state->quantisationMin) && !(atQlimit))
           {
-          fprintf(stdout, "Quantization at limit %d\n", param.value);
+          sprintf(runmessage, "Quantization at limit %d", param.value);
           atQlimit = MMAL_TRUE;
           }
         *write_variance = 0;
@@ -1365,16 +1373,19 @@ void *record_thread(void *argp)
     state->encodectx.audctx=state->urlctx.audctx;
     } 
   //	allocate_audio_encode(encodectx)
-  if (allocate_audio_encode(&state->encodectx)) goto err_aencode;
+  if (allocate_audio_encode(&state->encodectx)) {state->recording=-1; goto err_aencode;}
   //	allocate_alsa(encodectx)
-  if (allocate_alsa(&state->encodectx)) goto err_alsa;
+  if (allocate_alsa(&state->encodectx)) {state->recording=-1; goto err_alsa;}
   //	create_video_stream(state)
-  if (create_video_stream(state)) goto err_vstream;
+  if (create_video_stream(state)) {state->recording=-1; goto err_vstream;}
   //	create_encoder(state)
-  if (create_encoder_component(state)) goto err_encoder;
-//  g_signal_emit_by_name(stop_ptr, "clicked");
-//  printf("after emit\n");
-//  goto err_encoder;
+  if (create_encoder_component(state)) {state->recording=-1; goto err_encoder;}
+
+ /* printf("testing stop\n");
+  vcos_sleep(500);
+  state->recording=-1;
+  goto err_encoder; */
+  
   //	connect encoder
   MMAL_STATUS_T status; 
   status = connect_ports(state->hvs_component->output[0], state->encoder_component->input[0], &state->encoder_connection);
@@ -1382,6 +1393,7 @@ void *record_thread(void *argp)
     {
 		vcos_log_error("%s: Failed to connect hvs to encoder input", __func__); 
 		state->encoder_connection = NULL;
+    state->recording=-1;
     goto err_audio;
  // change to goto label   
 //    exit(120);
@@ -1411,9 +1423,8 @@ void *record_thread(void *argp)
   //	toggle_stream
   toggle_stream(state, START);
     
-  while (state->recording) 
+  while (state->recording > 0) 
       {
-//      printf("here10\n");
       // read_PCM
       read_pcm(state);
       // adjust_Q
@@ -1427,19 +1438,20 @@ void *record_thread(void *argp)
       printf("message\n");
       if (message1)
         {
-        int64_t raw_time=(get_microseconds64()/1000)-state->encodectx.start_time;
+        
   //      printf("%lld\n", raw_time);
   //      printf("in if\n");
-        char buf[9];
+        char runtime[9]; */
+        int64_t raw_time=(get_microseconds64()/1000)-state->encodectx.start_time;
         int hours=0, mins=0, secs=0;
         raw_time = raw_time/1000;
         secs = raw_time % 60;
         raw_time = (raw_time-secs)/60;
         mins = raw_time%60;
         hours = (raw_time-mins)/60;       
-        sprintf(buf, "%2d:%02d:%02d", hours, mins, secs);
-        printf("%s\n", buf);
-        gtk_label_set_text (GTK_LABEL(message1), buf);
+        sprintf(runtime, "%2d:%02d:%02d", hours, mins, secs);
+   //     printf("%s\n", buf);
+ /*       gtk_label_set_text (GTK_LABEL(message1), buf);
         gtk_widget_show_all(stop_win);
         }  */
       
@@ -1491,6 +1503,13 @@ err_gps:
       pthread_join(gps_tid, NULL);
       }
   av_packet_unref(&video_packet);
+ /* if (state->recording < 0)
+    {
+    gtk_widget_destroy(stop_win);
+    gtk_main_quit ();
+//    g_signal_emit_by_name(stop_button, "clicked");
+    printf("after emit\n");
+    } */
 }
 
 
@@ -1648,10 +1667,9 @@ void done_clicked(GtkWidget *widget, gpointer data)
 
 void stop_clicked(GtkWidget *widget, gpointer data)
 {
-  message1=NULL;
   gtk_widget_destroy(data);
   gtk_main_quit ();
-}
+ }
 
 void text_cb(GtkWidget *widget, gpointer data)
 {
@@ -2050,31 +2068,31 @@ void setup_clicked(GtkWidget *widget, gpointer data)
 
 }
 
-void stop_window(gpointer data)
+void stop_window(gpointer data, int message_flag)
 {
   gtk_widget_hide(data);
   /* stop window */
-  GtkWidget *wptr = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-  stop_win=wptr;
-  gtk_window_set_decorated (GTK_WINDOW(wptr), FALSE); 
-//  gtk_window_fullscreen (GTK_WINDOW(wptr));
+  stop_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+  gtk_window_set_decorated (GTK_WINDOW(stop_win), FALSE); 
+//  gtk_window_fullscreen (GTK_WINDOW(stop_win));
   /* stop button */
-//  GtkWidget *stop_button = gtk_button_new_with_label ("Stop");
-  stop_button = gtk_button_new();
+  GtkWidget *wptr = gtk_button_new();
+//  GtkWidget *wptr = gtk_button_new_with_label ("Stop");
 //  GtkWidget *image = gtk_image_new_from_file ("/home/pi/Pictures/stop_sign.png");
-//  gtk_button_set_image(GTK_BUTTON(stop_button), image);
-  gtk_button_set_image(GTK_BUTTON(stop_button), gtk_image_new_from_stock(GTK_STOCK_STOP, GTK_ICON_SIZE_DIALOG));
+//  gtk_button_set_image(GTK_BUTTON(wptr), image);
+  gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_STOP, GTK_ICON_SIZE_DIALOG));
   GtkWidget *vbox = gtk_vbox_new(FALSE, 5);
-  gtk_box_pack_start (GTK_BOX(vbox), stop_button, TRUE, TRUE, 0);
-//  message1 = gtk_label_new ("");
-//  gtk_box_pack_start (GTK_BOX(vbox), message1, TRUE, TRUE, 0);
-//  message2 = gtk_label_new ("");
-//  gtk_box_pack_start (GTK_BOX(vbox), message2, TRUE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX(vbox), wptr, TRUE, TRUE, 0);
+  if (message_flag)
+    {
+    message = gtk_label_new (NULL);
+    gtk_label_set_justify (GTK_LABEL (message), GTK_JUSTIFY_CENTER);
+    gtk_box_pack_start (GTK_BOX(vbox), message, TRUE, TRUE, 0);
+    }
 
-  g_signal_connect(stop_button, "clicked", G_CALLBACK(stop_clicked), wptr);
-  gtk_container_add (GTK_CONTAINER (wptr), vbox);
-  
-  gtk_widget_show_all(wptr);
+  g_signal_connect(wptr, "clicked", G_CALLBACK(stop_clicked), stop_win);
+  gtk_container_add (GTK_CONTAINER (stop_win), vbox);
+  gtk_widget_show_all(stop_win);
   
   gtk_main();
 
@@ -2100,7 +2118,7 @@ void preview_clicked(GtkWidget *widget, gpointer data)
 
   toggle_stream(&preview_state, START);
     
-  stop_window(data);
+  stop_window(data, FALSE);
 
   toggle_stream(&preview_state, STOP);
   
@@ -2112,15 +2130,38 @@ error:
   destroy_video_stream(&preview_state);
 }
 
+gint main_func (gpointer data)
+{
+  int *rs=(int *)data;
+  if (*rs < 0 && (stop_win))
+    {
+    gtk_widget_destroy(stop_win);
+    gtk_main_quit ();
+    }
+  char buf[90];
+  if (*runmessage)
+    sprintf(buf, "%s\n%s", runtime, runmessage);
+  else
+    sprintf(buf, "%s", runtime);
+  if (message) gtk_label_set_text (GTK_LABEL(message), buf);
+  return 1;
+}
+
 void record_clicked(GtkWidget *widget, gpointer data)
 {
-  RASPIVID_STATE record_state;
-  pthread_t record_tid;
-  pthread_create(&record_tid, NULL, record_thread, (void *)&record_state);
+  RASPIVID_STATE state;
+  state.recording=0;
 
-  stop_window(data);
+  gint timeout_id = g_timeout_add (125, main_func, &state.recording);
   
-  record_state.recording=0;
+  pthread_t record_tid;
+  pthread_create(&record_tid, NULL, record_thread, (void *)&state);
+
+  stop_window(data, TRUE);
+  
+  g_source_remove (timeout_id);
+  
+  state.recording=0;
   pthread_join(record_tid, NULL);
 
 }
@@ -2216,6 +2257,8 @@ int clean_files(void)
     }
   if (fclose(init_f1)) printf("close failed\n");
   if (fclose(init_f2)) printf("close failed\n");
+  if (remove("/home/pi/racecam.old")) 
+    printf("remove old init file\n");
   return 0;
   
 rename_back:
@@ -2295,9 +2338,9 @@ int main(int argc, char **argv)
   g_signal_connect(button, "clicked", G_CALLBACK(record_clicked), main_win);
   gtk_box_pack_start (GTK_BOX(vbox), button, TRUE, TRUE, 2);
   
-  gtk_widget_show_all (main_win);
+  gtk_widget_show_all(main_win);
 
-  gtk_main ();
+  gtk_main();
   
   if (gpio_init) {
 		bcm2835_gpio_write(GPIO_LED, LOW);
