@@ -130,12 +130,6 @@ typedef struct{
   float *xymax;
   float incv;
   } draw;
-
-/* typedef struct {
-  GtkWidget *wptr;
-  int *record_state;
-  } signal_main; */
-
   
 struct {
   char url[64];    // rtmp://a.rtmp.youtube.com/live2/<key>
@@ -202,8 +196,6 @@ unsigned long launch_keyboard(void)
   size_t n;
 
   unsigned long result;
-
-//  printf("Launching keyboard from: %s\r\n",m_kbd_path);
 
   pipe (stdout_pipe);
   pipe (stdin_pipe);
@@ -1098,7 +1090,6 @@ int write_audio(RASPIVID_STATE *state)
 	}
 	return status;
 
-
 cleanup:
 	av_packet_unref(&packet);
 	return status;
@@ -1321,7 +1312,6 @@ void *record_thread(void *argp)
     {
     pthread_create(&gps_tid, NULL, gps_thread, (void *)&gps_data);
     }
-  // set wtargettime ????? correct ????
   state->callback_data.wtargettime = TARGET_TIME/state->framerate;
   // allocate video buffer
 	state->callback_data.vbuf = (u_char *)malloc(BUFFER_SIZE);
@@ -1381,11 +1371,6 @@ void *record_thread(void *argp)
   //	create_encoder(state)
   if (create_encoder_component(state)) {state->recording=-1; goto err_encoder;}
 
- /* printf("testing stop\n");
-  vcos_sleep(500);
-  state->recording=-1;
-  goto err_encoder; */
-  
   //	connect encoder
   MMAL_STATUS_T status; 
   status = connect_ports(state->hvs_component->output[0], state->encoder_component->input[0], &state->encoder_connection);
@@ -1395,8 +1380,6 @@ void *record_thread(void *argp)
 		state->encoder_connection = NULL;
     state->recording=-1;
     goto err_audio;
- // change to goto label   
-//    exit(120);
     }
   // Set up our userdata - this is passed though to the callback where we need the information.
 	state->encoder_component->output[0]->userdata = (struct MMAL_PORT_USERDATA_T *)&state->callback_data;
@@ -1419,7 +1402,6 @@ void *record_thread(void *argp)
 		if (mmal_port_send_buffer(state->encoder_component->output[0], buffer)!= MMAL_SUCCESS)
 			vcos_log_error("Unable to send a buffer to encoder output port (%d)", q);
 		}
- 
   //	toggle_stream
   toggle_stream(state, START);
     
@@ -1434,33 +1416,17 @@ void *record_thread(void *argp)
         {
         send_text(gps_data.speed, state);
         }
- /*     // run time message
-      printf("message\n");
-      if (message1)
-        {
-        
-  //      printf("%lld\n", raw_time);
-  //      printf("in if\n");
-        char runtime[9]; */
-        int64_t raw_time=(get_microseconds64()/1000)-state->encodectx.start_time;
-        int hours=0, mins=0, secs=0;
-        raw_time = raw_time/1000;
-        secs = raw_time % 60;
-        raw_time = (raw_time-secs)/60;
-        mins = raw_time%60;
-        hours = (raw_time-mins)/60;       
-        sprintf(runtime, "%2d:%02d:%02d", hours, mins, secs);
-   //     printf("%s\n", buf);
- /*       gtk_label_set_text (GTK_LABEL(message1), buf);
-        gtk_widget_show_all(stop_win);
-        }  */
-      
-  //    vcos_sleep(50);
+      int64_t raw_time=(get_microseconds64()/1000)-state->encodectx.start_time;
+      int hours=0, mins=0, secs=0;
+      raw_time = raw_time/1000;
+      secs = raw_time % 60;
+      raw_time = (raw_time-secs)/60;
+      mins = raw_time%60;
+      hours = (raw_time-mins)/60;       
+      sprintf(runtime, "%2d:%02d:%02d", hours, mins, secs);
       }
-      
   // toggle_stream(state, int)
   toggle_stream(state, STOP);
-
   //	disconnect encoder
   if (state->encoder_component)
 		check_disable_port(state->encoder_component->output[0]);
@@ -1503,16 +1469,7 @@ err_gps:
       pthread_join(gps_tid, NULL);
       }
   av_packet_unref(&video_packet);
- /* if (state->recording < 0)
-    {
-    gtk_widget_destroy(stop_win);
-    gtk_main_quit ();
-//    g_signal_emit_by_name(stop_button, "clicked");
-    printf("after emit\n");
-    } */
 }
-
-
 
 void inc_val_lbl(GtkWidget *widget, gpointer data)
 {
@@ -1682,7 +1639,6 @@ void text_cb(GtkWidget *widget, gpointer data)
 void widget_destroy(GtkWidget *widget, gpointer data)
 {
    gtk_widget_destroy(widget);
-//   gtk_widget_destroy(m_layout);
    gtk_main_quit ();
 }
 
@@ -2074,20 +2030,19 @@ void stop_window(gpointer data, int message_flag)
   /* stop window */
   stop_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
   gtk_window_set_decorated (GTK_WINDOW(stop_win), FALSE); 
-//  gtk_window_fullscreen (GTK_WINDOW(stop_win));
+  gtk_window_fullscreen (GTK_WINDOW(stop_win));
   /* stop button */
   GtkWidget *wptr = gtk_button_new();
-//  GtkWidget *wptr = gtk_button_new_with_label ("Stop");
-//  GtkWidget *image = gtk_image_new_from_file ("/home/pi/Pictures/stop_sign.png");
-//  gtk_button_set_image(GTK_BUTTON(wptr), image);
-  gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_STOP, GTK_ICON_SIZE_DIALOG));
+  GtkWidget *image = gtk_image_new_from_file ("/home/pi/Pictures/stop-sign.png");
+  gtk_button_set_image(GTK_BUTTON(wptr), image);
+//  gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_STOP, GTK_ICON_SIZE_DIALOG));
   GtkWidget *vbox = gtk_vbox_new(FALSE, 5);
   gtk_box_pack_start (GTK_BOX(vbox), wptr, TRUE, TRUE, 0);
   if (message_flag)
     {
     message = gtk_label_new (NULL);
     gtk_label_set_justify (GTK_LABEL (message), GTK_JUSTIFY_CENTER);
-    gtk_box_pack_start (GTK_BOX(vbox), message, TRUE, TRUE, 0);
+    gtk_box_pack_start (GTK_BOX(vbox), message, FALSE, TRUE, 0);
     }
 
   g_signal_connect(wptr, "clicked", G_CALLBACK(stop_clicked), stop_win);
@@ -2352,6 +2307,5 @@ int main(int argc, char **argv)
 
   kill(-getpid(), 15);
   
-
   return 0;
 }
