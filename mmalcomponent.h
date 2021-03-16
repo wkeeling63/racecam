@@ -16,6 +16,13 @@
 #include "libavutil/audio_fifo.h"
 #include <alsa/asoundlib.h>
 
+enum mode_enum {
+  NOT_RUNNING,
+  CLICK_RECORD,
+  SWITCH_RECORD,
+  PREVIEW,
+  EXITING=-1};
+
 typedef struct
 {
    char camera_name[MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN]; // Name of the camera sensor
@@ -112,7 +119,8 @@ struct RASPIVID_STATE_S
 
    PORT_USERDATA callback_data;        /// Used to move data to the encoder callback
 
-   int bCapturing;                     /// State of capture/pause
+//   int bCapturing;                     /// State of capture/pause
+   int mode;    // 1=click_record, 2=switch_record, 3=preview -1=exiting)
 
    int frame;  
    int64_t starttime;

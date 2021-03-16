@@ -160,7 +160,8 @@ struct {
   
 char runtime[9];
 char runmessage[80];
-GtkWidget *stop_win=NULL, *message=NULL;
+pthread_t switch_tid;
+GtkWidget *main_win=NULL, *switch_dialog=NULL, *stop_win=NULL, *message=NULL;
 
 char gpio_init=0;
 
@@ -175,8 +176,11 @@ unsigned long     kb_xid;
 /* Backing pixmap for drawing area */
 static GdkPixmap *pixmap = NULL;
 
+RASPIVID_STATE global_state;
+
 void cleanup_children(int s)
 {
+  printf("term signal %d\n", s);
   kill(-getpid(), 15);  /* kill every one in our process group  */
   exit(0);
 }
@@ -382,7 +386,7 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 
 void parms_to_state(RASPIVID_STATE *state)
 {
-  default_status(state);
+//  default_status(state);
   switch (iparms.main_size)    // 2: 854x480 1: 1280x720 0: 1920x1080
   {
   case 0:
@@ -653,10 +657,6 @@ int allocate_fmtctx(char *dest, FORMAT_CTX *fctx, RASPIVID_STATE *state)
 int free_fmtctx(FORMAT_CTX *fctx)
 {
   int status=0;
-
-	if (fctx->vidctx) {avcodec_free_context(&fctx->vidctx);}
-	if (fctx->audctx) {avcodec_free_context(&fctx->audctx);}
-		
 	if (fctx->fmtctx)
 		{
 		if (fctx->ioctx && fctx->ioctx->seekable == 1)
@@ -664,7 +664,7 @@ int free_fmtctx(FORMAT_CTX *fctx)
 			status = av_write_trailer(fctx->fmtctx);  
 			if (status < 0) {fprintf(stderr, "Write ouput trailer failed! STATUS %d\n", status);}
 			}  
-		status = avio_close(fctx->ioctx);	
+		status = avio_closep(&fctx->ioctx);	
 		if (status < 0)
 			{
 			fprintf(stderr, "Could not close output file (error '%s')\n", av_err2str(status));
@@ -673,6 +673,8 @@ int free_fmtctx(FORMAT_CTX *fctx)
 		avformat_free_context(fctx->fmtctx);
     fctx->fmtctx=NULL;
 		}
+  if (fctx->vidctx) {avcodec_free_context(&fctx->vidctx);}
+	if (fctx->audctx) {avcodec_free_context(&fctx->audctx);}
 	return 0;
 }
 
@@ -1296,7 +1298,7 @@ int write_parms(char *mode, size_t size, void *ptr)
 void *record_thread(void *argp)
 {
   RASPIVID_STATE *state = (RASPIVID_STATE *)argp;
-  parms_to_state (state);
+//  parms_to_state (state);
   state->callback_data.pstate = state;
   state->encodectx.start_time = get_microseconds64()/1000;
   state->recording=1;
@@ -1615,11 +1617,13 @@ void cancel_clicked(GtkWidget *widget, gpointer data)
 void save_clicked(GtkWidget *widget, gpointer data)
 {
   if (write_parms("r+b", sizeof(iparms), &iparms)) printf("write failed\n");
+  parms_to_state (&global_state);
 }
 
 void done_clicked(GtkWidget *widget, gpointer data)
 {
   if (write_parms("r+b", sizeof(iparms), &iparms)) printf("write failed\n");
+  parms_to_state (&global_state);
   gtk_widget_destroy(data);
   gtk_main_quit ();
 }
@@ -2031,7 +2035,7 @@ void stop_window(gpointer data, int message_flag)
   gtk_widget_hide(data);
   /* stop window */
   stop_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-  gtk_window_set_default_size (GTK_WINDOW (stop_win), 800, 480);
+//  gtk_window_set_default_size (GTK_WINDOW (stop_win), 800, 480);
   gtk_window_set_decorated (GTK_WINDOW(stop_win), FALSE); 
 //  gtk_window_fullscreen (GTK_WINDOW(stop_win));
   /* stop button */
@@ -2061,35 +2065,50 @@ void stop_window(gpointer data, int message_flag)
 void preview_clicked(GtkWidget *widget, gpointer data)
 {
   MMAL_STATUS_T status = MMAL_SUCCESS;
-  RASPIVID_STATE preview_state;
-  parms_to_state (&preview_state);
-  preview_state.callback_data.pstate = &preview_state;
+  global_state.mode=PREVIEW;
+//  RASPIVID_STATE preview_state;
+//  parms_to_state (&global_state);
+//    parms_to_state (&preview_state);
+//  preview_state.callback_data.pstate = &preview_state;
+  global_state.callback_data.pstate = &global_state;
   
-  create_video_stream(&preview_state);
-  create_preview_component(&preview_state);
-  if ((status = connect_ports(preview_state.hvs_component->output[0], 
-    preview_state.preview_component->input[0], &preview_state.preview_connection)) != MMAL_SUCCESS)
+  create_video_stream(&global_state);
+//  create_video_stream(&preview_state);
+  create_preview_component(&global_state);
+//  create_preview_component(&preview_state);
+  if ((status = connect_ports(global_state.hvs_component->output[0], 
+ //   if ((status = connect_ports(preview_state.hvs_component->output[0], 
+    global_state.preview_component->input[0], &global_state.preview_connection)) != MMAL_SUCCESS)
+ //   preview_state.preview_component->input[0], &preview_state.preview_connection)) != MMAL_SUCCESS)
     {
 		vcos_log_error("%s: Failed to connect hvs to encoder input", __func__); 
-		preview_state.preview_connection = NULL;
+		global_state.preview_connection = NULL;
+ //   preview_state.preview_connection = NULL;
     goto error;
     } 
 
-  toggle_stream(&preview_state, START);
+  toggle_stream(&global_state, START);
+//  toggle_stream(&preview_state, START);
     
   stop_window(data, FALSE);
 
-  toggle_stream(&preview_state, STOP);
+  toggle_stream(&global_state, STOP);
+//  toggle_stream(&preview_state, STOP);
   
-  if (preview_state.preview_connection)
-		mmal_connection_destroy(preview_state.preview_connection);
+  if (global_state.preview_connection)
+//  if (preview_state.preview_connection)
+		mmal_connection_destroy(global_state.preview_connection);
+ //   mmal_connection_destroy(preview_state.preview_connection);
 
 error:  
-  destroy_preview_component(&preview_state);
-  destroy_video_stream(&preview_state);
+  destroy_preview_component(&global_state);
+//  destroy_preview_component(&preview_state);
+  destroy_video_stream(&global_state);
+//  destroy_video_stream(&preview_state);
+  global_state.mode=NOT_RUNNING;
 }
 
-gint main_func (gpointer data)
+gint record_timeout (gpointer data)
 {
   int *rs=(int *)data;
   if (*rs < 0 && (stop_win))
@@ -2099,30 +2118,33 @@ gint main_func (gpointer data)
     }
   char buf[90];
   sprintf(buf, "%s %s", runtime, runmessage);
-/*  if (*runmessage)
-    sprintf(buf, "%s\n%s", runtime, runmessage);
-  else
-    sprintf(buf, "%s", runtime); */
   if (message) gtk_label_set_text (GTK_LABEL(message), buf);
   return 1;
 }
 
 void record_clicked(GtkWidget *widget, gpointer data)
 {
-  RASPIVID_STATE state;
-  state.recording=0;
+  global_state.mode=CLICK_RECORD;
+//  RASPIVID_STATE state;
+  global_state.recording=0;
+//  state.recording=0;
 
-  gint timeout_id = g_timeout_add (125, main_func, &state.recording);
+  gint timeout_id = g_timeout_add (125, record_timeout, &global_state.recording);
+//  gint timeout_id = g_timeout_add (125, record_timeout, &state.recording);
   
   pthread_t record_tid;
-  pthread_create(&record_tid, NULL, record_thread, (void *)&state);
+  pthread_create(&record_tid, NULL, record_thread, (void *)&global_state);
+ //   pthread_create(&record_tid, NULL, record_thread, (void *)&state);
 
   stop_window(data, TRUE);
   
   g_source_remove (timeout_id);
   
-  state.recording=0;
+  global_state.recording=0;
+//  state.recording=0;
   pthread_join(record_tid, NULL);
+  global_state.mode=NOT_RUNNING;
+//  global_state.mode=EXITING;
 
 }
 
@@ -2232,6 +2254,37 @@ close_f1:
     return 1;
 }
 
+gint main_timeout (gpointer data)
+{
+  RASPIVID_STATE *state = (RASPIVID_STATE *)data;
+  
+  int switch_state = bcm2835_gpio_lev(GPIO_SWT);
+  if (switch_state == 0 && state->mode == NOT_RUNNING)
+    {
+    switch_dialog = gtk_dialog_new();
+    gtk_window_set_transient_for (GTK_WINDOW(switch_dialog), GTK_WINDOW(main_win));
+    gtk_window_set_destroy_with_parent (GTK_WINDOW(switch_dialog), TRUE);
+    gtk_window_set_modal (GTK_WINDOW(switch_dialog), TRUE);
+    message = gtk_label_new (NULL);
+    gtk_label_set_justify (GTK_LABEL (message), GTK_JUSTIFY_CENTER);
+    gtk_box_pack_start (GTK_BOX(switch_dialog), message, FALSE, TRUE, 0);
+    global_state.mode=SWITCH_RECORD;
+    global_state.recording=1;
+    pthread_create(&switch_tid, NULL, record_thread, (void *)&global_state);
+    }
+    
+  if (switch_state == 1 && state->mode == SWITCH_RECORD)
+    {
+    global_state.recording=0;
+//    global_state.mode=EXITING;
+    global_state.mode=NOT_RUNNING;
+    pthread_join(switch_tid, NULL);
+    gtk_widget_destroy(switch_dialog);
+    }
+//  if (global_state.mode == EXITING) gtk_main_quit ();
+  return 1;
+}
+
 int main(int argc, char **argv)
 {
   if (bcm2835_init()) 
@@ -2264,7 +2317,8 @@ int main(int argc, char **argv)
     iparms.file_keep=18;
     if (write_parms("r+b", sizeof(iparms), &iparms)) printf("write failed\n");
     } 
-    
+  default_status(&global_state);
+  parms_to_state(&global_state);
   gtk_init (&argc, &argv);
 
   install_signal_handlers();
@@ -2278,7 +2332,7 @@ int main(int argc, char **argv)
     }
     
   /*Main Window */
-  GtkWidget *main_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+  main_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 
   gtk_window_set_default_size (GTK_WINDOW (main_win), 640, 480);
   gtk_container_set_border_width (GTK_CONTAINER (main_win), 20);
@@ -2300,7 +2354,12 @@ int main(int argc, char **argv)
   
   gtk_widget_show_all(main_win);
 
+  gint timeout_id = g_timeout_add (125, main_timeout, &global_state);
+
   gtk_main();
+  
+  g_source_remove (timeout_id);
+//  if (mode < 0) distroy main_window and exit(-126)
   
   if (gpio_init) {
 		bcm2835_gpio_write(GPIO_LED, LOW);

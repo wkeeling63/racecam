@@ -797,11 +797,12 @@ void default_status(RASPIVID_STATE *state)
    state->profile = MMAL_VIDEO_PROFILE_H264_HIGH;
    state->level = MMAL_VIDEO_LEVEL_H264_41;
    state->waitMethod = 0;     //remove
-   state->bCapturing = 0;     //remove
+//   state->bCapturing = 0;     //remove
    state->bInlineHeaders = 0;
    state->frame = 0;             //remove??
    state->addSPSTiming = MMAL_FALSE;
    state->slices = 1;
+   state->mode=NOT_RUNNING;
 
    // Set up the camera_parameters to default
    state->camera_parameters.sharpness = 0;
