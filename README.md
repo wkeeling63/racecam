@@ -1,6 +1,6 @@
 Purpose: To build and front and rear facing live stream race camera
 
-Description PiPIPflv: Creates a 2 camera components and tunnels them to the 
+Description racecam: Creates a 2 camera components and tunnels them to the 
 Hardware Video Scaler (HVS) component to overlay the second camera 
 frame on the frame of the main camera. The HVS output is tunneled to 
 the encoder to create a video H.264 stream.  The video stream is 
@@ -16,7 +16,7 @@ Software required:
 * GTK+2.0 sudo apt-get install libgtk2.0-dev 
 * matchbox keyboard sudo apt-get install matchbox-keyboard
 * FFMPEG library sudo apt-get install ffmpeg
-* bcm2835 library http://www.airspayce.com/mikem/bcm2835/index.html  // not yet needed
+* bcm2835 library http://www.airspayce.com/mikem/bcm2835/index.html
 * Cairo library sudo apt-get install libcairo2-dev
 
 Hardware required:

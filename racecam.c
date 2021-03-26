@@ -1,5 +1,4 @@
 #include <gtk/gtk.h>
-//  #include <gdk-pixbuf/gdk-pixbuf.h>
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -50,55 +49,6 @@
 #define GPIO_LED			  RPI_BPLUS_GPIO_J8_13 
 #define GPIO_SWT			  RPI_BPLUS_GPIO_J8_15
 #define GPIO_PWR_LED	  RPI_BPLUS_GPIO_J8_16
-
- /* typedef struct FLVFileposition {
-        int64_t keyframe_position;
-        double keyframe_timestamp;
-        struct FLVFileposition *next;
-    } FLVFileposition;
-
-typedef struct FLVContext {
-       AVClass *av_class;
-       int     reserved;
-       int64_t duration_offset;
-       int64_t filesize_offset;
-       int64_t duration;
-       int64_t delay;      ///< first dts delay (needed for AVC & Speex)
-   
-       int64_t datastart_offset;
-       int64_t datasize_offset;
-       int64_t datasize;
-       int64_t videosize_offset;
-       int64_t videosize;
-       int64_t audiosize_offset;
-       int64_t audiosize;
-   
-       int64_t metadata_size_pos;
-       int64_t metadata_totalsize_pos;
-       int64_t metadata_totalsize;
-       int64_t keyframe_index_size;
-   
-       int64_t lasttimestamp_offset;
-       double lasttimestamp;
-       int64_t lastkeyframetimestamp_offset;
-       double lastkeyframetimestamp;
-       int64_t lastkeyframelocation_offset;
-       int64_t lastkeyframelocation;
-   
-       int acurframeindex;
-       int64_t keyframes_info_offset;
-   
-       int64_t filepositions_count;
-       FLVFileposition *filepositions;
-       FLVFileposition *head_filepositions;
-   
-       AVCodecParameters *audio_par;
-       AVCodecParameters *video_par;
-       double framerate;
-       AVCodecParameters *data_par;
-   
-       int flags;
-   } FLVContext; */
   
 typedef struct{
   GtkWidget *label;
@@ -178,9 +128,11 @@ static GdkPixmap *pixmap = NULL;
 
 RASPIVID_STATE global_state;
 
+static int clean_files(void);
+
 void cleanup_children(int s)
 {
-  printf("term signal %d\n", s);
+//  printf("term signal %d\n", s);
   kill(-getpid(), 15);  /* kill every one in our process group  */
   exit(0);
 }
@@ -1473,6 +1425,7 @@ err_gps:
       pthread_join(gps_tid, NULL);
       }
   av_packet_unref(&video_packet);
+  clean_files();
 }
 
 void inc_val_lbl(GtkWidget *widget, gpointer data)
@@ -2257,7 +2210,7 @@ close_f1:
 gint main_timeout (gpointer data)
 {
   RASPIVID_STATE *state = (RASPIVID_STATE *)data;
-  
+  static gint timeout_id=0;
   int switch_state = bcm2835_gpio_lev(GPIO_SWT);
   if (switch_state == 0 && state->mode == NOT_RUNNING)
     {
@@ -2265,11 +2218,18 @@ gint main_timeout (gpointer data)
     gtk_window_set_transient_for (GTK_WINDOW(switch_dialog), GTK_WINDOW(main_win));
     gtk_window_set_destroy_with_parent (GTK_WINDOW(switch_dialog), TRUE);
     gtk_window_set_modal (GTK_WINDOW(switch_dialog), TRUE);
+    gtk_window_set_default_size (GTK_WINDOW (switch_dialog), 320, 180);
+    gtk_window_set_decorated (GTK_WINDOW(switch_dialog), FALSE); 
+    gtk_container_set_border_width (GTK_CONTAINER (switch_dialog), 20);
     message = gtk_label_new (NULL);
     gtk_label_set_justify (GTK_LABEL (message), GTK_JUSTIFY_CENTER);
-    gtk_box_pack_start (GTK_BOX(switch_dialog), message, FALSE, TRUE, 0);
+    GtkWidget *vbox = gtk_dialog_get_content_area (GTK_DIALOG(switch_dialog));
+    gtk_box_pack_start (GTK_BOX(vbox), gtk_label_new("\nPress switch to stop\n"), FALSE, TRUE, 0);
+    gtk_box_pack_start (GTK_BOX(vbox), message, FALSE, TRUE, 0);
+    gtk_widget_show_all(switch_dialog);
     global_state.mode=SWITCH_RECORD;
     global_state.recording=1;
+    timeout_id = g_timeout_add (125, record_timeout, &global_state.recording);
     pthread_create(&switch_tid, NULL, record_thread, (void *)&global_state);
     }
     
@@ -2278,6 +2238,7 @@ gint main_timeout (gpointer data)
     global_state.recording=0;
 //    global_state.mode=EXITING;
     global_state.mode=NOT_RUNNING;
+    g_source_remove (timeout_id);
     pthread_join(switch_tid, NULL);
     gtk_widget_destroy(switch_dialog);
     }
@@ -2291,6 +2252,7 @@ int main(int argc, char **argv)
     {
     gpio_init = 1;    
     bcm2835_gpio_fsel(GPIO_SWT, BCM2835_GPIO_FSEL_INPT);
+    bcm2835_gpio_set_pud(GPIO_SWT, BCM2835_GPIO_PUD_UP);
     bcm2835_gpio_fsel(GPIO_LED, BCM2835_GPIO_FSEL_OUTP);
     bcm2835_gpio_fsel(GPIO_MODEM_LED, BCM2835_GPIO_FSEL_OUTP);
     bcm2835_gpio_fsel(GPIO_PWR_LED, BCM2835_GPIO_FSEL_OUTP);
