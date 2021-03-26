@@ -1,4 +1,4 @@
-Purpose: To build and front and rear facing live stream race camera
+Purpose: To build and front and rear facing live stream race camera with GUI
 
 Description racecam: Creates a 2 camera components and tunnels them to the 
 Hardware Video Scaler (HVS) component to overlay the second camera 
