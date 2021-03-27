@@ -115,13 +115,8 @@ GtkWidget *main_win=NULL, *switch_dialog=NULL, *stop_win=NULL, *message=NULL;
 
 char gpio_init=0;
 
-GtkWidget *m_layout;
-static const char *m_kbd_path = "/usr/local/bin/matchbox-keyboard";
-static const char *m_kbd_str;
-static guint m_kbd_xid;
-static guint m_kbd_pid;
-
 unsigned long     kb_xid;
+pid_t sh_pid, kbd_pid;
 
 /* Backing pixmap for drawing area */
 static GdkPixmap *pixmap = NULL;
@@ -132,8 +127,10 @@ static int clean_files(void);
 
 void cleanup_children(int s)
 {
-//  printf("term signal %d\n", s);
-  kill(-getpid(), 15);  /* kill every one in our process group  */
+  printf("term signal in handler %d\n", s);
+//  kill(-getpid(), 15);  /* kill every one in our process group  */
+  kill(kbd_pid, SIGTERM);  
+  kill(sh_pid, SIGTERM);  
   exit(0);
 }
 
@@ -158,7 +155,9 @@ unsigned long launch_keyboard(void)
   pipe (stdout_pipe);
   pipe (stdin_pipe);
 
-  switch (fork ())
+//  switch (fork ())
+  sh_pid = fork();
+  switch (sh_pid)
     {
     case 0:
       {
@@ -176,7 +175,6 @@ unsigned long launch_keyboard(void)
     }
 
   /* Parent */
-
   /* Close the write end of STDOUT */
   close(stdout_pipe[1]);
 
@@ -191,9 +189,15 @@ unsigned long launch_keyboard(void)
   while (i < 256);
 
   buf[i] = '\0';
-  result = atol (buf);
+  result = atol(buf);
 
   close(stdout_pipe[0]);
+  
+  sprintf(buf, "pgrep -P %d\n", sh_pid);
+  FILE *child_fd = popen(buf, "r");
+  fgets(buf, sizeof(buf), child_fd);
+  pclose(child_fd);
+  kbd_pid = atol(buf);
 
   return result;
 }
@@ -2019,45 +2023,26 @@ void preview_clicked(GtkWidget *widget, gpointer data)
 {
   MMAL_STATUS_T status = MMAL_SUCCESS;
   global_state.mode=PREVIEW;
-//  RASPIVID_STATE preview_state;
-//  parms_to_state (&global_state);
-//    parms_to_state (&preview_state);
-//  preview_state.callback_data.pstate = &preview_state;
   global_state.callback_data.pstate = &global_state;
   
   create_video_stream(&global_state);
-//  create_video_stream(&preview_state);
   create_preview_component(&global_state);
-//  create_preview_component(&preview_state);
   if ((status = connect_ports(global_state.hvs_component->output[0], 
- //   if ((status = connect_ports(preview_state.hvs_component->output[0], 
     global_state.preview_component->input[0], &global_state.preview_connection)) != MMAL_SUCCESS)
- //   preview_state.preview_component->input[0], &preview_state.preview_connection)) != MMAL_SUCCESS)
     {
 		vcos_log_error("%s: Failed to connect hvs to encoder input", __func__); 
 		global_state.preview_connection = NULL;
- //   preview_state.preview_connection = NULL;
     goto error;
     } 
-
   toggle_stream(&global_state, START);
-//  toggle_stream(&preview_state, START);
-    
   stop_window(data, FALSE);
-
   toggle_stream(&global_state, STOP);
-//  toggle_stream(&preview_state, STOP);
-  
   if (global_state.preview_connection)
-//  if (preview_state.preview_connection)
 		mmal_connection_destroy(global_state.preview_connection);
- //   mmal_connection_destroy(preview_state.preview_connection);
 
 error:  
   destroy_preview_component(&global_state);
-//  destroy_preview_component(&preview_state);
   destroy_video_stream(&global_state);
-//  destroy_video_stream(&preview_state);
   global_state.mode=NOT_RUNNING;
 }
 
@@ -2078,27 +2063,15 @@ gint record_timeout (gpointer data)
 void record_clicked(GtkWidget *widget, gpointer data)
 {
   global_state.mode=CLICK_RECORD;
-//  RASPIVID_STATE state;
   global_state.recording=0;
-//  state.recording=0;
-
   gint timeout_id = g_timeout_add (125, record_timeout, &global_state.recording);
-//  gint timeout_id = g_timeout_add (125, record_timeout, &state.recording);
-  
   pthread_t record_tid;
   pthread_create(&record_tid, NULL, record_thread, (void *)&global_state);
- //   pthread_create(&record_tid, NULL, record_thread, (void *)&state);
-
   stop_window(data, TRUE);
-  
   g_source_remove (timeout_id);
-  
   global_state.recording=0;
-//  state.recording=0;
   pthread_join(record_tid, NULL);
   global_state.mode=NOT_RUNNING;
-//  global_state.mode=EXITING;
-
 }
 
 int copy_file(FILE *to, FILE *from, int size)
@@ -2224,7 +2197,7 @@ gint main_timeout (gpointer data)
     message = gtk_label_new (NULL);
     gtk_label_set_justify (GTK_LABEL (message), GTK_JUSTIFY_CENTER);
     GtkWidget *vbox = gtk_dialog_get_content_area (GTK_DIALOG(switch_dialog));
-    gtk_box_pack_start (GTK_BOX(vbox), gtk_label_new("\nPress switch to stop\n"), FALSE, TRUE, 0);
+    gtk_box_pack_start (GTK_BOX(vbox), gtk_label_new("\nUse switch to stop\n"), FALSE, TRUE, 0);
     gtk_box_pack_start (GTK_BOX(vbox), message, FALSE, TRUE, 0);
     gtk_widget_show_all(switch_dialog);
     global_state.mode=SWITCH_RECORD;
@@ -2236,13 +2209,11 @@ gint main_timeout (gpointer data)
   if (switch_state == 1 && state->mode == SWITCH_RECORD)
     {
     global_state.recording=0;
-//    global_state.mode=EXITING;
     global_state.mode=NOT_RUNNING;
     g_source_remove (timeout_id);
     pthread_join(switch_tid, NULL);
     gtk_widget_destroy(switch_dialog);
     }
-//  if (global_state.mode == EXITING) gtk_main_quit ();
   return 1;
 }
 
@@ -2331,7 +2302,7 @@ int main(int argc, char **argv)
     
   clean_files();
 
-  kill(-getpid(), 15);
-  
+  kill(kbd_pid, 15);
+  kill(sh_pid, 15);
   return 0;
 }
