@@ -166,7 +166,9 @@ unsigned long launch_keyboard(void)
 	dup(stdout_pipe[1]);
 	close(stdout_pipe[0]);
 	close(stdout_pipe[1]);
-	
+  
+  /* use the following for standard keyboard layout 
+   * 	execlp ("/bin/sh", "sh", "-c", "matchbox-keyboard --xid fi", NULL); */ 
 	execlp ("/bin/sh", "sh", "-c", "matchbox-keyboard --xid rc", NULL);
       }
     case -1:
