@@ -167,7 +167,7 @@ unsigned long launch_keyboard(void)
 	close(stdout_pipe[0]);
 	close(stdout_pipe[1]);
 	
-	execlp ("/bin/sh", "sh", "-c", "matchbox-keyboard --xid fi", NULL);
+	execlp ("/bin/sh", "sh", "-c", "matchbox-keyboard --xid rc", NULL);
       }
     case -1:
       perror ("### Failed to launch 'matchbox-keyboard --xid', is it installed? ### ");
@@ -342,7 +342,6 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 
 void parms_to_state(RASPIVID_STATE *state)
 {
-//  default_status(state);
   switch (iparms.main_size)    // 2: 854x480 1: 1280x720 0: 1920x1080
   {
   case 0:
@@ -1254,7 +1253,6 @@ int write_parms(char *mode, size_t size, void *ptr)
 void *record_thread(void *argp)
 {
   RASPIVID_STATE *state = (RASPIVID_STATE *)argp;
-//  parms_to_state (state);
   state->callback_data.pstate = state;
   state->encodectx.start_time = get_microseconds64()/1000;
   state->recording=1;
@@ -1287,7 +1285,6 @@ void *record_thread(void *argp)
   
   int length;
   char str[64];
-  //	if file allocate_fmtctx (file, ctx)
   if (iparms.write_file)
     {
     time_t time_uf;
@@ -1307,8 +1304,7 @@ void *record_thread(void *argp)
       goto err_file;
       }
     state->encodectx.audctx=state->filectx.audctx;
-    }
-  //	if url allocate_fmtctx (url, ctx)  
+    } 
   if (iparms.write_url)
     {
     strcpy(str, "rtmp://");
@@ -1322,16 +1318,11 @@ void *record_thread(void *argp)
       }
     state->encodectx.audctx=state->urlctx.audctx;
     } 
-  //	allocate_audio_encode(encodectx)
   if (allocate_audio_encode(&state->encodectx)) {state->recording=-1; goto err_aencode;}
-  //	allocate_alsa(encodectx)
   if (allocate_alsa(&state->encodectx)) {state->recording=-1; goto err_alsa;}
-  //	create_video_stream(state)
   if (create_video_stream(state)) {state->recording=-1; goto err_vstream;}
-  //	create_encoder(state)
   if (create_encoder_component(state)) {state->recording=-1; goto err_encoder;}
 
-  //	connect encoder
   MMAL_STATUS_T status; 
   status = connect_ports(state->hvs_component->output[0], state->encoder_component->input[0], &state->encoder_connection);
   if (status != MMAL_SUCCESS)
@@ -1341,17 +1332,15 @@ void *record_thread(void *argp)
     state->recording=-1;
     goto err_audio;
     }
-  // Set up our userdata - this is passed though to the callback where we need the information.
+
 	state->encoder_component->output[0]->userdata = (struct MMAL_PORT_USERDATA_T *)&state->callback_data;
 
-    // Enable the encoder output port and tell it its callback function
 	status = mmal_port_enable(state->encoder_component->output[0], encoder_buffer_callback);
 	if (status) 
 		{
 		fprintf(stderr, "enable port failed\n");
 		}
 	
-	// Send all the buffers to the encoder output port
 	int num = mmal_queue_length(state->encoder_pool->queue);    
 	int q;
 	for (q=0; q<num; q++)
@@ -1362,16 +1351,13 @@ void *record_thread(void *argp)
 		if (mmal_port_send_buffer(state->encoder_component->output[0], buffer)!= MMAL_SUCCESS)
 			vcos_log_error("Unable to send a buffer to encoder output port (%d)", q);
 		}
-  //	toggle_stream
+
   toggle_stream(state, START);
     
   while (state->recording > 0) 
       {
-      // read_PCM
       read_pcm(state);
-      // adjust_Q
       adjust_q(state);
-      // send_text
       if (state->gps) 
         {
         send_text(gps_data.speed, state);
@@ -1385,33 +1371,25 @@ void *record_thread(void *argp)
       hours = (raw_time-mins)/60;       
       sprintf(runtime, "%2d:%02d:%02d", hours, mins, secs);
       }
-  // toggle_stream(state, int)
+
   toggle_stream(state, STOP);
-  //	disconnect encoder
   if (state->encoder_component)
 		check_disable_port(state->encoder_component->output[0]);
 	if (state->encoder_connection)
 		mmal_connection_destroy(state->encoder_connection);
-  // write_audio
 err_audio:
   flush_audio(state);
 err_encoder:
-  // destroy_encoder
   destroy_encoder_component(state);
 err_vstream:
-  // destroy_video_stream
   destroy_video_stream(state);
 err_alsa:
-  // free_alsa
   free_alsa(&state->encodectx);
 err_aencode:
-  // free_audio_encode 
   free_audio_encode(&state->encodectx);
 err_url:  
-  // if url free_fmtctx (url_ctx)
   if (state->urlctx.fmtctx) free_fmtctx(&state->urlctx);
 err_file:
-  // if file free_fmtctx (file_ctx)
   if (state->filectx.fmtctx) 
     {
     char buf[64];
@@ -1419,7 +1397,6 @@ err_file:
     if (write_parms("ab", sizeof(buf), buf)) printf("write failed\n");
     free_fmtctx(&state->filectx);
     }
-  // free  vbuf 
   free(state->callback_data.vbuf);
   sem_destroy(&def_mutex);
 err_gps:
@@ -2292,7 +2269,6 @@ int main(int argc, char **argv)
   gtk_main();
   
   g_source_remove (timeout_id);
-//  if (mode < 0) distroy main_window and exit(-126)
   
   if (gpio_init) {
 		bcm2835_gpio_write(GPIO_LED, LOW);

@@ -10,7 +10,9 @@ created from ALSA api using Adafruit I2S MEMS Microphone
 and both streams are added to flash video container by FFMPEG api.
 
 
-Install: cmake . 
+Install: cmake .
+
+Custom keyboard layout (keyboard-rc.xml) must be copied to /usr/share/matchbox-keyboard as root after matchbox-keyboard install of change racecam.c to use a standard layout (fi). 
 
 Software required:
 * GTK+2.0 sudo apt-get install libgtk2.0-dev 
