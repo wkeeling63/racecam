@@ -75,6 +75,7 @@ typedef struct
    u_char            *pcmbuf;
    u_char            *rlbufs;
    size_t            bufsize;
+   int64_t           audio_sample_cnt;
    int64_t           start_time;
 } AENCODE_CTX;
 

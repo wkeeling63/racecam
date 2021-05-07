@@ -928,6 +928,7 @@ int toggle_stream(RASPIVID_STATE *state, int run_status)
     snd_pcm_drop(state->encodectx.pcmhnd);
     snd_pcm_prepare(state->encodectx.pcmhnd);
     snd_pcm_start(state->encodectx.pcmhnd);
+    state->encodectx.audio_sample_cnt = 0;
     } 
 
   bcm2835_gpio_write(GPIO_LED, run_status);
@@ -968,9 +969,9 @@ void destroy_video_stream(RASPIVID_STATE *state)
 
 	return;
 }
-int write_audio(RASPIVID_STATE *state)
+int write_audio(RASPIVID_STATE *state, int samples)
 {
-	int status; 
+  int status; 
   AVFrame *infrm = state->encodectx.infrm;
   AVFrame *outfrm = state->encodectx.outfrm;
   AVAudioFifo *fifo = state->encodectx.fifo;
@@ -980,103 +981,106 @@ int write_audio(RASPIVID_STATE *state)
   SwrContext *resample_ctx = state->encodectx.swrctx;
   AVCodecContext *aac_codec_ctx = state->encodectx.audctx;
   sem_t *mutex = state->callback_data.mutex;
-	AVPacket packet;
-	int64_t save_pts=0, calc_pts;
+  AVPacket packet;
+  int64_t save_pts=0, calc_pts; 
+  float sample_const=44.1;
+  
+  while (av_audio_fifo_size(fifo) >= samples)
+    {
+    outfrm->pts = outfrm->pkt_dts = save_pts = state->encodectx.audio_sample_cnt/sample_const;
+    status = av_audio_fifo_read(fifo, (void **)infrm->data, 1024);
+    if (status < 0) 
+      {
+      fprintf(stderr, "fifo read failed! %d %s\n", status, av_err2str(status));
+      return -1;
+      }
+    else
+      {
+      state->encodectx.audio_sample_cnt += status;
+      }
+	
+    status = swr_convert_frame(resample_ctx, outfrm, infrm);
+    if (status) {fprintf(stderr, "Frame convert %d (error '%s')\n", status, av_err2str(status));}
+	
+    av_init_packet(&packet); // Set the packet data and size so that it is recognized as being empty. 
+    packet.data = NULL;
+    packet.size = 0;
 
-	while (av_audio_fifo_size(fifo) >= infrm->nb_samples)
+    status = avcodec_send_frame(aac_codec_ctx, outfrm);  
+    if (status == AVERROR_EOF) // The encoder signals that it has nothing more to encode.
+      {
+      status = 0;
+      fprintf(stderr, "EOF at send frame\n");
+      goto cleanup;
+      }
+    else 
+      if (status < 0)
 	{
-  outfrm->pts = outfrm->pkt_dts = save_pts = get_microseconds64()/1000-state->encodectx.start_time;
-	status = av_audio_fifo_read(fifo, (void **)infrm->data, infrm->nb_samples);
-	if (status < 0) 
-		{
-		fprintf(stderr, "fifo read failed! %d %s\n", status, av_err2str(status));
-		return -1;
-		}
-	
-	status = swr_convert_frame(resample_ctx, outfrm, infrm);
-	if (status) {fprintf(stderr, "Frame convert %d (error '%s')\n", status, av_err2str(status));}
-	
-	av_init_packet(&packet); // Set the packet data and size so that it is recognized as being empty. 
-	packet.data = NULL;
-	packet.size = 0;
-
-	status = avcodec_send_frame(aac_codec_ctx, outfrm);  
-	if (status == AVERROR_EOF) // The encoder signals that it has nothing more to encode.
-		{
-		status = 0;
-		fprintf(stderr, "EOF at send frame\n");
-		goto cleanup;
-		}
-	 else 
-		if (status < 0)
-			{
-			fprintf(stderr, "Could not send packet for encoding (error '%s')\n", av_err2str(status));
-			return status;
-			}
-      
-	status = avcodec_receive_packet(aac_codec_ctx, &packet);
-	if (status == AVERROR(EAGAIN)) // If the encoder asks for more data to be able to provide an encoded frame, return indicating that no data is present.
-		{
-		status = 0;
-		} 
-	else 
-		if (status == AVERROR_EOF) // If the last frame has been encoded, stop encoding.
-			{
-			status = 0;
-			fprintf(stderr, "EOF at receive packet\n");
-			goto cleanup;
-			} 
-		else 
-			if (status < 0) 
-				{
-				fprintf(stderr, "Could not encode frame (error '%s')\n", av_err2str(status));  //get this if not loaded frame
-				goto cleanup;
-    			} 
-			else 
-				{
-				packet.duration=0;
-				packet.pos=-1;
-				packet.dts=packet.pts=save_pts-250;
-				packet.stream_index = 1;
-				sem_wait(mutex);
-				if (urlctx) status = av_write_frame(urlctx, &packet);
-        if (filectx) status += av_write_frame(filectx, &packet);
-				sem_post(mutex); 
-				if (status < 0) 
-					{
-					fprintf(stderr, "Could not audio write frame (error '%s')\n", av_err2str(status));
-					goto cleanup;
-					}
-				}
-	}
+	fprintf(stderr, "Could not send packet for encoding (error '%s')\n", av_err2str(status));
 	return status;
+	}
+      
+      status = avcodec_receive_packet(aac_codec_ctx, &packet);
+      if (status == AVERROR(EAGAIN)) // If the encoder asks for more data to be able to provide an encoded frame, return indicating that no data is present.
+	{
+	printf("audio encode no packet yet\n");
+	status = 0;
+	} 
+      else 
+	if (status == AVERROR_EOF) // If the last frame has been encoded, stop encoding.
+	  {
+	  status = 0;
+	  fprintf(stderr, "EOF at receive packet\n");
+	  goto cleanup;
+	  } 
+	else 
+	  if (status < 0) 
+	    {
+	    fprintf(stderr, "Could not encode frame (error '%s')\n", av_err2str(status));  //get this if not loaded frame
+	    goto cleanup;
+	    } 
+	  else 
+	    {
+	    packet.duration=0;
+	    packet.pos=-1;
+	    packet.stream_index = 1;
+	    sem_wait(mutex);
+	    if (urlctx) status = av_write_frame(urlctx, &packet);
+	    if (filectx) status += av_write_frame(filectx, &packet);
+	    sem_post(mutex); 
+	    if (status < 0) 
+	      {
+	      fprintf(stderr, "Could not audio write frame (error '%s')\n", av_err2str(status));
+	      goto cleanup;
+	      }
+	    }
+    }
+    return status;
 
 cleanup:
-	av_packet_unref(&packet);
-	return status;
+    av_packet_unref(&packet);
+    return status;
 }
 
 void flush_audio(RASPIVID_STATE *state)
 {
-  state->encodectx.infrm->nb_samples=1;
-  write_audio(state);
+  write_audio(state, 1);
   int rc=0, write=0;
-	if (state->encodectx.audctx)
-		{
-		AVPacket packet;
-		av_init_packet(&packet); 
-		packet.data = NULL;
-		packet.size = 0;
-		avcodec_send_frame(state->encodectx.audctx, NULL); 
-		rc = avcodec_receive_packet(state->encodectx.audctx, &packet);
-		while (!rc) {
-			packet.pts = packet.dts = get_microseconds64()/1000-state->encodectx.start_time;
-      if (state->urlctx.fmtctx) write = av_write_frame(state->urlctx.fmtctx, &packet);
-      if (state->filectx.fmtctx) write += av_write_frame(state->filectx.fmtctx, &packet);
-      if (write) printf("Flush audio write status %d\n", write);
-			rc = avcodec_receive_packet(state->encodectx.audctx, &packet);
-			};
-		} 
+    if (state->encodectx.audctx)
+      {
+      AVPacket packet;
+      av_init_packet(&packet); 
+      avcodec_send_frame(state->encodectx.audctx, NULL); 
+      rc = avcodec_receive_packet(state->encodectx.audctx, &packet);
+      while (!rc) 
+	{
+	packet.stream_index = 1;
+	if (state->urlctx.fmtctx) write = av_write_frame(state->urlctx.fmtctx, &packet);
+	if (state->filectx.fmtctx) write += av_write_frame(state->filectx.fmtctx, &packet);
+	if (write) printf("Flush audio write status %d\n", write);
+	rc = avcodec_receive_packet(state->encodectx.audctx, &packet);
+	};
+      }
 }
 void xrun(snd_pcm_t *handle)
 {
@@ -1201,7 +1205,7 @@ int read_pcm(RASPIVID_STATE *state)
 			{
 			fprintf(stderr, "fifo did not write all! to write %d written %d\n", r, status);
 			}
-  write_audio(state);
+  write_audio(state, 1024);
   return result;
 }
 
@@ -1244,6 +1248,7 @@ int write_parms(char *mode, size_t size, void *ptr)
   {
   FILE *parm_file;
   parm_file=fopen("/home/pi/racecam.ini", mode);
+  if (parm_file == NULL) return 1;
   size_t cnt=0;
   cnt=fwrite(ptr, 1, size, parm_file);
   if (cnt!=size) return 1;
@@ -2198,6 +2203,7 @@ gint main_timeout (gpointer data)
 
 int main(int argc, char **argv)
 {
+ 
   if (bcm2835_init()) 
     {
     gpio_init = 1;    
@@ -2227,12 +2233,13 @@ int main(int argc, char **argv)
     iparms.qmax=40;
     iparms.write_url=iparms.write_file=1;
     iparms.file_keep=18;
-    if (write_parms("r+b", sizeof(iparms), &iparms)) printf("write failed\n");
+    if (write_parms("wb", sizeof(iparms), &iparms)) printf("write failed\n");
     } 
   default_status(&global_state);
   parms_to_state(&global_state);
+  
   gtk_init (&argc, &argv);
-
+  
   install_signal_handlers();
 
   kb_xid = launch_keyboard();
@@ -2241,8 +2248,7 @@ int main(int argc, char **argv)
     {
       perror ("### 'matchbox-keyboard --xid', failed to return valid window ID. ### ");
       exit(-1);
-    }
-    
+    }   
   /*Main Window */
   main_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 
