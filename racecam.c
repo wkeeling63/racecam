@@ -115,6 +115,7 @@ pthread_t switch_tid;
 GtkWidget *main_win=NULL, *switch_dialog=NULL, *stop_win=NULL, *message=NULL;
 
 char gpio_init=0;
+int ignore_signal=0;
 
 unsigned long     kb_xid;
 pid_t sh_pid, kbd_pid;
@@ -128,6 +129,8 @@ static int clean_files(void);
 
 void cleanup_children(int s)
 {
+//  printf("ignore value %d\n", ignore_signal);
+  if (ignore_signal) return;
   printf("term signal in handler %d\n", s);
 //  kill(-getpid(), 15);  /* kill every one in our process group  */
   kill(kbd_pid, SIGTERM);  
@@ -1283,7 +1286,7 @@ void *record_thread(void *argp)
   RASPIVID_STATE *state = (RASPIVID_STATE *)argp;
   state->callback_data.pstate = state;
   state->encodectx.start_time = get_microseconds64()/1000;
-  state->recording=1;
+  state->recording=ignore_signal=1;
   	
   AVPacket video_packet;
   av_init_packet(&video_packet);
@@ -1432,6 +1435,7 @@ err_gps:
     }
   av_packet_unref(&video_packet);
   clean_files();
+  if (state->recording == -1) ignore_signal=0;
 }
 
 void inc_val_lbl(GtkWidget *widget, gpointer data)
@@ -2062,13 +2066,13 @@ gint record_timeout (gpointer data)
 void record_clicked(GtkWidget *widget, gpointer data)
 {
   global_state.mode=CLICK_RECORD;
-  global_state.recording=0;
+  global_state.recording=ignore_signal=0;
   gint timeout_id = g_timeout_add (125, record_timeout, &global_state.recording);
   pthread_t record_tid;
   pthread_create(&record_tid, NULL, record_thread, (void *)&global_state);
   stop_window(data, TRUE);
   g_source_remove (timeout_id);
-  global_state.recording=0;
+  global_state.recording=ignore_signal=0;
   pthread_join(record_tid, NULL);
   global_state.mode=NOT_RUNNING;
 }
@@ -2200,14 +2204,14 @@ gint main_timeout (gpointer data)
     gtk_box_pack_start (GTK_BOX(vbox), message, FALSE, TRUE, 0);
     gtk_widget_show_all(switch_dialog);
     global_state.mode=SWITCH_RECORD;
-    global_state.recording=1;
+    global_state.recording=ignore_signal=1;
     timeout_id = g_timeout_add (125, record_timeout, &global_state.recording);
     pthread_create(&switch_tid, NULL, record_thread, (void *)&global_state);
     }
     
   if (switch_state == 1 && state->mode == SWITCH_RECORD)
     {
-    global_state.recording=0;
+    global_state.recording=ignore_signal=0;
     global_state.mode=NOT_RUNNING;
     g_source_remove (timeout_id);
     pthread_join(switch_tid, NULL);
