@@ -129,10 +129,8 @@ static int clean_files(void);
 
 void cleanup_children(int s)
 {
-//  printf("ignore value %d\n", ignore_signal);
   if (ignore_signal) return;
   printf("term signal in handler %d\n", s);
-//  kill(-getpid(), 15);  /* kill every one in our process group  */
   kill(kbd_pid, SIGTERM);  
   kill(sh_pid, SIGTERM);  
   exit(0);
@@ -159,7 +157,6 @@ unsigned long launch_keyboard(void)
   pipe (stdout_pipe);
   pipe (stdin_pipe);
 
-//  switch (fork ())
   sh_pid = fork();
   switch (sh_pid)
     {
@@ -220,8 +217,8 @@ static void hvs_input_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
   MMAL_BUFFER_HEADER_T *new_buffer;
-  static int64_t framecnt=0;
-  static int64_t pts = -1;
+  int64_t pts = 0;
+  static int64_t start_pts=0;
 	
   PORT_USERDATA *pData = (PORT_USERDATA *)port->userdata;
   RASPIVID_STATE *pstate = pData->pstate;
@@ -244,11 +241,14 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 //        av_init_packet(&packet);
         
 	int status=0;
-	if (buffer->pts != MMAL_TIME_UNKNOWN && buffer->pts != pData->pstate->lasttime)
+	if (buffer->pts != pData->pstate->lasttime)
 	  {
-	  if (pData->pstate->frame == 0) pData->pstate->starttime = buffer->pts;
+	    if (pData->pstate->frame == 0) 
+	    {
+	    start_pts = buffer->pts;
+	    }
 	  pData->pstate->lasttime = buffer->pts;
-	  pts = buffer->pts - pData->pstate->starttime;
+	  pts = buffer->pts - start_pts;
 	  pData->pstate->frame++;
 	  }	
 	if (buffer->flags & MMAL_BUFFER_HEADER_FLAG_FRAME_END) 
@@ -290,11 +290,10 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 	  int64_t wstart = get_microseconds64();
 	  int url_status=0, file_status=0;
 	  sem_wait(pData->mutex);
-//	  printf("video %lld %lld\n", packet->pts, packet->duration);
 	  if (pstate->urlctx.fmtctx) url_status=av_write_frame(pstate->urlctx.fmtctx, packet);
-	  if (url_status) fprintf(stderr, "video frame write error to url %d %s\n", status, av_err2str(status));
+	  if (url_status) fprintf(stderr, "video frame write error to url %d %s\n", url_status, av_err2str(url_status));
           if (pstate->filectx.fmtctx) file_status=av_write_frame(pstate->filectx.fmtctx, packet);					
-	  if (file_status) fprintf(stderr, "video frame write error to file %d %s\n", status, av_err2str(status));
+	  if (file_status) fprintf(stderr, "video frame write error to file %d %s\n", file_status, av_err2str(file_status));
           sem_post(pData->mutex);
           pData->wvariance += (get_microseconds64() - wstart) - pData->wtargettime;
 
@@ -304,7 +303,6 @@ static void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 	    }
 	  else 
 	    {
-	    ++framecnt;
 	    bytes_written = buffer->length;
 	    }				
 	  }
@@ -469,17 +467,11 @@ void send_text(int speed, RASPIVID_STATE *state)
 }
 
 int allocate_fmtctx(char *dest, FORMAT_CTX *fctx, RASPIVID_STATE *state) 
-// int allocate_fmtctx(char *dest, RASPIVID_STATE *state) 
 {
   int status=0;
-//  printf("%p %p\n", fctx, &state->filectx);
-/*  FORMAT_CTX *fctx;
-  if (memcmp(dest, "file:", 5)) {fctx=&state->filectx;}
-  else {fctx=&state->urlctx;} */
   
   AVDictionary *options = NULL;
 //  setup format context and io context
-
   avformat_alloc_output_context2(&fctx->fmtctx, NULL, "flv", NULL);
   if (!fctx->fmtctx) 
     {
@@ -504,31 +496,37 @@ int allocate_fmtctx(char *dest, FORMAT_CTX *fctx, RASPIVID_STATE *state)
     fprintf(stderr, "Could not allocate H264 stream\n");
     return -1;
     }
-        
-  fctx->vidctx = avcodec_alloc_context3(h264_codec); 
-  if (!fctx->vidctx) 
+    
+  AVCodecContext *vctx = avcodec_alloc_context3(h264_codec); 
+  if (!vctx) 
     {
     fprintf(stderr, "Could not alloc an video encoding context\n");
     return -1;
     }	
 
-  fctx->vidctx->codec_id = AV_CODEC_ID_H264;
-  fctx->vidctx->bit_rate = 0;
-  fctx->vidctx->qmin = state->quantisationMin;
-  fctx->vidctx->qmax = state->quantisationMax;
-  fctx->vidctx->width = fctx->vidctx->coded_width  = state->common_settings.width;
-  fctx->vidctx->height = fctx->vidctx->coded_height = state->common_settings.height;
+  vctx->codec_id = AV_CODEC_ID_H264;
+  vctx->bit_rate = 0;
+  vctx->qmin = state->quantisationMin;
+  vctx->qmax = state->quantisationMax;
+  vctx->width = vctx->coded_width  = state->common_settings.width;
+  vctx->height = vctx->coded_height = state->common_settings.height;
   
-  fctx->vidctx->sample_rate = state->framerate;
-  fctx->vidctx->gop_size = state->intraperiod;                  
-  fctx->vidctx->pix_fmt = AV_PIX_FMT_YUV420P; 
-  status = avcodec_parameters_from_context(h264_video_strm->codecpar, fctx->vidctx);
+  vctx->sample_rate = state->framerate;
+  vctx->gop_size = state->intraperiod;                  
+  vctx->pix_fmt = AV_PIX_FMT_YUV420P; 
+  
+  if (fctx->fmtctx->oformat->flags & AVFMT_GLOBALHEADER) { // Some container formats (like MP4) require global headers to be present.
+    vctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;}
+  
+  status = avcodec_parameters_from_context(h264_video_strm->codecpar, vctx);
   if (status < 0) 
     {
     fprintf(stderr, "Could not initialize stream parameters\n");
     return -1;
     }
     
+  avcodec_free_context(&vctx);
+  
   h264_video_strm->time_base.den = state->framerate;   // Set the sample rate for the container
   h264_video_strm->time_base.num = 1;
   h264_video_strm->avg_frame_rate.num = state->framerate;   // Set the sample rate for the container
@@ -536,21 +534,6 @@ int allocate_fmtctx(char *dest, FORMAT_CTX *fctx, RASPIVID_STATE *state)
   h264_video_strm->r_frame_rate.num = state->framerate;   // Set the sample rate for the container
   h264_video_strm->r_frame_rate.den = 1;
 
-  if (fctx->fmtctx->oformat->flags & AVFMT_GLOBALHEADER) { // Some container formats (like MP4) require global headers to be present.
-    fctx->vidctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;}
-		
-  if ((status = av_dict_set(&options, "rtmp_live", "live", 0)) < 0) {
-    fprintf(stderr, "rtmp live option: %s\n", av_err2str(status));}
-    	
-  if (memcmp(dest, "file:", 5)) options=NULL;
-  if ((status = avio_open2(&fctx->ioctx, dest, AVIO_FLAG_WRITE, NULL, &options)))
-    {
-    fprintf(stderr, "Could not open output file '%s' (error '%s')\n", dest, av_err2str(status));
-    return -1;
-    }
-        
-  fctx->fmtctx->pb = fctx->ioctx;
-		
 //  setup AAC codec and stream context
   AVCodec *aac_codec = avcodec_find_encoder(AV_CODEC_ID_AAC);
   if (!aac_codec)
@@ -558,6 +541,7 @@ int allocate_fmtctx(char *dest, FORMAT_CTX *fctx, RASPIVID_STATE *state)
     fprintf(stderr, "AAC codec id not found!\n");
     return -1;
     }	
+
   AVStream *aac_audio_strm = avformat_new_stream(fctx->fmtctx, NULL);
   if (!aac_audio_strm) 
     {
@@ -571,7 +555,7 @@ int allocate_fmtctx(char *dest, FORMAT_CTX *fctx, RASPIVID_STATE *state)
     fprintf(stderr, "Could not alloc an encoding context\n");
     return -1;
     }
-//  printf("initial padding %d\n", fctx->audctx->initial_padding);
+
   fctx->audctx->channels       = iparms.channels;
   fctx->audctx->channel_layout = av_get_default_channel_layout(iparms.channels);
   fctx->audctx->sample_rate    = DEFAULT_SPEED;
@@ -584,7 +568,7 @@ int allocate_fmtctx(char *dest, FORMAT_CTX *fctx, RASPIVID_STATE *state)
     
   if (fctx->fmtctx->oformat->flags & AVFMT_GLOBALHEADER)  // Some container formats (like MP4) require global headers to be present.
     fctx->audctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-        
+	
   if ((status = avcodec_open2(fctx->audctx, aac_codec, NULL) < 0)) 
     {
     fprintf(stderr, "Could not open output codec (error '%s')\n", av_err2str(status));
@@ -596,18 +580,22 @@ int allocate_fmtctx(char *dest, FORMAT_CTX *fctx, RASPIVID_STATE *state)
     fprintf(stderr, "Could not initialize stream parameters\n");
     return -1;
     }
+		
+  if ((status = av_dict_set(&options, "rtmp_live", "live", 0)) < 0) {
+    fprintf(stderr, "rtmp live option: %s\n", av_err2str(status));}
+    	
+  if (memcmp(dest, "file:", 5)) options=NULL;
+  if ((status =  avio_open2(&fctx->ioctx, dest, AVIO_FLAG_WRITE, NULL, &options)))
+    {
+    fprintf(stderr, "Could not open output file '%s' (error '%s')\n", dest, av_err2str(status));
+    return -1;
+    }
+        
+  fctx->fmtctx->pb = fctx->ioctx;
 //  write flv header 
-  fctx->fmtctx->start_time_realtime=1; 
-//	fctx->fmtctx->start_time_realtime=get_microseconds64();  // flv_frmtctx->start_time_realtime=0;  // 0 should user system clock
-/*	status = avformat_init_output(fctx->fmtctx, &options);  // null if AVDictionary is unneeded????
-	if (status < 0)
-		{
-		fprintf(stderr, "Write ouput header failed! STATUS %d\n", status);
-		return -1;
-		}  */
+  fctx->fmtctx->start_time_realtime=0; 
 
   status = avformat_write_header(fctx->fmtctx, NULL);  // null if AVDictionary is unneeded????
-//  printf("header write status %d %lld %lld\n", status, fctx->fmtctx->start_time_realtime, fctx->fmtctx->start_time);
   if (status < 0)
     {
     fprintf(stderr, "Write ouput header failed! STATUS %d\n", status);
@@ -625,7 +613,6 @@ int free_fmtctx(FORMAT_CTX *fctx)
     if (fctx->ioctx && fctx->ioctx->seekable == 1)
       {
       status = av_write_trailer(fctx->fmtctx); 
-//      printf("write trailer status %d\n", status); 
       if (status < 0) {fprintf(stderr, "Write ouput trailer failed! STATUS %d\n", status);}
       }  
     status = avio_closep(&fctx->ioctx);	
@@ -634,15 +621,16 @@ int free_fmtctx(FORMAT_CTX *fctx)
       fprintf(stderr, "Could not close output file (error '%s')\n", av_err2str(status));
       return -1; 
       }
+
     avformat_free_context(fctx->fmtctx);
     fctx->fmtctx=NULL;
-    }
-  if (fctx->vidctx) {avcodec_free_context(&fctx->vidctx);}
+    } 
   if (fctx->audctx) {avcodec_free_context(&fctx->audctx);}
+    
   return 0;
 }
 
-int allocate_audio_encode(AENCODE_CTX *actx) // need aacctx, rawctx,resamplectx, fifoctx
+int allocate_audio_encode(AENCODE_CTX *actx) 
 {
   int status=0;
 //  setup RAW codec and context
@@ -849,8 +837,6 @@ int allocate_alsa(AENCODE_CTX *actx)
 
   snd_pcm_info_alloca(&info);
 
-//  printf("%d %d %d\n", SND_PCM_NONBLOCK, SND_PCM_ASYNC, -EAGAIN);
-
   err = snd_pcm_open(&actx->pcmhnd, iparms.adev, SND_PCM_STREAM_CAPTURE, 0);
   //err = snd_pcm_open(&actx->pcmhnd, iparms.adev, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK);
   if (err < 0) 
@@ -1034,7 +1020,6 @@ int write_audio(RASPIVID_STATE *state, int samples)
       status = avcodec_receive_packet(aac_codec_ctx, &packet);
       if (status == AVERROR(EAGAIN) || packet.pts < 0) // If the encoder asks for more data to be able to provide an encoded frame, return indicating that no data is present.
 	{
-//	printf("%d %lld\n", status, packet.pts);
 	status = 0;
 	goto cleanup;
 	} 
@@ -1057,12 +1042,11 @@ int write_audio(RASPIVID_STATE *state, int samples)
 	    packet.pos=-1;
 	    packet.stream_index = 1;
 	    int url_status=0, file_status=0;
-//	    printf("pts %lld\n", packet.pts);
 	    sem_wait(mutex);
 	    if (urlctx) url_status = av_write_frame(urlctx, &packet);
-	    if (url_status) fprintf(stderr, "Could not audio write frame to url (error '%s')\n", av_err2str(status));
+	    if (url_status) fprintf(stderr, "Could not audio write frame to url (error '%s')\n", av_err2str(url_status));
 	    if (filectx) file_status = av_write_frame(filectx, &packet);
-	    if (file_status) fprintf(stderr, "Could not audio write frame to file (error '%s')\n", av_err2str(status));
+	    if (file_status) fprintf(stderr, "Could not audio write frame to file (error '%s')\n", av_err2str(file_status));
 	    sem_post(mutex); 
 	    if (url_status || file_status) goto cleanup;
 	    }
@@ -1088,7 +1072,6 @@ void flush_audio(RASPIVID_STATE *state)
 	{
 	packet.stream_index = 1;
 	packet.duration=0;
-//	printf("audio %lld %lld\n", packet.pts, packet.duration);
 	if (state->urlctx.fmtctx) url_status = av_write_frame(state->urlctx.fmtctx, &packet);
 	if (url_status) printf("Flush audio write to url status %d\n", url_status);
 	if (state->filectx.fmtctx) file_status = av_write_frame(state->filectx.fmtctx, &packet);
@@ -1287,6 +1270,7 @@ void *record_thread(void *argp)
   state->callback_data.pstate = state;
   state->encodectx.start_time = get_microseconds64()/1000;
   state->recording=ignore_signal=1;
+  state->lasttime = state->frame = 0;
   	
   AVPacket video_packet;
   av_init_packet(&video_packet);

@@ -3,7 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <memory.h>
-#include <sysexits.h>
+#include <sysexits.h> 
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -125,10 +125,6 @@ MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state)
    format->es->video.crop.height = state->common_settings.height;
    format->es->video.frame_rate.num = state->framerate;
    format->es->video.frame_rate.den = VIDEO_FRAME_RATE_DEN;
-   
- //  printf("%d %d %d %d %d %d\n", format->es->video.width, format->es->video.height, 
- //     format->es->video.crop.width, format->es->video.crop.height, 
- //     format->es->video.frame_rate.num, format->es->video.frame_rate.den);
    
    status = mmal_port_format_commit(preview_port);
 
@@ -691,11 +687,9 @@ MMAL_STATUS_T connect_ports(MMAL_PORT_T *output_port, MMAL_PORT_T *input_port, M
    MMAL_STATUS_T status;
 
    status =  mmal_connection_create(connection, output_port, input_port, MMAL_CONNECTION_FLAG_TUNNELLING | MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT);
-//   printf("connect status %d\n", status);
    if (status == MMAL_SUCCESS)
    {
       status =  mmal_connection_enable(*connection);
-//      printf("enable status %d\n", status);
       if (status != MMAL_SUCCESS)
          mmal_connection_destroy(*connection);
    }
@@ -777,8 +771,6 @@ void default_status(RASPIVID_STATE *state)
    strncpy(state->common_settings.camera_name, "(Unknown)", MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
    // We dont set width and height since these will be specific to the app being built.
 
- //  state->common_settings.filename = NULL;
- //  state->common_settings.verbose = 0;  //remove
    state->common_settings.cameraNum = 1;
    state->common_settings.sensor_mode = 5;
 
@@ -788,7 +780,6 @@ void default_status(RASPIVID_STATE *state)
    state->common_settings.height = 1080;     
    state->encoding = MMAL_ENCODING_H264;
    state->bitrate = 0; // 0 for variable bit rate
-//   state->framerate = VIDEO_FRAME_RATE_NUM;
    state->intraperiod = 15;    // Not set
    state->quantisationParameter = 30;
    state->quantisationMin = 20;
@@ -797,7 +788,6 @@ void default_status(RASPIVID_STATE *state)
    state->profile = MMAL_VIDEO_PROFILE_H264_HIGH;
    state->level = MMAL_VIDEO_LEVEL_H264_41;
    state->waitMethod = 0;     //remove
-//   state->bCapturing = 0;     //remove
    state->bInlineHeaders = 0;
    state->frame = 0;             //remove??
    state->addSPSTiming = MMAL_FALSE;

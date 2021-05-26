@@ -29,10 +29,8 @@ typedef struct
    int width;                          /// Requested width of image
    int height;                         /// requested height of image
    MMAL_RECT_T ovl;                    /// overlay location
-//   char *filename;                     /// filename of output file
    int cameraNum;                      /// Camera number
    int sensor_mode;                    /// Sensor mode. 0=auto. Check docs/forum for modes selected by other values.
-//   int verbose;                        /// !0 if want detailed run information
 
 } RASPICOMMONSETTINGS_PARAMETERS;
 
@@ -40,16 +38,11 @@ typedef struct RASPIVID_STATE_S RASPIVID_STATE;
 
 typedef struct
 {
-//   FILE *file_handle;   //needed???           /// File handle to write buffer data to.  //remove?
    RASPIVID_STATE *pstate;              /// pointer to our state in case required in callback
-//   int *abort_ptr;                           /// Set to 1 in callback if an error occurs to attempt to abort the capture
-//   AVFormatContext *fctx;   //  not needed use pstate            /// pointer to ffmpeg format context required in callback
    AVPacket *vpckt;
-//   GtkWidget *window;  // define genric ptr    
    u_char *vbuf;
    int vbuf_ptr;
-   sem_t *mutex;   
-//   int64_t *stime;      
+   sem_t *mutex;         
    int64_t wtargettime;
    int64_t wvariance;
       
@@ -59,7 +52,6 @@ typedef struct
 {
    AVFormatContext   *fmtctx;
    AVIOContext       *ioctx;
-   AVCodecContext    *vidctx;
    AVCodecContext    *audctx;
 } FORMAT_CTX;
 
@@ -120,19 +112,15 @@ struct RASPIVID_STATE_S
 
    PORT_USERDATA callback_data;        /// Used to move data to the encoder callback
 
-//   int bCapturing;                     /// State of capture/pause
    int mode;    // 1=click_record, 2=switch_record, 3=preview -1=exiting)
 
    int frame;  
-   int64_t starttime;
    int64_t lasttime;
-   
    char gps;
 
    MMAL_BOOL_T addSPSTiming;
    int slices;
 };
-// void check_camera_model(int cam_num);
 MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state);
 void destroy_camera_component(RASPIVID_STATE *state);
 MMAL_STATUS_T create_hvs_component(RASPIVID_STATE *state);
@@ -145,6 +133,3 @@ MMAL_STATUS_T connect_ports(MMAL_PORT_T *output_port, MMAL_PORT_T *input_port, M
 void check_disable_port(MMAL_PORT_T *port);
 void get_sensor_defaults(int camera_num, char *camera_name, int *width, int *height );
 void default_status(RASPIVID_STATE *state);
-// MMAL_STATUS_T setup_cam_and_encoder(RASPIVID_STATE *state);
-// void close_cam_and_encoder(RASPIVID_STATE *state);
-
