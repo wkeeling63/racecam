@@ -1278,7 +1278,7 @@ void *record_thread(void *argp)
   video_packet.duration=0;
   video_packet.pos=-1;
   state->callback_data.vpckt=&video_packet;
-
+  
   GPS_T gps_data;
   pthread_t gps_tid;
   if (state->gps) 
@@ -1297,6 +1297,8 @@ void *record_thread(void *argp)
   sem_t def_mutex;
   sem_init(&def_mutex, 0, 1);
   state->callback_data.mutex=&def_mutex;
+  
+  sprintf(runmessage, "Quantization %d", state->quantisationParameter);
   
   int length;
   char str[64];
