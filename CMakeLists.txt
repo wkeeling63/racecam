@@ -27,7 +27,7 @@ include_directories(/usr/include/glib-2.0)
  
 set (RACECAM_SOURCES
    raspiCamUtilities.c
-   mmalcomponent.c
+   racecamUtil.c
    GPSUtil.c)
    
 add_executable(racecam ${RACECAM_SOURCES} racecam.c)

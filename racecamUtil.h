@@ -11,10 +11,24 @@
 /// Video render needs at least 2 buffers.
 #define VIDEO_OUTPUT_BUFFERS_NUM 3
 
+#define BUFFER_SIZE		262144
+
+#define AUDIO_SIZE		1024
+#define DEFAULT_FORMAT		SND_PCM_FORMAT_S32_LE
+#define DEFAULT_SPEED 		44100
+#define DEFAULT_CHANNELS_IN	2
+
+#define GPIO_MODEM_LED	RPI_BPLUS_GPIO_J8_07 
+#define GPIO_LED	RPI_BPLUS_GPIO_J8_13 
+#define GPIO_SWT	RPI_BPLUS_GPIO_J8_15
+#define GPIO_PWR_LED	RPI_BPLUS_GPIO_J8_16
+
 #include <libavformat/avformat.h>
 #include "libswresample/swresample.h"
 #include "libavutil/audio_fifo.h"
 #include <alsa/asoundlib.h>
+
+#include <bcm2835.h>
 
 enum mode_enum {
   NOT_RUNNING,
@@ -69,6 +83,7 @@ typedef struct
    size_t            bufsize;
    int64_t           audio_sample_cnt;
    int64_t           start_time;
+   char              *adev;
 } AENCODE_CTX;
 
 struct RASPIVID_STATE_S
@@ -89,6 +104,8 @@ struct RASPIVID_STATE_S
    int level;                          /// H264 level to use for encoding
    int waitMethod;         //needed??            /// Method for switching between pause and capture
    int recording;            // 0=stopped 1=GUIRecording 2=SwitchRecording
+   int vflip_o;                          /// vert flip overlay
+   int hflip_o;                          /// horz flip overlay
 
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
 
@@ -117,6 +134,7 @@ struct RASPIVID_STATE_S
    int frame;  
    int64_t lasttime;
    char gps;
+   int   achannels;
 
    MMAL_BOOL_T addSPSTiming;
    int slices;
@@ -133,3 +151,18 @@ MMAL_STATUS_T connect_ports(MMAL_PORT_T *output_port, MMAL_PORT_T *input_port, M
 void check_disable_port(MMAL_PORT_T *port);
 void get_sensor_defaults(int camera_num, char *camera_name, int *width, int *height );
 void default_status(RASPIVID_STATE *state);
+int allocate_audio_encode(AENCODE_CTX *actx);
+void free_audio_encode(AENCODE_CTX *actx);
+int create_video_stream(RASPIVID_STATE *state);
+void destroy_video_stream(RASPIVID_STATE *state);
+void hvs_input_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
+int allocate_alsa(AENCODE_CTX *actx);
+int free_alsa(AENCODE_CTX *actx);
+int allocate_fmtctx(char *dest, FORMAT_CTX *fctx, RASPIVID_STATE *state);
+int free_fmtctx(FORMAT_CTX *fctx);
+int read_pcm(RASPIVID_STATE *state);
+void flush_audio(RASPIVID_STATE *state);
+void toggle_stream(RASPIVID_STATE *state, int run_status); 
+void send_text(int speed, RASPIVID_STATE *state);
+void adjust_q(RASPIVID_STATE *state, char *msg);
+void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
