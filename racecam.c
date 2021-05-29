@@ -7,38 +7,21 @@
 #include <signal.h>
 #include <unistd.h>
 
-#include <libavformat/avformat.h>
-#include <libavcodec/avcodec.h>
-#include "libavformat/avio.h"
-#include "libavutil/audio_fifo.h"
-#include "libavutil/avassert.h"
-#include "libavutil/avstring.h"
-#include "libavutil/frame.h"
-#include "libavutil/opt.h"
-#include "libswresample/swresample.h"
-#include <libavutil/channel_layout.h>
-#include <libavutil/mathematics.h>
-#include <libavutil/timestamp.h>
-
 #include "interface/mmal/mmal.h"
 #include "interface/mmal/mmal_logging.h"
-#include "interface/mmal/mmal_buffer.h"
-#include "interface/mmal/util/mmal_util.h"
-#include "interface/mmal/util/mmal_util_params.h"
-#include "interface/mmal/util/mmal_default_components.h"
 #include "interface/mmal/util/mmal_connection.h"
-#include "interface/mmal/mmal_parameters_camera.h"
 
 #include "stop-sign.xpm"
 #include "raspiCamUtilities.h"
 #include "racecamUtil.h"
-//#include "mmalcomponent.h"
 #include "GPSUtil.h"
 
 #define STOP 0
 #define START 1
-// write target time in micro seconds 250000=.25 second
-#define TARGET_TIME 250000
+#define WINDOW_WIDTH 800
+#define WINDOW_HEIGHT 480
+// write target time in micro seconds 16666=.016666 second  (1/30fps/2)
+#define TARGET_TIME 16666
 
   
 typedef struct{
@@ -674,7 +657,8 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   /* setup window */
   GtkWidget *setup_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
   g_signal_connect (G_OBJECT (setup_win), "destroy", G_CALLBACK (cancel_clicked), setup_win);
-  gtk_window_set_default_size (GTK_WINDOW (setup_win), 736, 480);
+  gtk_window_set_default_size (GTK_WINDOW (setup_win), WINDOW_WIDTH, WINDOW_HEIGHT);
+//  gtk_window_set_default_size (GTK_WINDOW (setup_win), 736, 480);
   gtk_container_set_border_width (GTK_CONTAINER (setup_win), 20);
   
   GtkWidget *vbox = gtk_vbox_new(FALSE, 5);
@@ -1000,7 +984,7 @@ void stop_window(gpointer data, int message_flag)
   gtk_widget_hide(data);
   /* stop window */
   stop_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-//  gtk_window_set_default_size (GTK_WINDOW (stop_win), 800, 480);
+  gtk_window_set_default_size (GTK_WINDOW (stop_win), WINDOW_WIDTH, WINDOW_HEIGHT);
   gtk_window_set_decorated (GTK_WINDOW(stop_win), FALSE); 
 //  gtk_window_fullscreen (GTK_WINDOW(stop_win));
   /* stop button */
@@ -1199,7 +1183,8 @@ gint main_timeout (gpointer data)
     gtk_window_set_transient_for (GTK_WINDOW(switch_dialog), GTK_WINDOW(main_win));
     gtk_window_set_destroy_with_parent (GTK_WINDOW(switch_dialog), TRUE);
     gtk_window_set_modal (GTK_WINDOW(switch_dialog), TRUE);
-    gtk_window_set_default_size (GTK_WINDOW (switch_dialog), 320, 180);
+//    gtk_window_set_default_size (GTK_WINDOW (switch_dialog), 320, 180);
+    gtk_window_set_default_size (GTK_WINDOW (switch_dialog), WINDOW_WIDTH, WINDOW_HEIGHT);
     gtk_window_set_decorated (GTK_WINDOW(switch_dialog), FALSE); 
     gtk_container_set_border_width (GTK_CONTAINER (switch_dialog), 20);
     message = gtk_label_new (NULL);
@@ -1276,7 +1261,8 @@ int main(int argc, char **argv)
   /*Main Window */
   main_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 
-  gtk_window_set_default_size (GTK_WINDOW (main_win), 640, 480);
+//  gtk_window_set_default_size (GTK_WINDOW (main_win), 640, 480);
+  gtk_window_set_default_size (GTK_WINDOW (main_win), WINDOW_WIDTH, WINDOW_HEIGHT);
   gtk_container_set_border_width (GTK_CONTAINER (main_win), 20);
 
   g_signal_connect (G_OBJECT (main_win), "destroy", G_CALLBACK (widget_destroy), NULL);

@@ -25,7 +25,6 @@
 #include "interface/mmal/mmal_parameters_camera.h"
 
 #include "raspiCamUtilities.h"
-//#include "mmalcomponent.h"
 #include "racecamUtil.h"
 #include "GPSUtil.h"
 
