@@ -9,6 +9,9 @@ created from ALSA api using Adafruit I2S MEMS Microphone
 (SPH0645LM4H).  The audio stream is encoded to ACC using FFPMEG api 
 and both streams are added to flash video container by FFMPEG api.
 
+Description racecamcli: Command line interfaqce version of racecam but 
+without the GUI or the CSI touch display
+
 
 Install: cmake .
 
