@@ -16,15 +16,10 @@
 #include "racecamUtil.h"
 #include "GPSUtil.h"
 
-#define STOP 0
-#define START 1
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 480
-// write target time in micro seconds 16666=.016666 second  (1/30fps/2)
-#define TARGET_TIME 16666
 
-  
-typedef struct{
+ typedef struct{
   GtkWidget *label;
   float *val;
   char *format;
@@ -218,23 +213,6 @@ void parms_to_state(RASPIVID_STATE *state)
   state->gps=iparms.gps;
 }
 
-void *gps_thread(void *argp)
-{
-  GPS_T *gps = (GPS_T *)argp;
-  gps->active=1;
-  gps->speed=-1; 
-  
-  open_gps(gps);
-    
-  while (gps->active) 
-    {  
-    read_gps(gps);
-    vcos_sleep(100);
-    }
- 
-  close_gps(gps);
-}
-
 int read_parms(void)
   {
   FILE *parm_file;
@@ -329,7 +307,6 @@ void *record_thread(void *argp)
     strcpy(str, "rtmp://");
     length=strlen(str);
     strcpy(str+length, iparms.url);
-    printf("%s\n", str);
     if (allocate_fmtctx(str, &state->urlctx, state))
       {
       printf("Allocate %s context failed\n", str);

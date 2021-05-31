@@ -13,6 +13,9 @@
 
 #define BUFFER_SIZE		262144
 
+// write target time in micro seconds 25000=.25 second  will be divided by FPS
+#define TARGET_TIME 25000
+
 #define AUDIO_SIZE		1024
 #define DEFAULT_FORMAT		SND_PCM_FORMAT_S32_LE
 #define DEFAULT_SPEED 		44100
@@ -22,6 +25,9 @@
 #define GPIO_LED	RPI_BPLUS_GPIO_J8_13 
 #define GPIO_SWT	RPI_BPLUS_GPIO_J8_15
 #define GPIO_PWR_LED	RPI_BPLUS_GPIO_J8_16
+
+#define STOP 0
+#define START 1
 
 #include <libavformat/avformat.h>
 #include "libswresample/swresample.h"
@@ -139,30 +145,31 @@ struct RASPIVID_STATE_S
    MMAL_BOOL_T addSPSTiming;
    int slices;
 };
-MMAL_STATUS_T create_camera_component(RASPIVID_STATE *state);
-void destroy_camera_component(RASPIVID_STATE *state);
-MMAL_STATUS_T create_hvs_component(RASPIVID_STATE *state);
-void destroy_hvs_component(RASPIVID_STATE *state);
-MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *state);
-void destroy_encoder_component(RASPIVID_STATE *state);
-MMAL_STATUS_T create_preview_component(RASPIVID_STATE *state);
-void destroy_preview_component(RASPIVID_STATE *state);
-MMAL_STATUS_T connect_ports(MMAL_PORT_T *output_port, MMAL_PORT_T *input_port, MMAL_CONNECTION_T **connection);
-void check_disable_port(MMAL_PORT_T *port);
-void get_sensor_defaults(int camera_num, char *camera_name, int *width, int *height );
-void default_status(RASPIVID_STATE *state);
-int allocate_audio_encode(AENCODE_CTX *actx);
-void free_audio_encode(AENCODE_CTX *actx);
-int create_video_stream(RASPIVID_STATE *state);
-void destroy_video_stream(RASPIVID_STATE *state);
-void hvs_input_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
-int allocate_alsa(AENCODE_CTX *actx);
-int free_alsa(AENCODE_CTX *actx);
-int allocate_fmtctx(char *dest, FORMAT_CTX *fctx, RASPIVID_STATE *state);
-int free_fmtctx(FORMAT_CTX *fctx);
-int read_pcm(RASPIVID_STATE *state);
-void flush_audio(RASPIVID_STATE *state);
-void toggle_stream(RASPIVID_STATE *state, int run_status); 
-void send_text(int speed, RASPIVID_STATE *state);
-void adjust_q(RASPIVID_STATE *state, char *msg);
-void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
+
+void adjust_q(RASPIVID_STATE *, char *);
+int allocate_alsa(AENCODE_CTX *);
+int allocate_audio_encode(AENCODE_CTX *);
+int allocate_fmtctx(char *, FORMAT_CTX *, RASPIVID_STATE *);
+void check_disable_port(MMAL_PORT_T *);
+MMAL_STATUS_T connect_ports(MMAL_PORT_T *, MMAL_PORT_T *, MMAL_CONNECTION_T **);
+MMAL_STATUS_T create_camera_component(RASPIVID_STATE *);
+MMAL_STATUS_T create_encoder_component(RASPIVID_STATE *);
+MMAL_STATUS_T create_hvs_component(RASPIVID_STATE *);
+MMAL_STATUS_T create_preview_component(RASPIVID_STATE *);
+int create_video_stream(RASPIVID_STATE *);
+void default_status(RASPIVID_STATE *);
+void destroy_camera_component(RASPIVID_STATE *);
+void destroy_encoder_component(RASPIVID_STATE *);
+void destroy_hvs_component(RASPIVID_STATE *);
+void destroy_preview_component(RASPIVID_STATE *);
+void destroy_video_stream(RASPIVID_STATE *);
+void encoder_buffer_callback(MMAL_PORT_T *, MMAL_BUFFER_HEADER_T *);
+void flush_audio(RASPIVID_STATE *);
+int free_alsa(AENCODE_CTX *);
+void free_audio_encode(AENCODE_CTX *);
+int free_fmtctx(FORMAT_CTX *);
+void get_sensor_defaults(int, char *, int *, int *);
+void hvs_input_callback(MMAL_PORT_T *, MMAL_BUFFER_HEADER_T *);
+int read_pcm(RASPIVID_STATE *);
+void send_text(int speed, RASPIVID_STATE *);
+void toggle_stream(RASPIVID_STATE *, int); 

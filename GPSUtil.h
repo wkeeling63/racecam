@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include <string.h>
 #include <cairo/cairo.h>
+#include "interface/mmal/mmal.h"
+
 #define BAUDRATE B115200            
 #define GPSDATA "/dev/ttyUSB1"
 #define GPSCNTL "/dev/ttyUSB2"
@@ -24,9 +26,10 @@ typedef struct GPS_S
    int active;
    } GPS_T;
    
-int open_gps(GPS_T *gps);
-int close_gps(GPS_T *gps);
-void read_gps(GPS_T *gps);
+int open_gps(GPS_T *);
+int close_gps(GPS_T *);
+void read_gps(GPS_T *);
 cairo_surface_t* cairo_text(int, int, int);
+void *gps_thread(void *);
 
 #endif /* GPSUTIL_H_ */

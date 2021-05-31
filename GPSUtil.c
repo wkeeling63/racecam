@@ -118,3 +118,20 @@ cairo_surface_t* cairo_text(int speed, int font_size, int font_space)
    cairo_destroy(cr);
    return(surface);
 }
+
+void *gps_thread(void *argp)
+{
+  GPS_T *gps = (GPS_T *)argp;
+  gps->active=1;
+  gps->speed=-1; 
+  
+  open_gps(gps);
+    
+  while (gps->active) 
+    {  
+    read_gps(gps);
+    vcos_sleep(100);
+    }
+ 
+  close_gps(gps);
+}

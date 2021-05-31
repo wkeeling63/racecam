@@ -771,7 +771,7 @@ void default_status(RASPIVID_STATE *state)
    strncpy(state->common_settings.camera_name, "(Unknown)", MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
    // We dont set width and height since these will be specific to the app being built.
 
-   state->common_settings.cameraNum = 1;
+//   state->common_settings.cameraNum = 1;
    state->common_settings.sensor_mode = 5;
 
    // Now set anything non-zero
@@ -811,7 +811,7 @@ void default_status(RASPIVID_STATE *state)
    state->camera_parameters.colourEffects.u = 128;
    state->camera_parameters.colourEffects.v = 128;
    state->camera_parameters.rotation = 0;
-   state->camera_parameters.hflip = state->camera_parameters.vflip = 1;
+   state->camera_parameters.hflip = state->camera_parameters.vflip = 0;
    state->camera_parameters.roi.x = state->camera_parameters.roi.y = 0.0;
    state->camera_parameters.roi.w = state->camera_parameters.roi.h = 1.0;
    state->camera_parameters.shutter_speed = 0;          // 0 = auto
