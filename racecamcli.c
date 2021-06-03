@@ -151,7 +151,11 @@ int main(int argc, char *argv[])
 	char parm_file[64] = "/home/pi/racecamcli";
 	char url[64];
 	char alsa_dev[17] = "dmic_sv";
+	char last_message[80] = "";
+	char new_message[80] = "";
+	// set state defauts not  set in default_status()
 	state.encodectx.adev = alsa_dev;
+	state.achannels = 2;
 
 	int option_index;
 	static const char short_options[] = "?D:d:r:c:s:q:i:n:l:f:F:o:u:g";
@@ -222,7 +226,6 @@ int main(int argc, char *argv[])
 		case 'f':
 			num_parms = sscanf(optarg, "%d.%d:%d.%d", &state.camera_parameters.hflip, &state.camera_parameters.vflip, 
 			&state.hflip_o, &state.vflip_o);
-            printf("here\n");
             switch(num_parms) {
 				case EOF:
 					fprintf(stderr, "filp sscanf failed\n");
@@ -295,7 +298,6 @@ int main(int argc, char *argv[])
 			gps_enabled = 1;
 			break;
 		case 'o':
-//			strcpy(parm_file, "file:");
 			strcpy(parm_file, optarg);
 			stream_file = 1;
 			break;
@@ -341,7 +343,7 @@ int main(int argc, char *argv[])
 			state.common_settings.ovl.y=0;
 			break;
 		case 2:
-			state.common_settings.ovl.x=state.common_settings.width-(state.common_settings.ovl.width/2);  
+			state.common_settings.ovl.x=(state.common_settings.width/2)-(state.common_settings.ovl.width/2);  
 			state.common_settings.ovl.y=0;
 			break;
 		case 3:
@@ -353,7 +355,7 @@ int main(int argc, char *argv[])
 			state.common_settings.ovl.y=state.common_settings.height-state.common_settings.ovl.height;
 			break;
 		default:
-			state.common_settings.ovl.x=state.common_settings.width-(state.common_settings.ovl.width/2);  
+			state.common_settings.ovl.x=(state.common_settings.width/2)-(state.common_settings.ovl.width/2);  
 			state.common_settings.ovl.y=state.common_settings.height-state.common_settings.ovl.height;
 			break;
 		}
@@ -421,16 +423,12 @@ int main(int argc, char *argv[])
 		pthread_create(&gps_tid, NULL, gps_thread, (void *)&gps_data);
 		}
 
-// if timelimit == 0 loop and wait for switch to close_gps
-//	int switch_state = bcm2835_gpio_lev(GPIO_SWT);
+//	if not time limited wait for switch to start
 	if (!timelimit)
 		while (bcm2835_gpio_lev(GPIO_SWT))
 		{
 		vcos_sleep(1000);
 		}
-//			{
-//			switch_state = bcm2835_gpio_lev(GPIO_SWT);  */
-//  a
 
 	state.callback_data.wtargettime = TARGET_TIME/state.framerate;
 // allocate video buffer
@@ -497,11 +495,19 @@ int main(int argc, char *argv[])
 		}
 		
 	toggle_stream(&state, START);
+	printf("Quantization %d\n", state.quantisationParameter);
 
 	while (state.recording > 0 ) 
 		{
 		read_pcm(&state);
-		adjust_q(&state, NULL);
+		adjust_q(&state, new_message);
+		if (strcmp( new_message, last_message))
+			{
+			printf("%s\n", new_message);
+			strcpy (last_message, new_message);
+//			printf("new=%s last=%s\n", new_message, last_message);
+			}
+			
 		if (gps_enabled) 
 			{
 			send_text(gps_data.speed, &state);

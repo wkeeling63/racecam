@@ -793,6 +793,7 @@ void default_status(RASPIVID_STATE *state)
    state->addSPSTiming = MMAL_FALSE;
    state->slices = 1;
    state->mode=NOT_RUNNING;
+   state->framerate=30;
 
    // Set up the camera_parameters to default
    state->camera_parameters.sharpness = 0;

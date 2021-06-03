@@ -634,8 +634,8 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   /* setup window */
   GtkWidget *setup_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
   g_signal_connect (G_OBJECT (setup_win), "destroy", G_CALLBACK (cancel_clicked), setup_win);
-  gtk_window_set_default_size (GTK_WINDOW (setup_win), WINDOW_WIDTH, WINDOW_HEIGHT);
-//  gtk_window_set_default_size (GTK_WINDOW (setup_win), 736, 480);
+//  gtk_window_set_default_size (GTK_WINDOW (setup_win), WINDOW_WIDTH, WINDOW_HEIGHT);
+  gtk_window_set_default_size (GTK_WINDOW (setup_win), 800, 400);
   gtk_container_set_border_width (GTK_CONTAINER (setup_win), 20);
   
   GtkWidget *vbox = gtk_vbox_new(FALSE, 5);
@@ -739,7 +739,8 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   wptr = gtk_socket_new ();
 
   gtk_container_add (GTK_CONTAINER (socket_box), wptr);
-  gtk_box_pack_start (GTK_BOX (vbox1), GTK_WIDGET(socket_box), TRUE, TRUE, 0);
+  
+  gtk_box_pack_start (GTK_BOX (vbox1), GTK_WIDGET(socket_box), FALSE, TRUE, 0);
 
   gtk_socket_add_id(GTK_SOCKET(wptr), kb_xid); 
    /* FIXME: handle "plug-added" & "plug-removed" signals for socket */
