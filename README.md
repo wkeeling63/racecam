@@ -13,7 +13,7 @@ Description racecamcli: Command line interface version of racecam but
 without the GUI or the CSI touch display
 
 
-Install: 	cmake .
+Install: 	cmake .  
 			make (or 'make racecamcli' to build only racecamcli)
 
 Custom keyboard layout (keyboard-rc.xml) must be copied to /usr/share/matchbox-keyboard as root after matchbox-keyboard install of change racecam.c to use a standard layout (fi). 
