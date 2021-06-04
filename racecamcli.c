@@ -9,7 +9,7 @@
  * (SPH0645LM4H).  The audio stream is encoded to ACC using FFPMEG aps 
  * and both streams are added to flash video container by FFMPEG api.
  *  
- */
+ */ 
 
 #include <getopt.h>
 #include <string.h>

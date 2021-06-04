@@ -2,5 +2,6 @@ CMakeCache.txt
 CMakeFiles/
 Makefile
 racecam
+racecamcli
 racecam.parms
 cmake_install.cmake
