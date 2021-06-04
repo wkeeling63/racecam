@@ -150,10 +150,10 @@
 	  <shifted display="P" />
     </key>
     <key>
-	  <default display="PgU" action="pageup"/>
+	  <default display="Home" action="home"/>
     </key>
     <key>
-	  <default display="PgD" action="pagedown"/>
+	  <default display="End" action="end"/>
     </key>
     <key>
 	  <default display="~" />

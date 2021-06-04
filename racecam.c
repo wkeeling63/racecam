@@ -740,7 +740,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
 
   gtk_container_add (GTK_CONTAINER (socket_box), wptr);
   
-  gtk_box_pack_start (GTK_BOX (vbox1), GTK_WIDGET(socket_box), FALSE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox1), GTK_WIDGET(socket_box), TRUE, TRUE, 0);
 
   gtk_socket_add_id(GTK_SOCKET(wptr), kb_xid); 
    /* FIXME: handle "plug-added" & "plug-removed" signals for socket */
