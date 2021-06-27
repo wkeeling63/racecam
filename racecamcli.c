@@ -14,7 +14,6 @@
 #include <getopt.h>
 #include <string.h>
 #include <ctype.h>
-//#include <alsa/asoundlib.h>
 #include <sys/time.h>
 #include <sys/signal.h>
 
@@ -27,40 +26,18 @@
 #include <semaphore.h>
 #include <stdbool.h>
 
-//#include <libavformat/avformat.h>
-//#include <libavcodec/avcodec.h>
-//#include "libavformat/avio.h"
-//#include "libavutil/audio_fifo.h"
-//#include "libavutil/avassert.h"
-//#include "libavutil/avstring.h"
-//#include "libavutil/frame.h"
-//#include "libavutil/opt.h"
-//#include "libswresample/swresample.h"
-//#include <libavutil/channel_layout.h>
-//#include <libavutil/mathematics.h>
-//#include <libavutil/timestamp.h>
-
 #include "bcm_host.h"
 #include "interface/vcos/vcos.h"
 
 #include "interface/mmal/mmal.h"
 #include "interface/mmal/mmal_logging.h"
-//#include "interface/mmal/mmal_buffer.h"
-//#include "interface/mmal/util/mmal_util.h"
-//#include "interface/mmal/util/mmal_util_params.h"
-//#include "interface/mmal/util/mmal_default_components.h"
 #include "interface/mmal/util/mmal_connection.h"
-//#include "interface/mmal/mmal_parameters_camera.h"
-
-//#include <bcm2835.h>
 
 #include "raspiCamUtilities.h"
 #include "racecamUtil.h"
 #include "GPSUtil.h"
 
-int not_killable = 0;
-
-//static void prg_exit(int code);
+RASPIVID_STATE *pstate;
 
 static void usage(char *command)
 {
@@ -93,53 +70,37 @@ static void usage(char *command)
 		, command);
 } 
 
-/*
- *	Subroutine to clean up before exit.
- */
-/*static void close_it(void)  
-{
-//	fprintf(stdout, "\n");
-	// stop gps thread
-	gps_data.active=0;
-	pthread_join(tid, NULL); 
-	
-	sem_t *psem=pstate->callback_data.mutex;	
-	close_components(pstate);
-	close_avapi();
-	sem_destroy(psem);
-	if (gpio_init) {
-		bcm2835_gpio_write(GPIO_LED, LOW);
-		bcm2835_close();}
-	if (handle) {
-		snd_pcm_close(handle);
-		handle = NULL;}
-	free(audiobuf);
-	free(rlbufs);
-	snd_config_update_free_global();
-	fprintf(stdout, "%s PiPIPflv ending\n", get_time_str(datestr));
-	
-}
-static void prg_exit(int code)  
-{
-	close_it();
-	exit(code);
-} */
 static void signal_handler(int sig)
 {
-// logic to wait for stream to stop and exit ????
-
-	if (not_killable)
+	static int64_t kill_time = -1;
+	
+	if (!pstate->recording) 
 		{
-		not_killable=-1;
+		printf("not recording Exiting killed!!\n");
+		exit(EXIT_FAILURE);	
+		}
+	
+	if (kill_time == -1) 
+		{
+		kill_time = get_microseconds64() + 500;
+		pstate->recording = -1;  // -1 is stop killed
 		return;
 		}
+	else
+		if (get_microseconds64() < kill_time)
+			{
+			return;
+			}
+		
+	printf("wait time for killing has passed Exiting killed!!\n");
+	exit(EXIT_FAILURE);	
 
-//	prg_exit(EXIT_FAILURE);
 }
-
 int main(int argc, char *argv[])
 {
 	RASPIVID_STATE state;
+	pstate = &state;
+
 	default_status(&state);
 
 	//non state params 
@@ -210,16 +171,16 @@ int main(int argc, char *argv[])
 			overlay_percent = strtol(optarg, NULL, 0);
 			if (overlay_percent > 99 || overlay_percent < 1)
 				{
-				fprintf(stdout, "Overlay size %% must be between 1 and 99 %d\%\n", overlay_percent);
+				fprintf(stdout, "Overlay size %% must be between 1 and 99 you selected %d\%\n", overlay_percent);
 				badparm=1;
 				break;
 				}
 			break;
 		case 'l':
 			overlay_location = strtol(optarg, NULL, 0);
-			if (overlay_location > 6 || overlay_location < 0)
+			if (overlay_location > 5 || overlay_location < 0)
 				{
-				fprintf(stdout, "Overlay location must be between 0 and 5 %d\%\n", overlay_location);
+				fprintf(stdout, "Overlay location must be between 0 and 5 you selected %d\n", overlay_location);
 				badparm=1;
 				}
 			break;
@@ -237,7 +198,7 @@ int main(int argc, char *argv[])
 						state.hflip_o  < 0 || state.hflip_o > 1 ||
 						state.vflip_o < 0 || state.vflip_o > 1) 
 						{
-						fprintf(stdout, "flip flag must be 1 or 0 (true or false) %d.%d:%d.%d\n", state.camera_parameters.hflip,
+						fprintf(stdout, "flip flag must be 1 or 0 (true or false) you selected %d.%d:%d.%d\n", state.camera_parameters.hflip,
 						state.camera_parameters.vflip, state.hflip_o, state.vflip_o);
 						badparm=1;}
 					break;
@@ -249,7 +210,7 @@ int main(int argc, char *argv[])
 		case 'c':
 			state.common_settings.cameraNum = strtol(optarg, NULL, 0);
 			if (state.common_settings.cameraNum > 1 || state.common_settings.cameraNum < 0) {
-				fprintf(stdout, "Camera must be 0 or 1 %d\n", state.common_settings.cameraNum);
+				fprintf(stdout, "Camera must be 0 or 1 you selected %d\n", state.common_settings.cameraNum);
 				badparm=1;}
 			break;
 		case 'q':
@@ -262,13 +223,13 @@ int main(int argc, char *argv[])
 					break;
 				case 3:
 					if (state.quantisationMin > 40 || state.quantisationMin < 20) {
-						fprintf(stdout, "Min quantisation parameter must be 20 to 40 %d\n", state.quantisationMin);
+						fprintf(stdout, "Min quantisation parameter must be 20 to 40 you selected %d\n", state.quantisationMin);
 						badparm=1;}
 					if (state.quantisationMax > 40 || state.quantisationMax < 20) {
-						fprintf(stdout, "Max quantisation parameter must be 20 to 40 %d\n", state.quantisationMax);
+						fprintf(stdout, "Max quantisation parameter must be 20 to 40 you selected %d\n", state.quantisationMax);
 						badparm=1;}
 					if (state.quantisationParameter > state.quantisationMax || state.quantisationParameter < state.quantisationMin) {
-						fprintf(stdout, "Init quantisation parameters must be Min and Max %d\n", state.quantisationParameter);
+						fprintf(stdout, "Init quantisation parameters must be between Min and Max you selected %d\n", state.quantisationParameter);
 						badparm=1;}
 				break;
 				default:
@@ -279,19 +240,19 @@ int main(int argc, char *argv[])
 		case 'n':
 			state.achannels = strtol(optarg, NULL, 0);
 			if (state.achannels > 2 || state.achannels < 1) {
-				fprintf(stdout, "number of audio channels must be 1 or 2 %d\n", state.achannels);
+				fprintf(stdout, "number of audio channels must be 1 or 2  you selected %d\n", state.achannels);
 				badparm=1;}
 			break;
 		case 'i':
 			state.intraperiod = strtol(optarg, NULL, 0);
 			if (state.intraperiod > 60) {
-				fprintf(stdout, "Intra frame rate should be < 61  %d\n", state.intraperiod);
+				fprintf(stdout, "Intra frame rate should be < 61  you selected %d\n", state.intraperiod);
 				badparm=1;}
 			break;
 		case 'F':
 			state.framerate = strtol(optarg, NULL, 0);
 			if (state.framerate < 22 || state.framerate > 30) {
-				fprintf(stdout, "frames per second must be > 21 and < 31 %d\n", state.framerate);
+				fprintf(stdout, "frames per second must be > 21 and < 31 you selected %d\n", state.framerate);
 				badparm=1;}
 			break;
 		case 'g':
@@ -381,7 +342,6 @@ int main(int argc, char *argv[])
 		strcpy(file+length, ".flv");
 		}
 		
-	
 	int gpio_init = 0;
 	if (bcm2835_init()) 
 		{
@@ -406,7 +366,6 @@ int main(int argc, char *argv[])
 	
 	state.callback_data.pstate = &state;
 	state.encodectx.start_time = get_microseconds64()/1000;
-	state.recording=not_killable=1;
 	state.lasttime = state.frame = 0;
   	
 	AVPacket video_packet;
@@ -425,9 +384,12 @@ int main(int argc, char *argv[])
 
 //	if not time limited wait for switch to start
 	if (!timelimit)
-		while (bcm2835_gpio_lev(GPIO_SWT))
 		{
-		vcos_sleep(1000);
+		printf("No duration specified -- using switch for start/stop\n");
+		while (bcm2835_gpio_lev(GPIO_SWT))
+			{
+			vcos_sleep(1000);
+			}
 		}
 
 	state.callback_data.wtargettime = TARGET_TIME/state.framerate;
@@ -461,6 +423,7 @@ int main(int argc, char *argv[])
 			}
 		state.encodectx.audctx=state.urlctx.audctx;
 		} 
+
 	if (allocate_audio_encode(&state.encodectx)) {state.recording=-1; goto err_aencode;}
 	if (allocate_alsa(&state.encodectx)) {state.recording=-1; goto err_alsa;}
 	if (create_video_stream(&state)) {state.recording=-1; goto err_vstream;}
@@ -494,6 +457,7 @@ int main(int argc, char *argv[])
 		vcos_log_error("Unable to send a buffer to encoder output port (%d)", q);
 		}
 		
+	state.recording=1;
 	toggle_stream(&state, START);
 	printf("Quantization %d\n", state.quantisationParameter);
 
@@ -505,7 +469,6 @@ int main(int argc, char *argv[])
 			{
 			printf("%s\n", new_message);
 			strcpy (last_message, new_message);
-//			printf("new=%s last=%s\n", new_message, last_message);
 			}
 			
 		if (gps_enabled) 
@@ -560,7 +523,8 @@ err_gps:
 		bcm2835_close();}
 		
 	av_packet_unref(&video_packet);
-	if (not_killable == -1) return EXIT_FAILURE;
+	
+	if (state.recording == -1) return EXIT_FAILURE;
 		
 	return EXIT_SUCCESS;  
 }
