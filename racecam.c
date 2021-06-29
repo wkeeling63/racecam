@@ -1199,7 +1199,15 @@ int main(int argc, char **argv)
     bcm2835_gpio_fsel(GPIO_LED, BCM2835_GPIO_FSEL_OUTP);
     bcm2835_gpio_fsel(GPIO_MODEM_LED, BCM2835_GPIO_FSEL_OUTP);
     bcm2835_gpio_fsel(GPIO_PWR_LED, BCM2835_GPIO_FSEL_OUTP);
+    while (system("ping -c 1 google.com > /dev/null 2>&1")) 
+      {
+      int8_t x=bcm2835_gpio_lev(GPIO_PWR_LED);
+      x=!x;
+      bcm2835_gpio_write(GPIO_PWR_LED, x);
+      vcos_sleep(1000);
+      }
     bcm2835_gpio_write(GPIO_PWR_LED, HIGH);
+    
     }
 	else 
     {
