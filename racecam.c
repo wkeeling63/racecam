@@ -1204,7 +1204,7 @@ int main(int argc, char **argv)
       int8_t x=bcm2835_gpio_lev(GPIO_PWR_LED);
       x=!x;
       bcm2835_gpio_write(GPIO_PWR_LED, x);
-      vcos_sleep(1000);
+      vcos_sleep(100);
       }
     bcm2835_gpio_write(GPIO_PWR_LED, HIGH);
     
