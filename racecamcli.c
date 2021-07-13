@@ -47,6 +47,8 @@ static void usage(char *command)
 "-?, --help                 these messages\n"
 "-d, --duration=#           interrupt after # seconds - defaults to 0 use GPIO switch\n"
 "-g, --gps                  enable gps speed overlay - defaults to disables\n"
+"-w, --wait                 second to wait for internet before canceling live stream when both \n"
+"                           file and URL are selected Defaults to 60 second\n"
 "\nAudio paramaters:\n"
 "-D, --device=NAME          select PCM by name\n"  
 "-n, --number=#             number of audio channels defaults to 2\n"
@@ -55,7 +57,7 @@ static void usage(char *command)
 "-r, --resolution=#         0=1920x1080 1=1280x720 2=854x480 - defaults to 0\n"
 "-s, --overlaysize%=#       overlay size % of main size (99% to 1%) defaults to 25%\n"
 "-l, --location=#           overlay location 0=BottomLeft, 1=TopLeft, 2=TopCenter, 3=TopRight, 4=BottomRight,\n" 
-							"5=BottomCenter - Defaults to BottomLeft\n"
+"                           5=BottomCenter - Defaults to BottomLeft\n"
 "-f, --flip=h.v:h.v         flip image of camera - example 1.1:0.1 flips the main camera vertically &\n" 
 "                           horizontally and 2nd camera vertically\n"
 "-F, --fps=#                frames per second #\n"
@@ -65,8 +67,8 @@ static void usage(char *command)
 "\nOutput stream location - atleast one must be selected - both can be used to save locally and remotely\n"
 "                           if neither is supplied then defaults to file of the name /home/pi/rqacecamcli\n"
 "-o, --outputfile=PATH/FILE local output file ie /home/pi/racecamcli - the name will be appended with\n"
-"                           timespace and file extention (.flv)\n"
-"-u, --url=URL/KEY          url output location and key\n" )   
+"                           timespace and file extention (.flv)\n" 
+"-u,  --url=URL/KEY         url output location and key\n" )   
 		, command);
 } 
 
@@ -114,12 +116,13 @@ int main(int argc, char *argv[])
 	char alsa_dev[17] = "dmic_sv";
 	char last_message[80] = "";
 	char new_message[80] = "";
+	int keep_waiting = 600;
 	// set state defauts not  set in default_status()
 	state.encodectx.adev = alsa_dev;
 	state.achannels = 2;
 
 	int option_index;
-	static const char short_options[] = "?D:d:r:c:s:q:i:n:l:f:F:o:u:g";
+	static const char short_options[] = "?D:d:r:c:s:q:i:n:l:f:F:o:u:gw:";
 	static const struct option long_options[] = {
 		{"help", 0, 0, '?'},
 		{"device", 1, 0, 'D'},
@@ -136,6 +139,7 @@ int main(int argc, char *argv[])
 		{"outputfile", 1, 0, 'o'},
 		{"url", 1, 0, 'u'},
 		{"gps", 0, 0, 'g'},
+		{"wait", 1, 0, 'w'},
 		{0, 0, 0, 0}
 		};
 
@@ -265,6 +269,15 @@ int main(int argc, char *argv[])
 		case 'u':
 			strcpy(url, "rtmp://");
 			strcpy(url+7, optarg);
+			stream_url=1;
+			break;
+		case 'w':
+			keep_waiting = strtol(optarg, NULL, 0);
+			if (keep_waiting < 0 || keep_waiting > 300001) {
+				fprintf(stdout, "wait seconds must be positive and 300,000 or less. you selected %d\n", keep_waiting);
+				badparm=1;}
+			else {
+				keep_waiting = keep_waiting * 10;}
 			break;
 		default:
 			fprintf(stdout, "Try `%s --help' for more information.\n", command);
@@ -351,12 +364,25 @@ int main(int argc, char *argv[])
 		bcm2835_gpio_fsel(GPIO_LED, BCM2835_GPIO_FSEL_OUTP);
 		bcm2835_gpio_fsel(GPIO_MODEM_LED, BCM2835_GPIO_FSEL_OUTP);
 		bcm2835_gpio_fsel(GPIO_PWR_LED, BCM2835_GPIO_FSEL_OUTP);
-		while (system("ping -c 1 google.com > /dev/null 2>&1"))  
+		if (stream_url) 
 			{
-			int8_t x=bcm2835_gpio_lev(GPIO_PWR_LED);
-			x=!x;
-			bcm2835_gpio_write(GPIO_PWR_LED, x);
-			vcos_sleep(100);
+			if (!(stream_file)) {keep_waiting = 3000000;}
+			while (keep_waiting)  
+				{
+				if (system("ping -c 1 google.com > /dev/null 2>&1")) 
+					{
+					keep_waiting--;
+					if ((!(keep_waiting)) && (stream_file)) {stream_url=0;}
+					}
+				else 
+					{
+					keep_waiting=0;
+					}
+				int8_t x=bcm2835_gpio_lev(GPIO_PWR_LED);
+				x=!x;
+				bcm2835_gpio_write(GPIO_PWR_LED, x);
+				vcos_sleep(100);
+				}
 			}
 		bcm2835_gpio_write(GPIO_PWR_LED, HIGH);
 		}

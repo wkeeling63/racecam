@@ -106,7 +106,8 @@ void cleanup_children(int s)
 
 void install_signal_handlers(void)
 {
-  signal (SIGCHLD, SIG_IGN);  /* kernel can deal with zombies  */
+// removed so system() would return correct RC
+//  signal (SIGCHLD, SIG_IGN);  /* kernel can deal with zombies  */
   signal (SIGINT, cleanup_children);
   signal (SIGQUIT, cleanup_children);
   signal (SIGTERM, cleanup_children);
@@ -278,6 +279,39 @@ void *record_thread(void *argp)
   sem_init(&def_mutex, 0, 1);
   state->callback_data.mutex=&def_mutex;
   
+  // wait for internet 
+  int save_url_state = iparms.write_url;
+  if (gpio_init) 
+    {
+    int keep_waiting = 600;
+    strcpy(runtime, "00:00:00");
+    if (iparms.write_url) 
+			{
+			if (!(iparms.write_file)) {keep_waiting = 3000000; }
+			while ((keep_waiting) && (state->recording > 0))  
+				{
+				if (system("ping -c 1 google.com > /dev/null 2>&1")) 
+          {
+					keep_waiting--;
+          strcpy(runmessage, "Waiting on internet connection!");
+          if ((!(keep_waiting)) && (iparms.write_file)) {iparms.write_url=0;}
+          }
+				else 
+          {
+          printf("good network\n");
+          strcpy(runmessage, "Done waiting!");
+					keep_waiting=0;
+          }
+				int8_t x=bcm2835_gpio_lev(GPIO_PWR_LED);
+				x=!x;
+				bcm2835_gpio_write(GPIO_PWR_LED, x);
+        vcos_sleep(100);
+				}
+			}
+		bcm2835_gpio_write(GPIO_PWR_LED, HIGH);
+    }
+  if (state->recording < 1) {goto err_gps;};
+  
   sprintf(runmessage, "Quantization %d", state->quantisationParameter);
   
   int length;
@@ -392,7 +426,9 @@ err_file:
     }
   free(state->callback_data.vbuf);
   sem_destroy(&def_mutex);
+  
 err_gps:
+  iparms.write_url = save_url_state;
   if (state->gps) 
     {
     gps_data.active=0;
@@ -740,7 +776,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
 
   gtk_container_add (GTK_CONTAINER (socket_box), wptr);
   
-  gtk_box_pack_start (GTK_BOX (vbox1), GTK_WIDGET(socket_box), TRUE, TRUE, 0);
+  gtk_box_pack_start (GTK_BOX (vbox1), GTK_WIDGET(socket_box), TRUE, TRUE, 40);
 
   gtk_socket_add_id(GTK_SOCKET(wptr), kb_xid); 
    /* FIXME: handle "plug-added" & "plug-removed" signals for socket */
@@ -1199,15 +1235,7 @@ int main(int argc, char **argv)
     bcm2835_gpio_fsel(GPIO_LED, BCM2835_GPIO_FSEL_OUTP);
     bcm2835_gpio_fsel(GPIO_MODEM_LED, BCM2835_GPIO_FSEL_OUTP);
     bcm2835_gpio_fsel(GPIO_PWR_LED, BCM2835_GPIO_FSEL_OUTP);
-    while (system("ping -c 1 google.com > /dev/null 2>&1")) 
-      {
-      int8_t x=bcm2835_gpio_lev(GPIO_PWR_LED);
-      x=!x;
-      bcm2835_gpio_write(GPIO_PWR_LED, x);
-      vcos_sleep(100);
-      }
     bcm2835_gpio_write(GPIO_PWR_LED, HIGH);
-    
     }
 	else 
     {
@@ -1247,7 +1275,6 @@ int main(int argc, char **argv)
   /*Main Window */
   main_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 
-//  gtk_window_set_default_size (GTK_WINDOW (main_win), 640, 480);
   gtk_window_set_default_size (GTK_WINDOW (main_win), WINDOW_WIDTH, WINDOW_HEIGHT);
   gtk_container_set_border_width (GTK_CONTAINER (main_win), 20);
 
