@@ -172,4 +172,4 @@ void get_sensor_defaults(int, char *, int *, int *);
 void hvs_input_callback(MMAL_PORT_T *, MMAL_BUFFER_HEADER_T *);
 int read_pcm(RASPIVID_STATE *);
 void send_text(int speed, RASPIVID_STATE *);
-void toggle_stream(RASPIVID_STATE *, int); 
+void toggle_stream(RASPIVID_STATE *, int, int); 

@@ -491,7 +491,7 @@ int main(int argc, char *argv[])
 		}
 		
 	state.recording=1;
-	toggle_stream(&state, START);
+	toggle_stream(&state, START, gpio_init);
 	printf("Quantization %d\n", state.quantisationParameter);
 
 	while (state.recording > 0 ) 
@@ -522,7 +522,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-	toggle_stream(&state, STOP);
+	toggle_stream(&state, STOP, gpio_init);
 	if (state.encoder_component) check_disable_port(state.encoder_component->output[0]);
 	if (state.encoder_connection) mmal_connection_destroy(state.encoder_connection);
 err_audio:

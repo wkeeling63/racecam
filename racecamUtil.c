@@ -1573,7 +1573,7 @@ int read_pcm(RASPIVID_STATE *state)
   return result;
 }
 
-void toggle_stream(RASPIVID_STATE *state, int run_status)
+void toggle_stream(RASPIVID_STATE *state, int run_status,int gpio_enabled)
 {
   if (state->encodectx.pcmhnd && run_status)
     {
@@ -1583,8 +1583,12 @@ void toggle_stream(RASPIVID_STATE *state, int run_status)
     state->encodectx.audio_sample_cnt = 0;
     } 
 
-  bcm2835_gpio_write(GPIO_LED, run_status);
-  bcm2835_gpio_write(GPIO_MODEM_LED, run_status);
+   printf("gpio debug %d %d %d\n", GPIO_LED, gpio_enabled, run_status);
+   if (gpio_enabled)
+      {
+      bcm2835_gpio_write(GPIO_LED, run_status);
+      bcm2835_gpio_write(GPIO_MODEM_LED, run_status);
+      }
   
   mmal_port_parameter_set_boolean(state->camera_component->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, run_status);
   mmal_port_parameter_set_boolean(state->camera2_component->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, run_status);

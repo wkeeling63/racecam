@@ -381,7 +381,7 @@ void *record_thread(void *argp)
       vcos_log_error("Unable to send a buffer to encoder output port (%d)", q);
     }
 
-  toggle_stream(state, START);
+  toggle_stream(state, START, gpio_init);
     
   while (state->recording > 0) 
     {
@@ -401,7 +401,7 @@ void *record_thread(void *argp)
     sprintf(runtime, "%2d:%02d:%02d", hours, mins, secs);
     }
 
-  toggle_stream(state, STOP);
+  toggle_stream(state, STOP, gpio_init);
   if (state->encoder_component) check_disable_port(state->encoder_component->output[0]);
   if (state->encoder_connection) mmal_connection_destroy(state->encoder_connection);
 err_audio:
@@ -1040,9 +1040,9 @@ void preview_clicked(GtkWidget *widget, gpointer data)
 		global_state.preview_connection = NULL;
     goto error;
     } 
-  toggle_stream(&global_state, START);
+  toggle_stream(&global_state, START, gpio_init);
   stop_window(data, FALSE);
-  toggle_stream(&global_state, STOP);
+  toggle_stream(&global_state, STOP, gpio_init);
   if (global_state.preview_connection)
 		mmal_connection_destroy(global_state.preview_connection);
 
