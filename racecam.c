@@ -1012,6 +1012,10 @@ void stop_window(gpointer data, int message_flag)
   if (message_flag)
     {
     message = gtk_label_new (NULL);
+    PangoFontDescription *df = pango_font_description_from_string("Monospace");
+    pango_font_description_set_size(df,30*PANGO_SCALE);
+    pango_font_description_set_weight (df, PANGO_WEIGHT_HEAVY);
+    gtk_widget_modify_font(message, df);
     gtk_label_set_justify (GTK_LABEL (message), GTK_JUSTIFY_CENTER);
     gtk_box_pack_start (GTK_BOX(vbox), message, FALSE, TRUE, 0);
     }
@@ -1282,15 +1286,32 @@ int main(int argc, char **argv)
 
   GtkWidget *vbox = gtk_vbox_new(FALSE, 20);
   gtk_container_add (GTK_CONTAINER (main_win), vbox);
-
-  GtkWidget *button = gtk_button_new_with_label ("Setup");
-  g_signal_connect(button, "clicked", G_CALLBACK(setup_clicked), main_win);
+  
+  PangoFontDescription *df = pango_font_description_from_string("Monospace");
+  pango_font_description_set_size(df,40*PANGO_SCALE);
+  pango_font_description_set_weight (df, PANGO_WEIGHT_HEAVY);
+  
+  GtkWidget *button, *label; 
+  
+  button = gtk_button_new ();
+  label = gtk_label_new("RECORD");
+  gtk_widget_modify_font(label, df);
+  gtk_container_add(GTK_CONTAINER(button), label);
+  g_signal_connect(button, "clicked", G_CALLBACK(record_clicked), main_win);
   gtk_box_pack_start (GTK_BOX(vbox), button, TRUE, TRUE, 2);
-  button = gtk_button_new_with_label ("Perview");
+  
+  button = gtk_button_new();
+  label = gtk_label_new("PREVIEW");
+  gtk_widget_modify_font(label, df);
+  gtk_container_add(GTK_CONTAINER(button), label);
   g_signal_connect(button, "clicked", G_CALLBACK(preview_clicked), main_win);
   gtk_box_pack_start (GTK_BOX(vbox), button, TRUE, TRUE, 2);
-  button = gtk_button_new_with_label ("Record");
-  g_signal_connect(button, "clicked", G_CALLBACK(record_clicked), main_win);
+
+  button= gtk_button_new ();
+  label = gtk_label_new("SETUP");
+  gtk_widget_modify_font(label, df);
+  gtk_container_add(GTK_CONTAINER(button), label);
+  g_signal_connect(button, "clicked", G_CALLBACK(setup_clicked), main_win);
   gtk_box_pack_start (GTK_BOX(vbox), button, TRUE, TRUE, 2);
   
   gtk_widget_show_all(main_win);
