@@ -1245,10 +1245,38 @@ int main(int argc, char **argv)
     {
     printf ("bcm2835 init failed\n");
     }
+    
+  FILE *url_file;
+  size_t url_size=0;
+  char url_new[64];
+  url_file=fopen("/home/pi/racecam.url", "rb");
+  if (url_file)
+    {
+    url_size=fread(&url_new, 1, sizeof(url_new), url_file);
+    int i;
+    for (i=0; i<=url_size;i++)
+      {
+      if (url_new[i] < '!')
+        {
+          url_new[i] = '\0';
+          url_size = i;
+        }
+        printf(">%c< %d\n", url_new[i], url_size);
+      }
+    if (remove("/home/pi/racecam.url")) printf ("rename of racecam.url failed\n");
+    }
+  
   if (read_parms())
     {
-    strcpy(iparms.url, "a.rtmp.youtube.com/live2/<key>");
-    strcpy(iparms.file, "filename.flv");
+    if (url_size)
+      {
+      strcpy(iparms.url, url_new);
+      }
+    else
+      {
+      strcpy(iparms.url, "a.rtmp.youtube.com/live2/<key>");
+      }
+    strcpy(iparms.file, "/RaceCam/video/racecam");
     strcpy(iparms.adev, "dmic_sv");
     iparms.fmh=iparms.fmv=iparms.foh=iparms.fov=iparms.main_size=0;
     iparms.cam=iparms.channels=1;
@@ -1262,6 +1290,14 @@ int main(int argc, char **argv)
     iparms.file_keep=18;
     if (write_parms("wb", sizeof(iparms), &iparms)) printf("write failed\n");
     } 
+   else
+    {
+    if (url_size)
+      {
+      strcpy(iparms.url, url_new);
+      if (write_parms("r+b", sizeof(iparms), &iparms)) printf("write failed\n");
+      }
+    }
   default_status(&global_state);
   parms_to_state(&global_state);
   
