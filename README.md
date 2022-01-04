@@ -24,7 +24,7 @@ Software required:
 * ALSA headers for compliling sudo apt-get install libasound2-dev
 * matchbox keyboard sudo apt-get install matchbox-keyboard (not need for racecamcli only build)
 * FFMPEG library sudo apt-get install libavformat-dev 
-* bcm2835 library http://www.airspayce.com/mikem/bcm2835/index.html
+* bcm2835 library http://www.airspayce.com/mikem/bcm2835/index.html (not needed for racecam only build)
 * Cairo library sudo apt-get install libcairo2-dev
 
 Hardware required:
