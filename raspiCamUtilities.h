@@ -1,103 +1,23 @@
-
-
 #ifndef RASPICAMCONTROL_H_
 #define RASPICAMCONTROL_H_
 
-/* Various parameters
- *
- * Exposure Mode
- *          MMAL_PARAM_EXPOSUREMODE_OFF,
-            MMAL_PARAM_EXPOSUREMODE_AUTO,
-            MMAL_PARAM_EXPOSUREMODE_NIGHT,
-            MMAL_PARAM_EXPOSUREMODE_NIGHTPREVIEW,
-            MMAL_PARAM_EXPOSUREMODE_BACKLIGHT,
-            MMAL_PARAM_EXPOSUREMODE_SPOTLIGHT,
-            MMAL_PARAM_EXPOSUREMODE_SPORTS,
-            MMAL_PARAM_EXPOSUREMODE_SNOW,
-            MMAL_PARAM_EXPOSUREMODE_BEACH,
-            MMAL_PARAM_EXPOSUREMODE_VERYLONG,
-            MMAL_PARAM_EXPOSUREMODE_FIXEDFPS,
-            MMAL_PARAM_EXPOSUREMODE_ANTISHAKE,
-            MMAL_PARAM_EXPOSUREMODE_FIREWORKS,
- *
- * Flicker Avoid Mode
- *          MMAL_PARAM_FLICKERAVOID_OFF,
-            MMAL_PARAM_FLICKERAVOID_AUTO,
-            MMAL_PARAM_FLICKERAVOID_50HZ,
-            MMAL_PARAM_FLICKERAVOID_60HZ,
- *
- * AWB Mode
- *          MMAL_PARAM_AWBMODE_OFF,
-            MMAL_PARAM_AWBMODE_AUTO,
-            MMAL_PARAM_AWBMODE_SUNLIGHT,
-            MMAL_PARAM_AWBMODE_CLOUDY,
-            MMAL_PARAM_AWBMODE_SHADE,
-            MMAL_PARAM_AWBMODE_TUNGSTEN,
-            MMAL_PARAM_AWBMODE_FLUORESCENT,
-            MMAL_PARAM_AWBMODE_INCANDESCENT,
-            MMAL_PARAM_AWBMODE_FLASH,
-            MMAL_PARAM_AWBMODE_HORIZON,
-            MMAL_PARAM_AWBMODE_GREYWORLD
- *
- * Image FX
-            MMAL_PARAM_IMAGEFX_NONE,
-            MMAL_PARAM_IMAGEFX_NEGATIVE,
-            MMAL_PARAM_IMAGEFX_SOLARIZE,
-            MMAL_PARAM_IMAGEFX_POSTERIZE,
-            MMAL_PARAM_IMAGEFX_WHITEBOARD,
-            MMAL_PARAM_IMAGEFX_BLACKBOARD,
-            MMAL_PARAM_IMAGEFX_SKETCH,
-            MMAL_PARAM_IMAGEFX_DENOISE,
-            MMAL_PARAM_IMAGEFX_EMBOSS,
-            MMAL_PARAM_IMAGEFX_OILPAINT,
-            MMAL_PARAM_IMAGEFX_HATCH,
-            MMAL_PARAM_IMAGEFX_GPEN,
-            MMAL_PARAM_IMAGEFX_PASTEL,
-            MMAL_PARAM_IMAGEFX_WATERCOLOUR,
-            MMAL_PARAM_IMAGEFX_FILM,
-            MMAL_PARAM_IMAGEFX_BLUR,
-            MMAL_PARAM_IMAGEFX_SATURATION,
-            MMAL_PARAM_IMAGEFX_COLOURSWAP,
-            MMAL_PARAM_IMAGEFX_WASHEDOUT,
-            MMAL_PARAM_IMAGEFX_POSTERISE,
-            MMAL_PARAM_IMAGEFX_COLOURPOINT,
-            MMAL_PARAM_IMAGEFX_COLOURBALANCE,
-            MMAL_PARAM_IMAGEFX_CARTOON,
-
- */
-
-/// Annotate bitmask options
-/// Supplied by user on command line
-#define ANNOTATE_USER_TEXT          1
-/// Supplied by app using this module
-#define ANNOTATE_APP_TEXT           2
-/// Insert current date
-#define ANNOTATE_DATE_TEXT          4
-// Insert current time
-#define ANNOTATE_TIME_TEXT          8
-
-#define ANNOTATE_SHUTTER_SETTINGS   16
-#define ANNOTATE_CAF_SETTINGS       32
-#define ANNOTATE_GAIN_SETTINGS      64
-#define ANNOTATE_LENS_SETTINGS      128
-#define ANNOTATE_MOTION_SETTINGS    256
-#define ANNOTATE_FRAME_NUMBER       512
-#define ANNOTATE_BLACK_BACKGROUND   1024
-
+#define MAX_NUMBER_OF_CAMERAS 2
+#define MAIN_CAMERA 0
+#define OVERLAY_CAMERA 1
 
 // There isn't actually a MMAL structure for the following, so make one
 typedef struct mmal_param_colourfx_s
 {
    int enable;       /// Turn colourFX on or off
    int u,v;          /// U and V to use
-} MMAL_PARAM_COLOURFX_T;
+} MMAL_PARAM_COLOURFX_T; 
 
 typedef struct mmal_param_thumbnail_config_s
 {
    int enable;
    int width,height;
    int quality;
-} MMAL_PARAM_THUMBNAIL_CONFIG_T;
+} MMAL_PARAM_THUMBNAIL_CONFIG_T; 
 
 typedef struct param_float_rect_s
 {
@@ -105,7 +25,7 @@ typedef struct param_float_rect_s
    double y;
    double w;
    double h;
-} PARAM_FLOAT_RECT_T;
+} PARAM_FLOAT_RECT_T; 
 
 /// struct contain camera settings
 typedef struct raspicam_camera_parameters_s
@@ -125,8 +45,8 @@ typedef struct raspicam_camera_parameters_s
    MMAL_PARAM_COLOURFX_T colourEffects;
    MMAL_PARAM_FLICKERAVOID_T flickerAvoidMode;
    int rotation;              /// 0-359
-   int hflip;                 /// 0 or 1
-   int vflip;                 /// 0 or 1
+   int hflip[MAX_NUMBER_OF_CAMERAS];                 /// 0 or 1
+   int vflip[MAX_NUMBER_OF_CAMERAS];                 /// 0 or 1
    PARAM_FLOAT_RECT_T  roi;   /// region of interest to use on the sensor. Normalised [0,1] values in the rect
    int shutter_speed;         /// 0 = auto, otherwise the shutter speed in ms
    float awb_gains_r;         /// AWB red gain
@@ -138,10 +58,7 @@ typedef struct raspicam_camera_parameters_s
    int annotate_text_size;    // Text size for annotation
    int annotate_text_colour;  // Text colour for annotation
    int annotate_bg_colour;    // Background colour for annotation
-   unsigned int annotate_justify;
-   unsigned int annotate_x;
-   unsigned int annotate_y;
-
+ 
    MMAL_PARAMETER_STEREOSCOPIC_MODE_T stereo_mode;
    float analog_gain;         // Analog gain
    float digital_gain;        // Digital gain
@@ -159,7 +76,7 @@ typedef struct xref_t
 {
    char *mode;
    int mmal_mode;
-} XREF_T;
+} XREF_T; 
 
 int raspicli_map_xref(const char *str, const XREF_T *map, int num_refs);
 const char *raspicli_unmap_xref(const int en, XREF_T *map, int num_refs);
@@ -167,7 +84,7 @@ const char *raspicli_unmap_xref(const int en, XREF_T *map, int num_refs);
 int mmal_status_to_int(MMAL_STATUS_T status);
 uint64_t get_microseconds64();
 
-int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_CAMERA_PARAMETERS *params);
+int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_CAMERA_PARAMETERS *params, int camera_type);
 
 // Individual setting functions
 int raspicamcontrol_set_saturation(MMAL_COMPONENT_T *camera, int saturation);
@@ -214,7 +131,5 @@ MMAL_STEREOSCOPIC_MODE_T stereo_mode_from_string(const char *str);
 /** Default camera callback function
   */
 void default_camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
-
-
 
 #endif /* RASPICAMCONTROL_H_ */

@@ -1,7 +1,10 @@
 #include "GPSUtil.h" 
+#include "racecamLogger.h"
+#include "racecamCommon.h"
  
-int open_gps(GPS_T *gps)
+int open_gps(int *fd_data, int *fd_cntl)
 {
+//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    struct termios options, ops;
    memset(&options, 0, sizeof(options));
    options.c_cflag = BAUDRATE | CRTSCTS | CS8 | CLOCAL | CREAD;
@@ -10,15 +13,15 @@ int open_gps(GPS_T *gps)
    options.c_cc[VEOF]     = 4;     // Ctrl-d  
    options.c_cc[VMIN]     = 1; 
     
-   gps->fd_data = open(GPSDATA, O_RDWR | O_NOCTTY ); 
-   if (gps->fd_data <0) 
+   *fd_data = open(GPSDATA, O_RDWR | O_NOCTTY ); 
+   if (*fd_data <0) 
       {
-      fprintf(stderr, "Open of GPS data failed! RC=%d\n", gps->fd_data);
-      return(gps->fd_data);
+      log_error("Open of GPS data failed! RC=%d", *fd_data);
+      return -1;
       }
-   tcgetattr(gps->fd_data,&ops);
-   tcflush(gps->fd_data, TCIFLUSH);
-   tcsetattr(gps->fd_data,TCSANOW,&options); 
+   tcgetattr(*fd_data,&ops);   //needed???
+   tcflush(*fd_data, TCIFLUSH);
+   tcsetattr(*fd_data,TCSANOW,&options); 
    
    memset(&options, 0, sizeof(options));
    options.c_cflag = BAUDRATE | CRTSCTS | CS8 | CLOCAL | CREAD;
@@ -27,44 +30,46 @@ int open_gps(GPS_T *gps)
    options.c_cc[VEOF]     = 4;     // Ctrl-d 
    options.c_cc[VMIN]     = 1; 
       
-   gps->fd_cntl = open(GPSCNTL, O_RDWR | O_NOCTTY ); 
-   if (gps->fd_cntl <0) 
+   *fd_cntl = open(GPSCNTL, O_RDWR | O_NOCTTY ); 
+   if (*fd_cntl <0) 
       {
-      fprintf(stderr, "Open of GPS control failed! RC=%d\n", gps->fd_cntl);
-      return(gps->fd_cntl);
+      log_error("Open of GPS control failed! RC=%d", *fd_cntl);
+      return -1;
       }
-   tcflush(gps->fd_cntl, TCIFLUSH);
-   tcsetattr(gps->fd_cntl,TCSANOW,&options); 
+   tcflush(*fd_cntl, TCIFLUSH);
+   tcsetattr(*fd_cntl,TCSANOW,&options); 
    
-   write(gps->fd_cntl, "AT+QGPS=1\r", 10);
+   write(*fd_cntl, "AT+QGPS=1\r", 10);
    
    return 0;
 }
 
-int close_gps(GPS_T *gps)
+int close_gps(int *fd_data, int *fd_cntl)
 {
+//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    int status=0;
-   write(gps->fd_cntl, "AT+QGPSEND\r", 11);
+   write(*fd_cntl, "AT+QGPSEND\r", 11);
      
-   status=close(gps->fd_cntl);
+   status=close(*fd_cntl);
    if (status)
       {
-      fprintf(stderr, "Close of GPS control failed! RC=%d\n", status);
+      log_error("Close of GPS control failed! RC=%d", status);
       } 
-   status=close(gps->fd_data);
+   status=close(*fd_data);
    if (status)
       {
-      fprintf(stderr, "Close of GPS data failed! RC=%d\n", status);
+      log_error("Close of GPS data failed! RC=%d", status);
       }
    
    return status;
 }
-void read_gps(GPS_T *gps)
+int read_gps(int *fd_data)
 {
+//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    int cnt, i, c=0;
    int index[20];
    char buf[255];
-   cnt = read(gps->fd_data,buf,255);
+   cnt = read(*fd_data,buf,255);
    cnt--;
    buf[cnt]=0;
    if ((cnt) && (!(strncmp(buf,"$GPRMC",6))))
@@ -83,55 +88,112 @@ void read_gps(GPS_T *gps)
             {
             float fspd=0;
             sscanf(buf+index[7], "%f", &fspd);
-            gps->speed=fspd*1.15078;   
+            return fspd*1.15078;   
             }
          else
             {
-            gps->speed=-1;
+            return-1;
             }
       } 
       
-   return;
+   return -2;   //loop until good meassge?
 }
 
-cairo_surface_t* cairo_text(int speed, int font_size, int font_space)
+void send_text(int speed, int max_width, GPS_T *gps)
 {
-   char buffer[8];
-   sprintf(buffer, "%3d mph", speed); 
-   cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, TEXTW, TEXTH);
-   cairo_status_t status = cairo_surface_status (surface);
-   if (status) 
+//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   MMAL_BUFFER_HEADER_T *buffer_header=NULL;
+
+   if ((buffer_header = mmal_queue_get(gps->t_queue)) != NULL)
       {
-      fprintf(stderr, "surface status %s %d\n", cairo_status_to_string (status), status);
+      if (speed < 0)
+         {
+         buffer_header->length=buffer_header->alloc_size=0;
+         buffer_header->user_data=NULL;
+         } 
+      else
+         {
+         char buffer[8];
+         sprintf(buffer, "%3d MPH", speed); 
+         cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, VCOS_ALIGN_UP(gps->text.width,32), VCOS_ALIGN_UP(gps->text.height,16));
+         cairo_status_t status = cairo_surface_status (surface);
+         if (status) 
+            {
+            log_error("surface status %s %d", cairo_status_to_string (status), status);
+            }
+         cairo_t *cr =  cairo_create(surface);
+         cairo_rectangle(cr, 0, 0, gps->text.width, gps->text.height);
+         cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.0);
+         cairo_fill(cr);
+         cairo_set_source_rgb(cr, 0.75, 0.75, 0.75);
+         cairo_select_font_face(cr, "cairo:serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+         cairo_set_font_size(cr, gps->text_size);
+         cairo_text_extents_t extents;
+         cairo_text_extents(cr, buffer, &extents);
+         cairo_move_to(cr, gps->text.x+(max_width-extents.x_advance), gps->text.y);
+         cairo_show_text(cr, buffer);
+         cairo_destroy(cr);
+         buffer_header->data=cairo_image_surface_get_data(surface);
+         buffer_header->length=buffer_header->alloc_size=
+         cairo_image_surface_get_height(surface)*cairo_image_surface_get_stride(surface);
+         } 
+      buffer_header->cmd=buffer_header->offset=0;
+
+      int status=mmal_port_send_buffer(gps->t_port, buffer_header);
+      if (status) log_error("buffer send of text overlay failed %s", mmal_status_to_string(status));
       }
-   cairo_t *cr =  cairo_create(surface);
-   cairo_rectangle(cr, 0, 0, TEXTW, TEXTH);
-   cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.0);
-   cairo_fill(cr);
-   cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
-   cairo_select_font_face(cr, "cairo:serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
-   cairo_set_font_size(cr, font_size);
-   cairo_text_extents_t extents;
-   cairo_text_extents(cr, buffer, &extents);
-   cairo_move_to(cr, TEXTW-extents.x_advance-font_space, TEXTH-(extents.height+extents.y_bearing));
-   cairo_show_text(cr, buffer);
-   cairo_destroy(cr);
-   return(surface);
+   else
+      {
+      log_error("no buffer header returned for text overlay");
+      }
+
 }
 
 void *gps_thread(void *argp)
 {
-  GPS_T *gps = (GPS_T *)argp;
-  gps->active=1;
-  gps->speed=-1; 
+//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
+   GPS_T *gps = (GPS_T *)argp;
+   int fd_data, fd_cntl;
+   int speed = -1, last_speed = -1;
+//   int *ptr_state=gps->active;
+//   int64_t start = get_microseconds64()/100000;
+   if (open_gps(&fd_data, &fd_cntl)) return NULL;
   
-  open_gps(gps);
-    
-  while (gps->active) 
-    {  
-    read_gps(gps);
-    vcos_sleep(100);
-    }
+   cairo_surface_t *temp_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, VCOS_ALIGN_UP(gps->text.width,32), VCOS_ALIGN_UP(gps->text.height,16));
+   cairo_t *temp_context =  cairo_create(temp_surface);
+   cairo_rectangle(temp_context, 0, 0, gps->text.width, gps->text.height);
+   cairo_select_font_face(temp_context, "cairo:serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
+   cairo_set_font_size(temp_context, gps->text_size);
+   cairo_text_extents_t extents;
+   cairo_text_extents(temp_context, "888 MPH", &extents);
+
+   int max_width=extents.x_advance;
+   int max_above_o=(double)extents.y_bearing*-1;
+   int max_below_o=(double)extents.height-((double)extents.y_bearing*-1);  // why 51-40=10???
+   cairo_destroy(temp_context);
+   cairo_surface_destroy(temp_surface);
+
+   if (gps->text.x > (gps->text.width-max_width)) gps->text.x = gps->text.width-max_width; 
+   if (gps->text.x < 0) gps->text.x = 0; 
+   if (gps->text.y > (gps->text.height-max_below_o)) gps->text.y = gps->text.height-max_below_o; 
+   if (gps->text.y < max_above_o) gps->text.y = max_above_o; 
+
+ //  while (gps->active) 
+   while (gps->active > 0) 
+      { 
+//      speed = get_microseconds64()/100000 - start;
+      speed = read_gps(&fd_data);
+
+      if (!(speed == last_speed)) 
+         {
+         if (gps->active == SENDING)
+            {  
+            send_text(speed, max_width, gps);
+            }
+         last_speed = speed;
+         }
+ //     vcos_sleep(1000);
+      }
  
-  close_gps(gps);
+   close_gps(&fd_data, &fd_cntl);
 }

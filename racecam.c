@@ -1,20 +1,19 @@
 #include <gtk/gtk.h>
 
-#include <fcntl.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <signal.h>
-#include <unistd.h>
+#include "racecamCommon.h"
 
-#include "interface/mmal/mmal.h"
-#include "interface/mmal/mmal_logging.h"
-#include "interface/mmal/util/mmal_connection.h"
+#include <bcm2835.h>
+
+#include "GPSUtil.h"
 
 #include "stop-sign.xpm"
-#include "raspiCamUtilities.h"
-#include "racecamUtil.h"
-#include "GPSUtil.h"
+
+enum {STOP, START};
+
+#define GPIO_MODEM_LED	RPI_BPLUS_GPIO_J8_18 
+#define GPIO_LED	RPI_BPLUS_GPIO_J8_13 
+#define GPIO_SWT	RPI_BPLUS_GPIO_J8_15
+#define GPIO_PWR_LED	RPI_BPLUS_GPIO_J8_16
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 480
@@ -57,7 +56,7 @@ struct {
   char write_url;
   char file[64];
   char write_file;
-  float file_keep;      
+  float keep_free;      
   char adev[18];  // dmic_sv
   short int main_size;  // 2: 854x480 1: 1280x720 0: 1920x1080
   float ovrl_size;
@@ -67,23 +66,18 @@ struct {
   char fmv;
   char foh;
   char fov;
-  char channels;
   float qmin;
   float qcur;
-  float qmax;
   float fps;
   float ifs;
   char cam;
   char gps;
+  char preview;
   } iparms;
-  
-char runtime[9];
-char runmessage[80];
-pthread_t switch_tid;
-GtkWidget *main_win=NULL, *switch_dialog=NULL, *stop_win=NULL, *message=NULL;
 
-char gpio_init=0;
-int ignore_signal=0;
+GtkWidget *main_win=NULL, *stop_win=NULL;
+
+// char gpio_init=0;
 
 unsigned long     kb_xid;
 pid_t sh_pid, kbd_pid;
@@ -91,14 +85,24 @@ pid_t sh_pid, kbd_pid;
 /* Backing pixmap for drawing area */
 static GdkPixmap *pixmap = NULL;
 
-RASPIVID_STATE global_state;
+RACECAM_STATE global_state;
 
+int gps_enabled = 0; 
+char alsa_dev[17] = "dmic_sv";
+char file[64];
+char url[64];
+
+GPS_T gps_data;
+	
 static int clean_files(void);
 
 void cleanup_children(int s)
 {
-  if (ignore_signal) return;
-  printf("term signal in handler %d\n", s);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  static int64_t kill_time = -1;
+//  log_debug("%d %d %d %lld %d", global_state.current_mode, global_state.output_state[FILE_STRM].run_state, global_state.output_state[URL_STRM].run_state, kill_time, s);
+  if (global_state.current_mode) return;
+  log_error("term signal in handler %d", s);
   kill(kbd_pid, SIGTERM);  
   kill(sh_pid, SIGTERM);  
   exit(0);
@@ -106,15 +110,17 @@ void cleanup_children(int s)
 
 void install_signal_handlers(void)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 // removed so system() would return correct RC
 //  signal (SIGCHLD, SIG_IGN);  /* kernel can deal with zombies  */
-  signal (SIGINT, cleanup_children);
-  signal (SIGQUIT, cleanup_children);
-  signal (SIGTERM, cleanup_children);
+  signal(SIGINT, cleanup_children);
+  signal(SIGQUIT, cleanup_children);
+  signal(SIGTERM, cleanup_children);
 }
 
 unsigned long launch_keyboard(void)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   int    i = 0, fd[2];
   int    stdout_pipe[2];
   int    stdin_pipe[2];
@@ -142,7 +148,7 @@ unsigned long launch_keyboard(void)
       execlp ("/bin/sh", "sh", "-c", "matchbox-keyboard --xid rc", NULL);
       }
     case -1:
-      perror ("### Failed to launch 'matchbox-keyboard --xid', is it installed? ### ");
+      log_error("### Failed to launch 'matchbox-keyboard --xid', is it installed? ### ");
       exit(-1);
     }
 
@@ -174,48 +180,119 @@ unsigned long launch_keyboard(void)
   return result;
 }
 
-void parms_to_state(RASPIVID_STATE *state)
+void parms_to_state(RACECAM_STATE *state)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   switch (iparms.main_size)    // 2: 854x480 1: 1280x720 0: 1920x1080
     {
     case 0:
-      state->common_settings.width = 1920;
-      state->common_settings.height = 1080;
+      state->common_settings[MAIN_CAMERA].cam.width = 1920;
+      state->common_settings[MAIN_CAMERA].cam.height = 1080;
       break;
     case 1:
-      state->common_settings.width = 1280;
-      state->common_settings.height = 720;
+      state->common_settings[MAIN_CAMERA].cam.width = 1280;
+      state->common_settings[MAIN_CAMERA].cam.height = 720;
       break;
     default:
-      state->common_settings.width = 854;
-      state->common_settings.height = 480;
+      state->common_settings[MAIN_CAMERA].cam.width = 854;
+      state->common_settings[MAIN_CAMERA].cam.height = 480;
   }
     
-  state->common_settings.ovl.width = state->common_settings.width*iparms.ovrl_size;
-  state->common_settings.ovl.height = state->common_settings.height*iparms.ovrl_size;
-  state->common_settings.ovl.x = state->common_settings.width*iparms.ovrl_x;
-  state->common_settings.ovl.y = state->common_settings.height*iparms.ovrl_y;
-  state->common_settings.cameraNum = iparms.cam;
-  state->camera_parameters.vflip = iparms.fmv;
-  state->camera_parameters.hflip = iparms.fmh;
+  state->common_settings[OVERLAY_CAMERA].cam.width = state->common_settings[MAIN_CAMERA].cam.width*iparms.ovrl_size;
+  state->common_settings[OVERLAY_CAMERA].cam.height = state->common_settings[MAIN_CAMERA].cam.height*iparms.ovrl_size;
+  state->common_settings[OVERLAY_CAMERA].cam.x = state->common_settings[MAIN_CAMERA].cam.width*iparms.ovrl_x;
+  state->common_settings[OVERLAY_CAMERA].cam.y = state->common_settings[MAIN_CAMERA].cam.height*iparms.ovrl_y;
+
+  state->common_settings[0].cameraNum = state->common_settings[1].cameraNum = 1;
+  state->common_settings[iparms.cam].cameraNum = 0;
+
+  state->camera_parameters.vflip[MAIN_CAMERA] = iparms.fmv;
+  state->camera_parameters.hflip[MAIN_CAMERA] = iparms.fmh;
   
-  state->vflip_o = iparms.fov;
-  state->hflip_o = iparms.foh;
-  
-  state->encodectx.adev = iparms.adev;
-  state->achannels = iparms.channels;
+  state->camera_parameters.vflip[OVERLAY_CAMERA] = iparms.fov;
+  state->camera_parameters.hflip[OVERLAY_CAMERA] = iparms.foh;
   
   state->quantisationParameter=iparms.qcur;
   state->quantisationMin=iparms.qmin;
-  state->quantisationMax=iparms.qmax;
   state->framerate=iparms.fps;
   state->intraperiod=iparms.fps*iparms.ifs;
   
-  state->gps=iparms.gps;
+  int i;
+  for (i=0;i<4;i++)
+		{
+		state->hvs[i].enable = MMAL_TRUE;
+		state->hvs[i].param.hdr.id = MMAL_PARAMETER_DISPLAYREGION;
+		state->hvs[i].param.hdr.size = sizeof(state->hvs[i].param);
+		state->hvs[i].param.layer = i;
+		}
+
+	state->hvs[0].param.set = MMAL_DISPLAY_SET_DEST_RECT | MMAL_DISPLAY_SET_LAYER | MMAL_DISPLAY_SET_ALPHA;
+	state->hvs[0].param.dest_rect.width = state->common_settings[MAIN_CAMERA].cam.width;
+ 	state->hvs[0].param.dest_rect.height = state->common_settings[MAIN_CAMERA].cam.height;
+ 	state->hvs[0].param.alpha = 255;
+ 
+ 	state->hvs[1].param.set =  MMAL_DISPLAY_SET_FULLSCREEN | MMAL_DISPLAY_SET_DEST_RECT | MMAL_DISPLAY_SET_LAYER | MMAL_DISPLAY_SET_ALPHA;
+  state->hvs[1].param.fullscreen = MMAL_FALSE;
+  state->hvs[1].param.dest_rect.x = state->common_settings[OVERLAY_CAMERA].cam.x;  
+  state->hvs[1].param.dest_rect.y = state->common_settings[OVERLAY_CAMERA].cam.y;
+  state->hvs[1].param.dest_rect.width = state->common_settings[OVERLAY_CAMERA].cam.width;
+  state->hvs[1].param.dest_rect.height = state->common_settings[OVERLAY_CAMERA].cam.height;
+  state->hvs[1].param.alpha = 255 | MMAL_DISPLAY_ALPHA_FLAGS_DISCARD_LOWER_LAYERS;
+
+  state->hvs[2].param.set =  MMAL_DISPLAY_SET_FULLSCREEN | MMAL_DISPLAY_SET_DEST_RECT | MMAL_DISPLAY_SET_LAYER | MMAL_DISPLAY_SET_ALPHA;
+  state->hvs[2].param.fullscreen = MMAL_FALSE;
+	state->hvs[2].param.dest_rect.x = 0;
+	state->hvs[2].param.dest_rect.y = 0;
+	state->hvs[2].param.dest_rect.width = state->common_settings[MAIN_CAMERA].cam.width;
+	state->hvs[2].param.dest_rect.height = state->common_settings[MAIN_CAMERA].cam.height;
+	state->hvs[2].param.alpha = 255;
+ 
+	state->hvs[3].enable = MMAL_FALSE;
+  
+  gps_enabled=iparms.gps;
+  
+  state->selected[FILE_STRM] = iparms.write_file;
+  state->selected[URL_STRM] = iparms.write_url;
+  
+  state->preview_mode=iparms.preview;
+  state->adev = iparms.adev;
+}
+
+void dest_parms(void)
+{
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+    
+  if (iparms.write_url)
+		{
+    strcpy(url, "rtmp://");
+    strcpy(url+7, iparms.url);
+    }
+  else
+    url[0]='\0';
+    
+  if (iparms.write_file)
+		{
+		int length = 0;	
+		time_t time_uf;
+		struct tm *time_fmt;
+		time(&time_uf);
+		time_fmt = localtime(&time_uf);
+		strcpy(file, "file:");
+		length=strlen(file);
+		strcpy(file+length, iparms.file);
+		length=strlen(file);
+		strftime(file+length, 20,"%Y-%m-%d_%H_%M_%S", time_fmt);
+		length=strlen(file);
+		strcpy(file+length, ".flv"); 
+    }
+  else
+    file[0]='\0';
+
 }
 
 int read_parms(void)
-  {
+{
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   FILE *parm_file;
   parm_file=fopen("/home/pi/racecam.ini", "rb");
   if (parm_file)
@@ -229,11 +306,13 @@ int read_parms(void)
     {
     return 1;
     } 
+  dest_parms();
   return 0;
 }
 
 int write_parms(char *mode, size_t size, void *ptr)
   {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   FILE *parm_file;
   parm_file=fopen("/home/pi/racecam.ini", mode);
   if (parm_file == NULL) return 1;
@@ -241,206 +320,166 @@ int write_parms(char *mode, size_t size, void *ptr)
   cnt=fwrite(ptr, 1, size, parm_file);
   if (cnt!=size) return 1;
   if (fclose(parm_file)) return 1;
+  dest_parms();
   return 0;
   }
   
 
 void *record_thread(void *argp)
 {
-  RASPIVID_STATE *state = (RASPIVID_STATE *)argp;
-  state->callback_data.pstate = state;
-  state->encodectx.start_time = get_microseconds64()/1000;
-  state->recording=ignore_signal=1;
-  state->lasttime = state->frame = 0;
-  	
-  AVPacket video_packet;
-  av_init_packet(&video_packet);
-  video_packet.stream_index=0;
-  video_packet.duration=0;
-  video_packet.pos=-1;
-  state->callback_data.vpckt=&video_packet;
-  
-  GPS_T gps_data;
-  pthread_t gps_tid;
-  if (state->gps) 
-    {
-    pthread_create(&gps_tid, NULL, gps_thread, (void *)&gps_data);
-    }
-  state->callback_data.wtargettime = TARGET_TIME/state->framerate;
-  // allocate video buffer
-  state->callback_data.vbuf = (u_char *)malloc(BUFFER_SIZE);
-  if (state->callback_data.vbuf == NULL) 
-    {
-    fprintf(stderr, "not enough memory vbuf\n");
-    goto err_gps;
-    }
-  // allocate mutex
-  sem_t def_mutex;
-  sem_init(&def_mutex, 0, 1);
-  state->callback_data.mutex=&def_mutex;
-  
-  // wait for internet 
-  int save_url_state = iparms.write_url;
-  if (gpio_init) 
-    {
-    int keep_waiting = 600;
-    strcpy(runtime, "00:00:00");
-    if (iparms.write_url) 
-			{
-			if (!(iparms.write_file)) {keep_waiting = 3000000; }
-			while ((keep_waiting) && (state->recording > 0))  
-				{
-				if (system("ping -c 1 google.com > /dev/null 2>&1")) 
-          {
-					keep_waiting--;
-          strcpy(runmessage, "Waiting on internet connection!");
-          if ((!(keep_waiting)) && (iparms.write_file)) {iparms.write_url=0;}
-          }
-				else 
-          {
-          printf("good network\n");
-          strcpy(runmessage, "Done waiting!");
-					keep_waiting=0;
-          }
-				int8_t x=bcm2835_gpio_lev(GPIO_PWR_LED);
-				x=!x;
-				bcm2835_gpio_write(GPIO_PWR_LED, x);
-        vcos_sleep(100);
-				}
-			}
-		bcm2835_gpio_write(GPIO_PWR_LED, HIGH);
-    }
-  if (state->recording < 1) {goto err_gps;};
-  
-  sprintf(runmessage, "Quantization %d", state->quantisationParameter);
-  
-  int length;
-  char str[64];
-  if (iparms.write_file)
-    {
-    time_t time_uf;
-    struct tm *time_fmt;
-    time(&time_uf);
-    time_fmt = localtime(&time_uf);
-    strcpy(str, "file:");
-    length=strlen(str);
-    strcpy(str+length, iparms.file);
-    length=strlen(str);
-    strftime(str+length, 20,"%Y-%m-%d_%H_%M_%S", time_fmt);
-    length=strlen(str);
-    strcpy(str+length, ".flv");
-    if (allocate_fmtctx(str, &state->filectx, state))
-      {
-      printf("Allocate %s context failed\n", str);
-      goto err_file;
-      }
-    state->encodectx.audctx=state->filectx.audctx;
-    } 
-  if (iparms.write_url)
-    {
-    strcpy(str, "rtmp://");
-    length=strlen(str);
-    strcpy(str+length, iparms.url);
-    if (allocate_fmtctx(str, &state->urlctx, state))
-      {
-      printf("Allocate %s context failed\n", str);
-      goto err_url;
-      }
-    state->encodectx.audctx=state->urlctx.audctx;
-    } 
-  if (allocate_audio_encode(&state->encodectx)) {state->recording=-1; goto err_aencode;}
-  if (allocate_alsa(&state->encodectx)) {state->recording=-1; goto err_alsa;}
-  if (create_video_stream(state)) {state->recording=-1; goto err_vstream;}
-  if (create_encoder_component(state)) {state->recording=-1; goto err_encoder;}
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 
-  MMAL_STATUS_T status; 
-  status = connect_ports(state->hvs_component->output[0], state->encoder_component->input[0], &state->encoder_connection);
-  if (status != MMAL_SUCCESS)
-    {
-    vcos_log_error("%s: Failed to connect hvs to encoder input", __func__); 
-    state->encoder_connection = NULL;
-    state->recording=-1;
-    goto err_audio;
-    }
+  if (global_state.selected[FILE_STRM])
+		{
+		// setup states
+    int length = 0;	
+		time_t time_uf;
+		struct tm *time_fmt;
+		time(&time_uf);
+		time_fmt = localtime(&time_uf);
+		strcpy(file, "file:");
+		length=strlen(file);
+		strcpy(file+length, iparms.file);
+		length=strlen(file);
+		strftime(file+length, 20,"%Y-%m-%d_%H_%M_%S", time_fmt);
+		length=strlen(file);
+		strcpy(file+length, ".flv"); 
+    global_state.output_state[FILE_STRM].dest = file;
+		global_state.output_state[FILE_STRM].run_state = WRITING;
+    global_state.output_state[FILE_STRM].queue = global_state.userdata[FILE_STRM].queue = alloc_queue();
+		}
+		
+  if (global_state.selected[URL_STRM])
+		{
+		// setup states
+//    global_state.output_state[URL_STRM].dest = url;
+		global_state.output_state[URL_STRM].run_state = WRITING;
+    global_state.output_state[URL_STRM].queue = global_state.userdata[URL_STRM].queue = alloc_queue();
+		}
 
-  state->encoder_component->output[0]->userdata = (struct MMAL_PORT_USERDATA_T *)&state->callback_data;
+  if (allocate_audio_encode(&global_state)) 
+		{
+		goto err_aencode;
+		}
 
-  status = mmal_port_enable(state->encoder_component->output[0], encoder_buffer_callback);
-  if (status) 
-    {
-    fprintf(stderr, "enable port failed\n");
-    }
-	
-  int num = mmal_queue_length(state->encoder_pool->queue);    
-  int q;
-  for (q=0; q<num; q++)
-    {
-    MMAL_BUFFER_HEADER_T *buffer = mmal_queue_get(state->encoder_pool->queue);
-    if (!buffer) vcos_log_error("Unable to get a required buffer %d from pool queue", q);
-    if (mmal_port_send_buffer(state->encoder_component->output[0], buffer)!= MMAL_SUCCESS)
-      vcos_log_error("Unable to send a buffer to encoder output port (%d)", q);
-    }
+  if (allocate_alsa(&global_state)) 
+		{ 
+		goto err_alsa;
+		}
 
-  toggle_stream(state, START, gpio_init);
+  if (create_video_stream(&global_state)) 
+		{
+		goto err_vstream;
+		}
+
+/*	GPS_T gps_data;
+	gps_data.active = SENDING
+//  gps_data.active = &global_state.current_mode;
+	gps_data.text_size = global_state.common_settings[MAIN_CAMERA].cam.height/20;
+	gps_data.text.width = global_state.common_settings[MAIN_CAMERA].cam.width;
+	gps_data.text.height =  global_state.common_settings[MAIN_CAMERA].cam.height;
+	gps_data.text.x = 2000;
+	gps_data.text.y = 2000;
+  gps_data.t_queue = global_state.hvs_textin_pool->queue;
+  gps_data.t_port = global_state.hvs_component->input[2];
+	pthread_t gps_tid;	
+	if (gps_enabled) 
+		{
+		pthread_create(&gps_tid, NULL, gps_thread, (void *)&gps_data);
+		} */
     
-  while (state->recording > 0) 
-    {
-    read_pcm(state);
-    adjust_q(state, runmessage);
-    if (state->gps) 
-      {
-      send_text(gps_data.speed, state);
-      }
-    int64_t raw_time=(get_microseconds64()/1000)-state->encodectx.start_time;
-    int hours=0, mins=0, secs=0;
-    raw_time = raw_time/1000;
-    secs = raw_time % 60;
-    raw_time = (raw_time-secs)/60;
-    mins = raw_time%60;
-    hours = (raw_time-mins)/60;       
-    sprintf(runtime, "%2d:%02d:%02d", hours, mins, secs);
+  if (gps_enabled) 
+		{
+    gps_data.active = SENDING;
     }
+    
+	pthread_t file_tid;
+  if (global_state.output_state[FILE_STRM].run_state == WRITING)
+		{
+    pthread_create(&file_tid, NULL, write_stream, (void *)&global_state.output_state[FILE_STRM]);
+		}  
+		
+	pthread_t url_tid, adjq_tid;
+  if (global_state.output_state[URL_STRM].run_state == WRITING)
+		{
+	  pthread_create(&url_tid, NULL, write_stream, (void *)&global_state.output_state[URL_STRM]);
+		global_state.adjust_q_state.queue = global_state.userdata[URL_STRM].queue;
+    global_state.adjust_q_state.running = &global_state.output_state[URL_STRM].run_state;
+		global_state.adjust_q_state.port = global_state.encoder_component[URL_STRM]->output[0];
+		global_state.adjust_q_state.min_q = global_state.quantisationMin;
+		pthread_create(&adjq_tid, NULL, adjust_q, (void *)&global_state.adjust_q_state);
+		}  
 
-  toggle_stream(state, STOP, gpio_init);
-  if (state->encoder_component) check_disable_port(state->encoder_component->output[0]);
-  if (state->encoder_connection) mmal_connection_destroy(state->encoder_connection);
-err_audio:
-  flush_audio(state);
-err_encoder:
-  destroy_encoder_component(state);
+	int64_t start_time = get_microseconds64()/1000;
+	
+	global_state.current_mode=RECORDING;
+
+  snd_pcm_drop(global_state.pcmhnd);
+  snd_pcm_prepare(global_state.pcmhnd);
+  snd_pcm_start(global_state.pcmhnd);
+  global_state.sample_cnt = 0;
+	mmal_port_parameter_set_boolean(global_state.camera_component[MAIN_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, START);
+	mmal_port_parameter_set_boolean(global_state.camera_component[OVERLAY_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, START);
+	
+	while (global_state.current_mode > 0 ) 
+		{
+		//should flash LEDs?
+/*		if (gpio_init)
+			{
+			bcm2835_gpio_write(GPIO_LED, HIGH);
+			bcm2835_gpio_write(GPIO_MODEM_LED, HIGH);	
+			} */
+			
+    read_pcm(&global_state);
+    check_output_status(&global_state);
+		}
+
+  mmal_port_parameter_set_boolean(global_state.camera_component[MAIN_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, STOP);
+	mmal_port_parameter_set_boolean(global_state.camera_component[OVERLAY_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, STOP);
+	
+  encode_queue_audio(&global_state, TRUE); // flush audio encoder
+	
+			
 err_vstream:
-  destroy_video_stream(state);
-err_alsa:
-  free_alsa(&state->encodectx);
-err_aencode:
-  free_audio_encode(&state->encodectx);
-err_url:  
-  if (state->urlctx.fmtctx) free_fmtctx(&state->urlctx);
-err_file:
-  if (state->filectx.fmtctx) 
-    {
+  destroy_video_stream(&global_state);
+	
+  if (global_state.output_state[FILE_STRM].queue)
+		{
+    if (queue_end(global_state.output_state[FILE_STRM].queue)) {log_error("End queue file stream failed");}
+    if (global_state.output_state[FILE_STRM].run_state == WRITING) global_state.output_state[FILE_STRM].run_state = STOPPING_WRITE;
     char buf[64];
-    strcpy(buf, state->filectx.fmtctx->url+5);
+    strcpy(buf, global_state.output_state[FILE_STRM].dest+5);
     if (write_parms("ab", sizeof(buf), buf)) printf("write failed\n");
-    free_fmtctx(&state->filectx);
-    }
-  free(state->callback_data.vbuf);
-  sem_destroy(&def_mutex);
-  
-err_gps:
-  iparms.write_url = save_url_state;
-  if (state->gps) 
-    {
-    gps_data.active=0;
-    pthread_join(gps_tid, NULL);
-    }
-  av_packet_unref(&video_packet);
+		}
+  if (global_state.output_state[URL_STRM].queue)
+		{
+	  if (queue_end(global_state.output_state[URL_STRM].queue)) {log_error("End queue url stream failed");}
+    if (global_state.output_state[URL_STRM].run_state == WRITING) global_state.output_state[URL_STRM].run_state = STOPPING_WRITE;
+		}
+		
+err_alsa:
+  free_alsa(&global_state);
+	
+err_aencode:
+  free_audio_encode(&global_state);
+
+  if (global_state.selected[FILE_STRM]) 
+		{
+		pthread_join(file_tid, NULL);
+		}  
+		 
+  if (global_state.selected[URL_STRM])
+		{
+		pthread_join(url_tid, NULL);
+		pthread_join(adjq_tid, NULL);
+		}  	
+	
   clean_files();
-  if (state->recording == -1) ignore_signal=0;
 }
 
 void inc_val_lbl(GtkWidget *widget, gpointer data)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   limit *lmt=data;
   if (*lmt->val < *lmt->max)
     {
@@ -453,6 +492,7 @@ void inc_val_lbl(GtkWidget *widget, gpointer data)
 
 void dec_val_lbl(GtkWidget *widget, gpointer data)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   limit *lmt=data;
   if (*lmt->val > *lmt->min)
     {
@@ -465,6 +505,7 @@ void dec_val_lbl(GtkWidget *widget, gpointer data)
 
 void swap_cam(GtkWidget *widget, gpointer data)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   char *cptr=data;
   if (*cptr)
     {
@@ -480,37 +521,50 @@ void swap_cam(GtkWidget *widget, gpointer data)
 
 void check_status(GtkWidget *widget, gpointer data)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   check *chk=data;
   *chk->status = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(chk->button));  
 }
 
 void check_res0(GtkWidget *widget, gpointer data)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if(gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(data))) iparms.main_size=0;  
 }
 
 void check_res1(GtkWidget *widget, gpointer data)
 {
+// log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if(gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(data))) iparms.main_size=1;  
 }
 
 void check_res2(GtkWidget *widget, gpointer data)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if(gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(data))) iparms.main_size=2;  
 }
 
-void check_mono(GtkWidget *widget, gpointer data)
+void check_main(GtkWidget *widget, gpointer data)
 {
-  if(gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(data))) iparms.channels=1;
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  if(gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(data))) iparms.preview=1;
 }
 
-void check_stereo(GtkWidget *widget, gpointer data)
+void check_overlay(GtkWidget *widget, gpointer data)
 {
-  if(gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(data))) iparms.channels=2; 
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  if(gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(data))) iparms.preview=2; 
+}
+
+void check_composite(GtkWidget *widget, gpointer data)
+{
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  if(gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(data))) iparms.preview=3; 
 }
 
 void draw_it(ovrl *ol)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   GtkWidget *widget=ol->draw_area;
   gdk_draw_rectangle (pixmap, widget->style->black_gc, TRUE, 0, 0, *ol->x, *ol->y); 		
   int ox=(*ol->x)*(*ol->o_x);
@@ -523,6 +577,7 @@ void draw_it(ovrl *ol)
 
 void inc_size(GtkWidget *widget, gpointer data)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   draw *dptr=data;
   if (*dptr->val < *dptr->max) 
     {
@@ -539,6 +594,7 @@ void inc_size(GtkWidget *widget, gpointer data)
 
 void dec_size(GtkWidget *widget, gpointer data)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   draw *dptr=data; 
   if (*dptr->val > *dptr->min) 
     {
@@ -551,6 +607,7 @@ void dec_size(GtkWidget *widget, gpointer data)
 
 void inc_xy(GtkWidget *widget, gpointer data)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   draw *dptr=data;
   if (*dptr->val < (*dptr->max-*dptr->ol->size)) 
     {
@@ -562,6 +619,7 @@ void inc_xy(GtkWidget *widget, gpointer data)
 
 void dec_xy(GtkWidget *widget, gpointer data)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   draw *dptr=data;
   if (*dptr->val > *dptr->min) 
     {
@@ -571,35 +629,129 @@ void dec_xy(GtkWidget *widget, gpointer data)
     }
 }
 
+int test_dest(const char *dest)
+{
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  AVIOContext *ioctx;
+
+  if (avio_open(&ioctx,	dest, AVIO_FLAG_WRITE) < 0) 
+    {
+    return 1;
+    }
+  else 
+    {
+    avio_close(ioctx);
+    if (!(strncmp(dest, "file:", 5)))
+      {
+      char *only_file=strstr(dest, ":");
+      only_file++;    
+      if (remove(only_file)) log_error("remove %s failed %d", only_file, errno);
+      }
+    }
+  return 0;
+}
+int warn_dest(GtkWindow *parent, int flag)
+{
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  char msg[256]={'\0'};
+  int error=FALSE;
+  
+  if (iparms.write_url) 
+    {
+    if (system("ping -c 1 8.8.8.8 > /dev/null 2>&1")) 
+      {
+      strcpy(msg, "URL selected but unable to validate as network unavailable!\n\n");
+      error=TRUE;
+      }
+    else
+      {
+      if (test_dest(url))
+        {
+        sprintf(msg, "URL:%s\n selected but unable to validate!\n\n", url);
+        error=TRUE;
+        }
+      }
+    }
+    
+  int length=strlen(msg);
+  if (iparms.write_file)
+    {
+    if (test_dest(file))
+      {
+      sprintf(msg+length, "File:%s\n selected but unable to validate!\n\n", file);
+      error=TRUE;
+      }
+    }
+  int response=0;
+  if (error)
+    {
+    length=strlen(msg);
+    GtkWidget *dlg=NULL;
+    if (flag)
+      {
+      strcpy(msg+length, "Select OK to proceed to setup");
+      dlg = gtk_dialog_new_with_buttons(NULL, GTK_WINDOW(parent), 
+        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT, "OK", 0, NULL);
+      }
+    else
+      {
+      strcpy(msg+length, "Select Ignore error or proceed to Setup");
+      dlg = gtk_dialog_new_with_buttons(NULL, GTK_WINDOW(parent), 
+        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT, "Ignore", 0, "Setup", 1, NULL);
+      }
+    GtkWidget *lbl = gtk_label_new(msg);
+    gtk_container_add(GTK_CONTAINER(gtk_dialog_get_content_area(GTK_DIALOG(dlg))), lbl);
+ /*   GValue val = G_VALUE_INIT;
+    g_value_init (&val, G_TYPE_ENUM);
+    g_value_set_enum (&val, GTK_ALIGN_CENTER);
+    g_object_set_property(GTK_OBJECT(gtk_dialog_get_action_area(GTK_DIALOG(dlg))), "halign", &val); */
+//    gtk_widget_set_halign(gtk_dialog_get_action_area(GTK_DIALOG(dlg)), GTK_ALIGN_CENTER);
+//    gtk_widget_set_halign(gtk_dialog_get_action_area(GTK_DIALOG(dlg)), 3);
+    gtk_widget_show(lbl);
+    error=gtk_dialog_run(GTK_DIALOG(dlg));
+    gtk_widget_destroy(dlg);
+    }
+  return error;
+}
+
 void cancel_clicked(GtkWidget *widget, gpointer data)
 {
-  if (read_parms()) printf("read failed\n");
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  if (read_parms()) log_error("read failed");
   gtk_widget_destroy(data);
   gtk_main_quit ();
 }
 
 void save_clicked(GtkWidget *widget, gpointer data)
 {
-  if (write_parms("r+b", sizeof(iparms), &iparms)) printf("write failed\n");
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  if (write_parms("r+b", sizeof(iparms), &iparms)) log_error("write failed");
   parms_to_state (&global_state);
+  warn_dest(GTK_WINDOW(data), TRUE);
 }
 
 void done_clicked(GtkWidget *widget, gpointer data)
 {
-  if (write_parms("r+b", sizeof(iparms), &iparms)) printf("write failed\n");
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  if (write_parms("r+b", sizeof(iparms), &iparms)) log_error("write failed");
   parms_to_state (&global_state);
-  gtk_widget_destroy(data);
-  gtk_main_quit ();
+  if (!(warn_dest(GTK_WINDOW(data), FALSE))) 
+    {
+    gtk_widget_destroy(data);
+    gtk_main_quit();
+    }
 }
 
 void stop_clicked(GtkWidget *widget, gpointer data)
 {
   gtk_widget_destroy(data);
-  gtk_main_quit ();
+  data=NULL;
+  gtk_main_quit();
  }
 
  void text_cb(GtkWidget *widget, gpointer data)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   char *cptr=data;
   const gchar *text;
   text = gtk_entry_get_text (GTK_ENTRY (widget));
@@ -608,6 +760,7 @@ void stop_clicked(GtkWidget *widget, gpointer data)
 
 void widget_destroy(GtkWidget *widget, gpointer data)
 {
+//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    gtk_widget_destroy(widget);
    gtk_main_quit ();
 }
@@ -615,6 +768,7 @@ void widget_destroy(GtkWidget *widget, gpointer data)
 /* Create a new backing pixmap of the appropriate size */
 static gboolean configure_event(GtkWidget *widget, GdkEventConfigure *event, gpointer data)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   ovrl *ol=data;
   
   if (pixmap)
@@ -629,6 +783,7 @@ static gboolean configure_event(GtkWidget *widget, GdkEventConfigure *event, gpo
 /* Redraw the screen from the backing pixmap */
 static gboolean expose_event( GtkWidget *widget, GdkEventExpose *event, gpointer data)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   gdk_draw_drawable (widget->window,
 		     widget->style->fg_gc[gtk_widget_get_state (widget)],
 		     pixmap,
@@ -641,17 +796,17 @@ static gboolean expose_event( GtkWidget *widget, GdkEventExpose *event, gpointer
 
 void setup_clicked(GtkWidget *widget, gpointer data)
 {
-    
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);  
   char num_buf[3];
   char intf[6]="%2.0f"; 
   char fltf[6]="%1.1f";
-  float fps_min=20, fps_max=60, q_min=25, q_max=40, ifs_min=.1, ifs_max=2, fk_min=1, fk_max=25;
-  limit fk_lmt = {0, &iparms.file_keep, intf, &fk_min, &fk_max, 1};
+  float qmax = 39;
+  float fps_min=20, fps_max=60, q_min=15, q_max=40, ifs_min=.1, ifs_max=2, fk_min=1, fk_max=25;
+  limit fk_lmt = {0, &iparms.keep_free, intf, &fk_min, &fk_max, 1};
   limit fps_lmt = {0, &iparms.fps, intf, &fps_min, &fps_max, 1};
   limit ifs_lmt = {0, &iparms.ifs, fltf, &ifs_min, &ifs_max, .1};
   limit qmin_lmt = {0, &iparms.qmin, intf, &q_min, &iparms.qcur, 1};
-  limit qcur_lmt = {0, &iparms.qcur, intf, &iparms.qmin, &iparms.qmax, 1};
-  limit qmax_lmt = {0, &iparms.qmax, intf, &iparms.qcur, &q_max, 1};
+  limit qcur_lmt = {0, &iparms.qcur, intf, &iparms.qmin, &qmax, 1};
   check url_check = {0, &iparms.write_url};
   check file_check = {0, &iparms.write_file};
   check fmh_check = {0, &iparms.fmh};
@@ -666,7 +821,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   draw dx = {&iparms.ovrl_x, &da_ovrl, &xymin, &xymax, &xymin, &xymax, .05};
   draw dy = {&iparms.ovrl_y, &da_ovrl, &xymin, &xymax, &xymin, &xymax, .05};
    
-  gtk_widget_hide(data);
+  if (data) gtk_widget_hide(data);
   /* setup window */
   GtkWidget *setup_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
   g_signal_connect (G_OBJECT (setup_win), "destroy", G_CALLBACK (cancel_clicked), setup_win);
@@ -688,7 +843,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   gtk_box_pack_start (GTK_BOX(hbox), button, TRUE, TRUE, 2);
   
   button = gtk_button_new_with_label ("Save");
-  g_signal_connect(button, "clicked", G_CALLBACK(save_clicked), NULL);
+  g_signal_connect(button, "clicked", G_CALLBACK(save_clicked), setup_win);
   gtk_box_pack_start (GTK_BOX(hbox), button, TRUE, TRUE, 2);
   
   button = gtk_button_new_with_label ("Done");
@@ -730,7 +885,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   hbox = gtk_hbox_new(FALSE, 0);
   
   gtk_table_attach_defaults (GTK_TABLE (table), hbox, 3, 4, 1, 2);
-  wptr = gtk_label_new ("Keep files ");
+  wptr = gtk_label_new ("Keep free (GB)");
   gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, FALSE, 5);
   
   wptr = gtk_button_new();
@@ -738,7 +893,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_REMOVE, GTK_ICON_SIZE_BUTTON));
   gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, FALSE, 0);
   
-  sprintf(num_buf, "%2.0f", iparms.file_keep);
+  sprintf(num_buf, "%2.0f", iparms.keep_free);
   fk_lmt.label = gtk_label_new (num_buf);
   gtk_box_pack_start (GTK_BOX(hbox), fk_lmt.label, FALSE, FALSE, 0);
     
@@ -755,18 +910,6 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   wptr=gtk_entry_new_with_buffer(buf3);
   g_signal_connect (wptr, "changed", G_CALLBACK (text_cb), &iparms.adev);
   gtk_table_attach_defaults (GTK_TABLE (table), wptr, 1, 2, 2, 3);
-  
-  /* setup window ALSA device  stereo/mono */ 
-  wptr=gtk_radio_button_new_with_label (NULL, "Stereo");
-  g_signal_connect(wptr, "clicked", G_CALLBACK(check_stereo), wptr);
-  GSList *channel_grp=gtk_radio_button_get_group (GTK_RADIO_BUTTON(wptr));
-  if (iparms.channels == 2) gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (wptr), TRUE);
-  gtk_table_attach_defaults (GTK_TABLE (table), wptr, 2, 3, 2, 3);
-
-  wptr=gtk_radio_button_new_with_label (channel_grp, "Mono");
-  g_signal_connect(wptr, "clicked", G_CALLBACK(check_mono), wptr);
-  if (iparms.channels == 1) gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (wptr), TRUE);
-  gtk_table_attach_defaults (GTK_TABLE (table), wptr, 3, 4, 2, 3);
 
   /* setup window keyboard socket stuff */ 
   GtkWidget *socket_box = gtk_event_box_new ();
@@ -874,27 +1017,27 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   g_signal_connect(wptr, "clicked", G_CALLBACK(inc_val_lbl), &qcur_lmt);
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_ADD, GTK_ICON_SIZE_BUTTON));
   gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, TRUE, 2);
-    
-  gtk_box_pack_start (GTK_BOX(hbox), gtk_label_new (" Max "), FALSE, TRUE, 2);
   
-  wptr = gtk_button_new();
-  g_signal_connect(wptr, "clicked", G_CALLBACK(dec_val_lbl), &qmax_lmt);
-  gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_REMOVE, GTK_ICON_SIZE_BUTTON));
-  gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, TRUE, 2);
-  
-  sprintf(num_buf, "%2.0f", iparms.qmax);
-  qmax_lmt.label = gtk_label_new (num_buf);
-  gtk_box_pack_start (GTK_BOX(hbox), qmax_lmt.label, FALSE, TRUE, 2);
-  
-  wptr = gtk_button_new();
-  g_signal_connect(wptr, "clicked", G_CALLBACK(inc_val_lbl), &qmax_lmt);
-  gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_ADD, GTK_ICON_SIZE_BUTTON)); 
-  gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, TRUE, 2);
-  
-  gps_check.button=gtk_check_button_new_with_label ("GPS spd");
+  gps_check.button=gtk_check_button_new_with_label ("GPS spd  ");
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gps_check.button), iparms.gps);
   g_signal_connect(gps_check.button, "toggled", G_CALLBACK(check_status), &gps_check);
   gtk_box_pack_start (GTK_BOX(hbox), gps_check.button, FALSE, TRUE, 2);
+   
+   /* setup window preview select composite/main/overlay */ 
+  wptr=gtk_radio_button_new_with_label (NULL, "Composite");
+  g_signal_connect(wptr, "clicked", G_CALLBACK(check_composite), wptr);
+  if (iparms.preview == 3) gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (wptr), TRUE);
+  gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, TRUE, 2);
+
+  wptr=gtk_radio_button_new_with_label (gtk_radio_button_get_group (GTK_RADIO_BUTTON(wptr)), "Main");
+  g_signal_connect(wptr, "clicked", G_CALLBACK(check_main), wptr);
+  if (iparms.preview == 1) gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (wptr), TRUE);
+  gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, TRUE, 2);
+  
+  wptr=gtk_radio_button_new_with_label (gtk_radio_button_get_group (GTK_RADIO_BUTTON(wptr)), "Overlay");
+  g_signal_connect(wptr, "clicked", G_CALLBACK(check_overlay), wptr);
+  if (iparms.preview == 2) gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (wptr), TRUE);
+    gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, TRUE, 2); 
     
   /* setup window Flip check boxes */ 
   vbox1 = gtk_vbox_new(FALSE, 5);
@@ -989,12 +1132,13 @@ void setup_clicked(GtkWidget *widget, gpointer data)
 
   gtk_widget_show_all(setup_win);
   gtk_main();
-  gtk_widget_show_all(data);
+  if (data) gtk_widget_show_all(data);
 
 }
 
-void stop_window(gpointer data, int message_flag)
+void stop_window(gpointer data)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   gtk_widget_hide(data);
   /* stop window */
   stop_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
@@ -1009,16 +1153,6 @@ void stop_window(gpointer data, int message_flag)
   
   GtkWidget *vbox = gtk_vbox_new(FALSE, 5);
   gtk_box_pack_start (GTK_BOX(vbox), wptr, TRUE, TRUE, 0);
-  if (message_flag)
-    {
-    message = gtk_label_new (NULL);
-    PangoFontDescription *df = pango_font_description_from_string("Monospace");
-    pango_font_description_set_size(df,30*PANGO_SCALE);
-    pango_font_description_set_weight (df, PANGO_WEIGHT_HEAVY);
-    gtk_widget_modify_font(message, df);
-    gtk_label_set_justify (GTK_LABEL (message), GTK_JUSTIFY_CENTER);
-    gtk_box_pack_start (GTK_BOX(vbox), message, FALSE, TRUE, 0);
-    }
 
   g_signal_connect(wptr, "clicked", G_CALLBACK(stop_clicked), stop_win);
   gtk_container_add (GTK_CONTAINER (stop_win), vbox);
@@ -1031,66 +1165,46 @@ void stop_window(gpointer data, int message_flag)
 
 void preview_clicked(GtkWidget *widget, gpointer data)
 {
-  MMAL_STATUS_T status = MMAL_SUCCESS;
-  global_state.mode=PREVIEW;
-  global_state.callback_data.pstate = &global_state;
-  
-  create_video_stream(&global_state);
-  create_preview_component(&global_state);
-  if ((status = connect_ports(global_state.hvs_component->output[0], 
-    global_state.preview_component->input[0], &global_state.preview_connection)) != MMAL_SUCCESS)
-    {
-		vcos_log_error("%s: Failed to connect hvs to encoder input", __func__); 
-		global_state.preview_connection = NULL;
-    goto error;
-    } 
-  toggle_stream(&global_state, START, gpio_init);
-  stop_window(data, FALSE);
-  toggle_stream(&global_state, STOP, gpio_init);
-  if (global_state.preview_connection)
-		mmal_connection_destroy(global_state.preview_connection);
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 
-error:  
-  destroy_preview_component(&global_state);
-  destroy_video_stream(&global_state);
-  global_state.mode=NOT_RUNNING;
-}
+  create_video_preview(&global_state);
 
-gint record_timeout (gpointer data)
-{
-  int *rs=(int *)data;
-  if (*rs < 0 && (stop_win))
-    {
-    gtk_widget_destroy(stop_win);
-    gtk_main_quit ();
-    }
-  char buf[90];
-  sprintf(buf, "%s %s", runtime, runmessage);
-  if (message) gtk_label_set_text (GTK_LABEL(message), buf);
-  return 1;
+  stop_window(data);
+
+  destroy_video_preview(&global_state);
 }
 
 void record_clicked(GtkWidget *widget, gpointer data)
 {
-  global_state.mode=CLICK_RECORD;
-  global_state.recording=ignore_signal=0;
-  gint timeout_id = g_timeout_add (125, record_timeout, &global_state.recording);
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  global_state.current_mode = RECORDING;
+  
   pthread_t record_tid;
   pthread_create(&record_tid, NULL, record_thread, (void *)&global_state);
-  stop_window(data, TRUE);
-  g_source_remove (timeout_id);
-  global_state.recording=ignore_signal=0;
+
+  stop_window(data);
+
+  global_state.current_mode=STOPPED;
   pthread_join(record_tid, NULL);
-  global_state.mode=NOT_RUNNING;
 }
 
+int get_free(void)
+{
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  char buf[80];
+  FILE *free_fd = popen("df --output=avail / | tail -1", "r");
+  fgets(buf, sizeof(buf), free_fd);
+  pclose(free_fd);
+  return (atoi(buf))/1048576;
+} 
 int copy_file(FILE *to, FILE *from, int size)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   char buf[201];
   size_t cnt=fread(buf, 1, size, from);
   if (cnt != size)
     {
-    printf("read failed in copy_file\n");
+    log_error("read failed in copy_file");
     return 1;
     }
   else
@@ -1098,7 +1212,7 @@ int copy_file(FILE *to, FILE *from, int size)
     cnt=fwrite(buf, 1, size, to);
     if (cnt!=size) 
       {
-      printf("write failed in copy_file\n");
+      log_error("write failed in copy_file");
       return 1;
       }
     }
@@ -1107,45 +1221,50 @@ int copy_file(FILE *to, FILE *from, int size)
 
 int del_file(FILE *file)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   char buf[64];
   size_t cnt=fread(buf, 1, 64, file);
   if (cnt != 64)
-    printf("delete read failed %d\n", cnt);
+    log_error("delete read failed %d", cnt);
   else
     if (remove(buf)) 
-      printf("remove file %s failed\n", buf);
+      log_error("remove file %s failed", buf);
   return 0;
 }
 
 int clean_files(void)
 {
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
+
+  if (get_free() >= iparms.keep_free) return 0;
+
   FILE *init_f1, *init_f2;
   init_f1=fopen("/home/pi/racecam.ini", "rb");
   if (!init_f1) 
     {
-    printf("open ini file for cleanup failed\n");
+    log_error("open ini file for cleanup failed");
     return 1;
     }
     
   if (fseek(init_f1, 0, SEEK_END))
     {
-    printf("seek end failed\n");
+    log_error("seek end failed");
     return 1;
     }
 
   int num_of_files=ftell(init_f1);
   if (num_of_files<0)
     {
-    printf("file size check failed\n");
+    log_error("file size check failed");
     return 1;
     }
   num_of_files=(num_of_files-sizeof(iparms))/64;
-  if (num_of_files <= iparms.file_keep) goto close_f1;
+  int files_left=num_of_files;
   
   int rc=rename("/home/pi/racecam.ini", "/home/pi/racecam.old");
   if (rc) 
     {
-    printf("rename failed\n");
+    log_error("rename failed");
     return 1;
     } 
 
@@ -1154,84 +1273,58 @@ int clean_files(void)
 
   if (fseek(init_f1, 0, SEEK_SET))
     {
-    printf("seek start failed\n");
+    log_error("seek start failed");
     goto rename_back;
     }
            
   if(copy_file(init_f2, init_f1, sizeof(iparms)))
-    printf("copy file failed\n");
+    log_error("copy file failed");
   else
     {
-    int x=num_of_files-iparms.file_keep;
-    for (x=num_of_files-iparms.file_keep; x ;x--)
+    int x=num_of_files;
+    for (x=num_of_files; x>1 ;x--)
       {
       del_file(init_f1);
+      if (get_free() >= iparms.keep_free) x=0;
+      files_left--; 
       }
-    
-    for(x=iparms.file_keep; x; x--)  
+
+    for(x=files_left; x; x--)  
       {
       copy_file(init_f2, init_f1, 64);
       }
     }
-  if (fclose(init_f1)) printf("close failed\n");
-  if (fclose(init_f2)) printf("close failed\n");
+  if (fclose(init_f1)) log_error("close failed");
+  if (fclose(init_f2)) log_error("close failed");
   if (remove("/home/pi/racecam.old")) 
-    printf("remove old init file\n");
+    log_error("remove old init file");
   return 0;
   
 rename_back:
-  printf("open new ini file for cleanup failed\n");
+//  log_error("open new ini file for cleanup failed"); 
   rc=rename("/home/pi/racecam.old", "/home/pi/racecam.init");
   if (rc) printf("rename back failed\n"); 
-  if (fclose(init_f2)) printf("close failed\n");
+  if (fclose(init_f2)) log_error("close failed");
   goto close_f1;
 close_f1:
-  if (fclose(init_f1)) printf("close failed\n");
-  return 1;
-}
-
-gint main_timeout (gpointer data)
-{
-  RASPIVID_STATE *state = (RASPIVID_STATE *)data;
-  static gint timeout_id=0;
-  int switch_state = bcm2835_gpio_lev(GPIO_SWT);
-  if (switch_state == 0 && state->mode == NOT_RUNNING)
-    {
-    switch_dialog = gtk_dialog_new();
-    gtk_window_set_transient_for (GTK_WINDOW(switch_dialog), GTK_WINDOW(main_win));
-    gtk_window_set_destroy_with_parent (GTK_WINDOW(switch_dialog), TRUE);
-    gtk_window_set_modal (GTK_WINDOW(switch_dialog), TRUE);
-//    gtk_window_set_default_size (GTK_WINDOW (switch_dialog), 320, 180);
-    gtk_window_set_default_size (GTK_WINDOW (switch_dialog), WINDOW_WIDTH, WINDOW_HEIGHT);
-    gtk_window_set_decorated (GTK_WINDOW(switch_dialog), FALSE); 
-    gtk_container_set_border_width (GTK_CONTAINER (switch_dialog), 20);
-    message = gtk_label_new (NULL);
-    gtk_label_set_justify (GTK_LABEL (message), GTK_JUSTIFY_CENTER);
-    GtkWidget *vbox = gtk_dialog_get_content_area (GTK_DIALOG(switch_dialog));
-    gtk_box_pack_start (GTK_BOX(vbox), gtk_label_new("\nUse switch to stop\n"), FALSE, TRUE, 0);
-    gtk_box_pack_start (GTK_BOX(vbox), message, FALSE, TRUE, 0);
-    gtk_widget_show_all(switch_dialog);
-    global_state.mode=SWITCH_RECORD;
-    global_state.recording=ignore_signal=1;
-    timeout_id = g_timeout_add (125, record_timeout, &global_state.recording);
-    pthread_create(&switch_tid, NULL, record_thread, (void *)&global_state);
-    }
-    
-  if (switch_state == 1 && state->mode == SWITCH_RECORD)
-    {
-    global_state.recording=ignore_signal=0;
-    global_state.mode=NOT_RUNNING;
-    g_source_remove (timeout_id);
-    pthread_join(switch_tid, NULL);
-    gtk_widget_destroy(switch_dialog);
-    }
+  if (fclose(init_f1)) log_error("close failed");
   return 1;
 }
 
 int main(int argc, char **argv)
 {
- 
-  if (bcm2835_init()) 
+ // set message levels as needed 
+	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
+//	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
+	logger_set_out_stdout();
+  
+// AV_LOG_ QUIET, PANIC, FATAL, ERROR, WARNING, INFO, VERBOSE, DEBUG and TRACE
+	av_log_set_level(AV_LOG_ERROR);
+//  av_log_set_level(AV_LOG_TRACE);
+    
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  
+/*  if (bcm2835_init()) 
     {
     gpio_init = 1;    
     bcm2835_gpio_fsel(GPIO_SWT, BCM2835_GPIO_FSEL_INPT);
@@ -1243,8 +1336,25 @@ int main(int argc, char **argv)
     }
 	else 
     {
-    printf ("bcm2835 init failed\n");
-    }
+    log_error ("bcm2835 init failed");
+    } */
+    
+//  GPS_T gps_data;
+	
+//  gps_data.active = &global_state.current_mode;
+	gps_data.text_size = global_state.common_settings[MAIN_CAMERA].cam.height/20;
+	gps_data.text.width = global_state.common_settings[MAIN_CAMERA].cam.width;
+	gps_data.text.height =  global_state.common_settings[MAIN_CAMERA].cam.height;
+	gps_data.text.x = 2000;
+	gps_data.text.y = 2000;
+  gps_data.t_queue = global_state.hvs_textin_pool->queue;
+  gps_data.t_port = global_state.hvs_component->input[2];
+	pthread_t gps_tid;	
+	if (gps_enabled) 
+		{
+    gps_data.active = WAITING;
+    pthread_create(&gps_tid, NULL, gps_thread, (void *)&gps_data);
+		} 
     
   FILE *url_file;
   size_t url_size=0;
@@ -1261,9 +1371,9 @@ int main(int argc, char **argv)
           url_new[i] = '\0';
           url_size = i;
         }
-        printf(">%c< %d\n", url_new[i], url_size);
+        log_error(">%c< %d", url_new[i], url_size);
       }
-    if (remove("/home/pi/racecam.url")) printf ("rename of racecam.url failed\n");
+    if (remove("/home/pi/racecam.url")) log_error("rename of racecam.url failed");
     }
   
   if (read_parms())
@@ -1279,32 +1389,33 @@ int main(int argc, char **argv)
     strcpy(iparms.file, "/RaceCam/video/racecam");
     strcpy(iparms.adev, "dmic_sv");
     iparms.fmh=iparms.fmv=iparms.foh=iparms.fov=iparms.main_size=0;
-    iparms.cam=iparms.channels=1;
     iparms.ovrl_size=iparms.ovrl_x=iparms.ovrl_y=.5;
     iparms.fps=30;
     iparms.ifs=2;
     iparms.qmin=25;
     iparms.qcur=28;
-    iparms.qmax=40;
+    iparms.preview=3;
     iparms.write_url=iparms.write_file=1;
-    iparms.file_keep=18;
-    if (write_parms("wb", sizeof(iparms), &iparms)) printf("write failed\n");
+    iparms.keep_free=3;
+    if (write_parms("wb", sizeof(iparms), &iparms)) log_error("write failed");
     } 
    else
     {
     if (url_size)
       {
       strcpy(iparms.url, url_new);
-      if (write_parms("r+b", sizeof(iparms), &iparms)) printf("write failed\n");
+      if (write_parms("r+b", sizeof(iparms), &iparms)) log_error("write failed");
       }
     }
+    
+  memset(&global_state, 0, sizeof(RACECAM_STATE));
   default_status(&global_state);
+  global_state.output_state[FILE_STRM].r_state = global_state.output_state[URL_STRM].r_state =&global_state;
   parms_to_state(&global_state);
   
+  install_signal_handlers();
   gtk_init (&argc, &argv);
   
-  install_signal_handlers();
-
   kb_xid = launch_keyboard();
 
   if (!kb_xid)
@@ -1312,6 +1423,9 @@ int main(int argc, char **argv)
       perror ("### 'matchbox-keyboard --xid', failed to return valid window ID. ### ");
       exit(-1);
     }   
+  
+  if (warn_dest(NULL, FALSE)) setup_clicked(NULL, NULL);
+
   /*Main Window */
   main_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 
@@ -1352,18 +1466,21 @@ int main(int argc, char **argv)
   
   gtk_widget_show_all(main_win);
 
-  gint timeout_id = g_timeout_add (125, main_timeout, &global_state);
-
   gtk_main();
-  
-  g_source_remove (timeout_id);
-  
-  if (gpio_init) {
+
+/*  if (gpio_init) {
     bcm2835_gpio_write(GPIO_LED, LOW);
     bcm2835_gpio_write(GPIO_MODEM_LED, LOW);
     bcm2835_gpio_write(GPIO_PWR_LED, LOW);
-    bcm2835_close();}
+    bcm2835_close();} */
     
+  if (gps_enabled) 
+		{
+//    gps_data.active=&global_state.current_mode;
+		gps_data.active=0;
+		pthread_join(gps_tid, NULL);
+		} 
+
   clean_files();
 
   kill(kbd_pid, 15);

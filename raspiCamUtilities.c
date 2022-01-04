@@ -1,104 +1,7 @@
-#include <stdio.h>
-#include <memory.h>
-#include <ctype.h>
- 
-#include "interface/vcos/vcos.h"
-
-#include "interface/vmcs_host/vc_vchi_gencmd.h"
-#include "interface/mmal/mmal.h"
-#include "interface/mmal/mmal_logging.h"
-#include "interface/mmal/util/mmal_util.h"
 #include "interface/mmal/util/mmal_util_params.h"
-#include "interface/mmal/util/mmal_default_components.h"
-#include "interface/mmal/util/mmal_connection.h"
 
 #include "raspiCamUtilities.h"
-//#include "rcamCLI.h"
-//#include "rcamHelpers.h" 
-
-/// Structure to cross reference image effect against the MMAL parameter equivalent
-static XREF_T imagefx_map[] =
-{
-   {"none",          MMAL_PARAM_IMAGEFX_NONE},
-   {"negative",      MMAL_PARAM_IMAGEFX_NEGATIVE},
-   {"solarise",      MMAL_PARAM_IMAGEFX_SOLARIZE},
-   {"sketch",        MMAL_PARAM_IMAGEFX_SKETCH},
-   {"denoise",       MMAL_PARAM_IMAGEFX_DENOISE},
-   {"emboss",        MMAL_PARAM_IMAGEFX_EMBOSS},
-   {"oilpaint",      MMAL_PARAM_IMAGEFX_OILPAINT},
-   {"hatch",         MMAL_PARAM_IMAGEFX_HATCH},
-   {"gpen",          MMAL_PARAM_IMAGEFX_GPEN},
-   {"pastel",        MMAL_PARAM_IMAGEFX_PASTEL},
-   {"watercolour",   MMAL_PARAM_IMAGEFX_WATERCOLOUR},
-   {"film",          MMAL_PARAM_IMAGEFX_FILM},
-   {"blur",          MMAL_PARAM_IMAGEFX_BLUR},
-   {"saturation",    MMAL_PARAM_IMAGEFX_SATURATION},
-   {"colourswap",    MMAL_PARAM_IMAGEFX_COLOURSWAP},
-   {"washedout",     MMAL_PARAM_IMAGEFX_WASHEDOUT},
-   {"posterise",     MMAL_PARAM_IMAGEFX_POSTERISE},
-   {"colourpoint",   MMAL_PARAM_IMAGEFX_COLOURPOINT},
-   {"colourbalance", MMAL_PARAM_IMAGEFX_COLOURBALANCE},
-   {"cartoon",       MMAL_PARAM_IMAGEFX_CARTOON}
-};
-
-static const int imagefx_map_size = sizeof(imagefx_map) / sizeof(imagefx_map[0]);
-
-static XREF_T stereo_mode_map[] =
-{
-   {"off",           MMAL_STEREOSCOPIC_MODE_NONE},
-   {"sbs",           MMAL_STEREOSCOPIC_MODE_SIDE_BY_SIDE},
-   {"tb",            MMAL_STEREOSCOPIC_MODE_TOP_BOTTOM},
-};
-
-static const int stereo_mode_map_size = sizeof(stereo_mode_map)/sizeof(stereo_mode_map[0]);
-
-
-#define parameter_reset -99999
-
-#define zoom_full_16P16 ((unsigned int)(65536 * 0.15))
-#define zoom_increment_16P16 (65536UL / 10)
-
-/**
- * Function to take a string, a mapping, and return the int equivalent
- * @param str Incoming string to match
- * @param map Mapping data
- * @param num_refs The number of items in the mapping data
- * @return The integer match for the string, or -1 if no match
- */
-int raspicli_map_xref(const char *str, const XREF_T *map, int num_refs)
-{
-   int i;
-
-   for (i=0; i<num_refs; i++)
-   {
-      if (!strcasecmp(str, map[i].mode))
-      {
-         return map[i].mmal_mode;
-      }
-   }
-   return -1;
-}
-
-/**
- * Function to take a mmal enum (as int) and return the string equivalent
- * @param en Incoming int to match
- * @param map Mapping data
- * @param num_refs The number of items in the mapping data
- * @return const pointer to string, or NULL if no match
- */
-const char *raspicli_unmap_xref(const int en, XREF_T *map, int num_refs)
-{
-   int i;
-
-   for (i=0; i<num_refs; i++)
-   {
-      if (en == map[i].mmal_mode)
-      {
-         return map[i].mode;
-      }
-   }
-   return NULL;
-}
+#include "racecamLogger.h"  
 
 int mmal_status_to_int(MMAL_STATUS_T status)
 {
@@ -109,58 +12,58 @@ int mmal_status_to_int(MMAL_STATUS_T status)
       switch (status)
       {
       case MMAL_ENOMEM :
-         vcos_log_error("Out of memory");
+         log_error("Out of memory");
          break;
       case MMAL_ENOSPC :
-         vcos_log_error("Out of resources (other than memory)");
+         log_error("Out of resources (other than memory)");
          break;
       case MMAL_EINVAL:
-         vcos_log_error("Argument is invalid");
+         log_error("Argument is invalid");
          break;
       case MMAL_ENOSYS :
-         vcos_log_error("Function not implemented");
+         log_error("Function not implemented");
          break;
       case MMAL_ENOENT :
-         vcos_log_error("No such file or directory");
+         log_error("No such file or directory");
          break;
       case MMAL_ENXIO :
-         vcos_log_error("No such device or address");
+         log_error("No such device or address");
          break;
       case MMAL_EIO :
-         vcos_log_error("I/O error");
+         log_error("I/O error");
          break;
       case MMAL_ESPIPE :
-         vcos_log_error("Illegal seek");
+         log_error("Illegal seek");
          break;
       case MMAL_ECORRUPT :
-         vcos_log_error("Data is corrupt \attention FIXME: not POSIX");
+         log_error("Data is corrupt \attention FIXME: not POSIX");
          break;
       case MMAL_ENOTREADY :
-         vcos_log_error("Component is not ready \attention FIXME: not POSIX");
+         log_error("Component is not ready \attention FIXME: not POSIX");
          break;
       case MMAL_ECONFIG :
-         vcos_log_error("Component is not configured \attention FIXME: not POSIX");
+         log_error("Component is not configured \attention FIXME: not POSIX");
          break;
       case MMAL_EISCONN :
-         vcos_log_error("Port is already connected ");
+         log_error("Port is already connected ");
          break;
       case MMAL_ENOTCONN :
-         vcos_log_error("Port is disconnected");
+         log_error("Port is disconnected");
          break;
       case MMAL_EAGAIN :
-         vcos_log_error("Resource temporarily unavailable. Try again later");
+         log_error("Resource temporarily unavailable. Try again later");
          break;
       case MMAL_EFAULT :
-         vcos_log_error("Bad address");
+         log_error("Bad address");
          break;
       default :
-         vcos_log_error("Unknown status error");
+         log_error("Unknown status error");
          break;
       }
 
       return 1;
    }
-}
+} 
 
 uint64_t get_microseconds64()
 {
@@ -175,46 +78,13 @@ uint64_t get_microseconds64()
    return us;
 }
 
-
-/**
- * Convert string to the MMAL parameter for image effects mode
- * @param str Incoming string to match
- * @return MMAL parameter matching the strong, or the AUTO option if no match found
- */
-MMAL_PARAM_IMAGEFX_T imagefx_mode_from_string(const char *str)
-{
-   int i = raspicli_map_xref(str, imagefx_map, imagefx_map_size);
-
-   if( i != -1)
-      return (MMAL_PARAM_IMAGEFX_T)i;
-
-   vcos_log_error("Unknown image fx: %s", str);
-   return MMAL_PARAM_IMAGEFX_NONE;
-}
-
-/**
- * Convert string to the MMAL parameter for exposure metering mode
- * @param str Incoming string to match
- * @return MMAL parameter matching the string, or the AUTO option if no match found
- */
-MMAL_STEREOSCOPIC_MODE_T stereo_mode_from_string(const char *str)
-{
-   int i = raspicli_map_xref(str, stereo_mode_map, stereo_mode_map_size);
-
-   if( i != -1)
-      return (MMAL_STEREOSCOPIC_MODE_T)i;
-
-   vcos_log_error("Unknown metering mode: %s", str);
-   return MMAL_STEREOSCOPIC_MODE_NONE;
-}
-
 /**
  * Set the specified camera to all the specified settings
  * @param camera Pointer to camera component
  * @param params Pointer to parameter block containing parameters
  * @return 0 if successful, none-zero if unsuccessful.
  */
-int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_CAMERA_PARAMETERS *params)
+int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_CAMERA_PARAMETERS *params, int camera_type)
 {
    int result;
 
@@ -233,7 +103,7 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
    result += raspicamcontrol_set_imageFX(camera, params->imageEffect);
    result += raspicamcontrol_set_colourFX(camera, &params->colourEffects);
    result += raspicamcontrol_set_rotation(camera, params->rotation);
-   result += raspicamcontrol_set_flips(camera, params->hflip, params->vflip);
+   result += raspicamcontrol_set_flips(camera, params->hflip[camera_type], params->vflip[camera_type]);
    result += raspicamcontrol_set_ROI(camera, params->roi);
    result += raspicamcontrol_set_shutter_speed(camera, params->shutter_speed);
    result += raspicamcontrol_set_DRC(camera, params->drc_level);
@@ -251,7 +121,7 @@ int raspicamcontrol_set_all_parameters(MMAL_COMPONENT_T *camera, const RASPICAM_
       MMAL_STATUS_T status = mmal_port_parameter_set(camera->control, &change_event_request.hdr);
       if ( status != MMAL_SUCCESS )
       {
-         vcos_log_error("No camera settings events");
+         log_error("No camera settings events");
       }
 
       result += status;
@@ -280,7 +150,7 @@ int raspicamcontrol_set_saturation(MMAL_COMPONENT_T *camera, int saturation)
    }
    else
    {
-      vcos_log_error("Invalid saturation value");
+      log_error("Invalid saturation value");
       ret = 1;
    }
 
@@ -306,7 +176,7 @@ int raspicamcontrol_set_sharpness(MMAL_COMPONENT_T *camera, int sharpness)
    }
    else
    {
-      vcos_log_error("Invalid sharpness value");
+      log_error("Invalid sharpness value");
       ret = 1;
    }
 
@@ -333,7 +203,7 @@ int raspicamcontrol_set_contrast(MMAL_COMPONENT_T *camera, int contrast)
    }
    else
    {
-      vcos_log_error("Invalid contrast value");
+      log_error("Invalid contrast value");
       ret = 1;
    }
 
@@ -360,7 +230,7 @@ int raspicamcontrol_set_brightness(MMAL_COMPONENT_T *camera, int brightness)
    }
    else
    {
-      vcos_log_error("Invalid brightness value");
+      log_error("Invalid brightness value");
       ret = 1;
    }
 
@@ -651,82 +521,6 @@ int raspicamcontrol_set_ROI(MMAL_COMPONENT_T *camera, PARAM_FLOAT_RECT_T rect)
 }
 
 /**
- * Zoom in and Zoom out by changing ROI
- * @param camera Pointer to camera component
- * @param zoom_command zoom command enum
- * @return 0 if successful, non-zero otherwise
- */
-int raspicamcontrol_zoom_in_zoom_out(MMAL_COMPONENT_T *camera, ZOOM_COMMAND_T zoom_command, PARAM_FLOAT_RECT_T *roi)
-{
-   MMAL_PARAMETER_INPUT_CROP_T crop;
-   crop.hdr.id = MMAL_PARAMETER_INPUT_CROP;
-   crop.hdr.size = sizeof(crop);
-
-   if (mmal_port_parameter_get(camera->control, &crop.hdr) != MMAL_SUCCESS)
-   {
-      vcos_log_error("mmal_port_parameter_get(camera->control, &crop.hdr) failed, skip it");
-      return 0;
-   }
-
-   if (zoom_command == ZOOM_IN)
-   {
-      if (crop.rect.width <= (zoom_full_16P16 + zoom_increment_16P16))
-      {
-         crop.rect.width = zoom_full_16P16;
-         crop.rect.height = zoom_full_16P16;
-      }
-      else
-      {
-         crop.rect.width -= zoom_increment_16P16;
-         crop.rect.height -= zoom_increment_16P16;
-      }
-   }
-   else if (zoom_command == ZOOM_OUT)
-   {
-      unsigned int increased_size = crop.rect.width + zoom_increment_16P16;
-      if (increased_size < crop.rect.width) //overflow
-      {
-         crop.rect.width = 65536;
-         crop.rect.height = 65536;
-      }
-      else
-      {
-         crop.rect.width = increased_size;
-         crop.rect.height = increased_size;
-      }
-   }
-
-   if (zoom_command == ZOOM_RESET)
-   {
-      crop.rect.x = 0;
-      crop.rect.y = 0;
-      crop.rect.width = 65536;
-      crop.rect.height = 65536;
-   }
-   else
-   {
-      unsigned int centered_top_coordinate = (65536 - crop.rect.width) / 2;
-      crop.rect.x = centered_top_coordinate;
-      crop.rect.y = centered_top_coordinate;
-   }
-
-   int ret = mmal_status_to_int(mmal_port_parameter_set(camera->control, &crop.hdr));
-
-   if (ret == 0)
-   {
-      roi->x = roi->y = (double)crop.rect.x/65536;
-      roi->w = roi->h = (double)crop.rect.width/65536;
-   }
-   else
-   {
-      vcos_log_error("Failed to set crop values, x/y: %u, w/h: %u", crop.rect.x, crop.rect.width);
-      ret = 1;
-   }
-
-   return ret;
-}
-
-/**
  * Adjust the exposure time used for images
  * @param camera Pointer to camera component
  * @param shutter speed in microseconds
@@ -767,7 +561,7 @@ int raspicamcontrol_set_stats_pass(MMAL_COMPONENT_T *camera, int stats_pass)
       return 1;
 
    return mmal_status_to_int(mmal_port_parameter_set_boolean(camera->control, MMAL_PARAMETER_CAPTURE_STATS_PASS, stats_pass));
-}
+} 
 
 int raspicamcontrol_set_stereo_mode(MMAL_PORT_T *port, MMAL_PARAMETER_STEREOSCOPIC_MODE_T *stereo_mode)
 {
@@ -808,7 +602,7 @@ int raspicamcontrol_set_gains(MMAL_COMPONENT_T *camera, float analog, float digi
  */
 void default_camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
-   fprintf(stderr, "Camera control callback  cmd=0x%08x", buffer->cmd);
+   log_error("Camera control callback  cmd=0x%08x", buffer->cmd);
 
    if (buffer->cmd == MMAL_EVENT_PARAMETER_CHANGED)
    {
@@ -818,11 +612,11 @@ void default_camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *bu
       case MMAL_PARAMETER_CAMERA_SETTINGS:
       {
          MMAL_PARAMETER_CAMERA_SETTINGS_T *settings = (MMAL_PARAMETER_CAMERA_SETTINGS_T*)param;
-         vcos_log_error("Exposure now %u, analog gain %u/%u, digital gain %u/%u",
+         log_error("Exposure now %u, analog gain %u/%u, digital gain %u/%u",
                         settings->exposure,
                         settings->analog_gain.num, settings->analog_gain.den,
                         settings->digital_gain.num, settings->digital_gain.den);
-         vcos_log_error("AWB R=%u/%u, B=%u/%u",
+         log_error("AWB R=%u/%u, B=%u/%u",
                         settings->awb_red_gain.num, settings->awb_red_gain.den,
                         settings->awb_blue_gain.num, settings->awb_blue_gain.den);
       }
@@ -831,11 +625,11 @@ void default_camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *bu
    }
    else if (buffer->cmd == MMAL_EVENT_ERROR)
    {
-      vcos_log_error("No data received from sensor. Check all connections, including the Sunny one on the camera board");
+      log_error("No data received from sensor. Check all connections, including the Sunny one on the camera board");
    }
    else
    {
-      vcos_log_error("Received unexpected camera control callback event, 0x%08x", buffer->cmd);
+      log_error("Received unexpected camera control callback event, 0x%08x", buffer->cmd);
    }
 
    mmal_buffer_header_release(buffer);
