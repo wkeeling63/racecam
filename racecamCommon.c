@@ -2186,7 +2186,7 @@ void default_status(RACECAM_STATE *state)
    state->camera_parameters.sharpness = 0;
    state->camera_parameters.contrast = 0;
    state->camera_parameters.brightness = 50;
-   state->camera_parameters.saturation = 50;
+   state->camera_parameters.saturation = 25;
    state->camera_parameters.ISO = 0;                    // 0 = auto
    state->camera_parameters.videoStabilisation = 0;
    state->camera_parameters.exposureCompensation = 0;

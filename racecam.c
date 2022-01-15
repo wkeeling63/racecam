@@ -1194,6 +1194,7 @@ void record_clicked(GtkWidget *widget, gpointer data)
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   global_state.current_mode = RECORDING;
   
+  global_state.preview_mode = 0;
   pthread_t record_tid;
   pthread_create(&record_tid, NULL, record_thread, (void *)&global_state);
 
