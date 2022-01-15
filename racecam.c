@@ -1194,7 +1194,7 @@ void record_clicked(GtkWidget *widget, gpointer data)
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   global_state.current_mode = RECORDING;
   
-  global_state.preview_mode = 0;
+//  global_state.preview_mode = 0;
   pthread_t record_tid;
   pthread_create(&record_tid, NULL, record_thread, (void *)&global_state);
 
@@ -1330,8 +1330,8 @@ close_f1:
 int main(int argc, char **argv)
 {
  // set message levels as needed 
-// logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
-	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
+ logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
+//	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
 //	logger_set_out_stdout();
   
 // AV_LOG_ QUIET, PANIC, FATAL, ERROR, WARNING, INFO, VERBOSE, DEBUG and TRACE
