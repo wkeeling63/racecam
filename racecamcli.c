@@ -36,7 +36,7 @@ char url[64];
 
 static void usage(char *command)
 {
-//	log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+	log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 	printf(
 ("Usage: %s [OPTION]"
 "\nProgram paramaters:\n"
@@ -69,7 +69,7 @@ static void usage(char *command)
 
 static void parse_params(int argc, char *argv[], RACECAM_STATE *state)
 {
-//	log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+	log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 	int option_index, resolution = 0, overlay_percent = 33, overlay_location = 0;
 	char *command;
 	static const char short_options[] = "?D:d:r:c:s:q:i:n:l:f:F:o:u:gp:";
@@ -343,7 +343,7 @@ static void parse_params(int argc, char *argv[], RACECAM_STATE *state)
 
 static void signal_handler(int sig)
 {
-//	log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+	log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 	static int64_t kill_time = -1;
 	
 	if (!pstate->current_mode) 
@@ -377,7 +377,7 @@ int main(int argc, char *argv[])
 // AV_LOG_ QUIET, PANIC, FATAL, ERROR, WARNING, INFO, VERBOSE, DEBUG and TRACE
 	av_log_set_level(AV_LOG_ERROR);
 
-//	log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+	log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 	
 	RACECAM_STATE state;
 

@@ -5,7 +5,7 @@ int64_t adjust_pts = 1;
 
 void hvs_input_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if (buffer->user_data)
     {
     cairo_surface_destroy(buffer->user_data);
@@ -14,7 +14,7 @@ void hvs_input_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 } 
 int create_video_stream(RACECAM_STATE *state)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   MMAL_STATUS_T status = MMAL_SUCCESS;
    
     // Setup for sensor specific parameters, only set W/H settings if zero on entry
@@ -237,7 +237,7 @@ int create_video_stream(RACECAM_STATE *state)
 
 void destroy_video_stream(RACECAM_STATE *state)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
   if (state->preview_mode)
     {
     if (state->preview_connection) mmal_connection_destroy(state->preview_connection);
@@ -307,7 +307,7 @@ void destroy_video_stream(RACECAM_STATE *state)
 
 void check_output_status(RACECAM_STATE *state)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if (state->current_mode <= 0) return;
   int running = 0, stopped = 0, i;
   for (i=0; i<MAX_NUMBER_OF_STREAMS; i++)
@@ -334,7 +334,7 @@ void check_output_status(RACECAM_STATE *state)
 
 int create_video_preview(RACECAM_STATE *state)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   MMAL_STATUS_T status = MMAL_SUCCESS;
      
     // Setup for sensor specific parameters, only set W/H settings if zero on entry
@@ -425,7 +425,7 @@ int create_video_preview(RACECAM_STATE *state)
 
 void destroy_video_preview(RACECAM_STATE *state)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if (state->preview_connection) mmal_connection_destroy(state->preview_connection);
   if (state->preview_component) check_disable_port(state->preview_component->input[0]);
 
@@ -456,7 +456,7 @@ void destroy_video_preview(RACECAM_STATE *state)
 
 void *adjust_q(void *arg)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   ADJUST_Q_STATE *q_state;
   q_state = (ADJUST_Q_STATE *) arg;
   int *ptr_status=q_state->running;
@@ -517,7 +517,7 @@ void *adjust_q(void *arg)
 // ALSA stuff
 int allocate_alsa(RACECAM_STATE *state)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   snd_pcm_hw_params_t *params;
   snd_pcm_uframes_t buffer_size = 0;
   snd_pcm_uframes_t chunk_size = 0;
@@ -619,7 +619,7 @@ int allocate_alsa(RACECAM_STATE *state)
 
 int free_alsa(RACECAM_STATE *state)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if (state->pcmhnd) 
     {
     snd_pcm_close(state->pcmhnd);
@@ -633,7 +633,7 @@ int free_alsa(RACECAM_STATE *state)
 
 void xrun(snd_pcm_t *handle)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   snd_pcm_status_t *status;
   int res;
   snd_pcm_status_alloca(&status);
@@ -670,7 +670,7 @@ void xrun(snd_pcm_t *handle)
 
 void suspend(snd_pcm_t *handle)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   int res;
   while ((res = snd_pcm_resume(handle)) == -EAGAIN)
     sleep(1);	
@@ -687,7 +687,7 @@ void suspend(snd_pcm_t *handle)
 // void read_pcm(ALSA_STATE *alsa)
 void read_pcm(RACECAM_STATE *state)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 // *  currently setup for blocking (0) reads [see allocate_alsa snd_pcm_open()]
 // * so all the logic is included even wait that would be unneed unless
 // * open set too non-blocked (SND_PCM_NONBLOCK) 
@@ -857,7 +857,7 @@ int allocate_audio_encode(RACECAM_STATE *state)
 
 void free_audio_encode(RACECAM_STATE *state)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 	
   if (state->fifo) {av_audio_fifo_free(state->fifo);}
 
@@ -869,7 +869,7 @@ void free_audio_encode(RACECAM_STATE *state)
 
 void encode_queue_audio(RACECAM_STATE *state, int flush)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
   int status=0, send_status=0, recieve_status=0, min_frame=state->audctx->frame_size; 
   AVAudioFifo *fifo = state->fifo;
 
@@ -989,7 +989,7 @@ cleanup:
 // OUTPUT stuff
 int allocate_fmtctx(OUTPUT_STATE *o_state)  
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   int status=0;
   RACECAM_STATE *state=o_state->r_state;
   
@@ -1138,7 +1138,7 @@ int allocate_fmtctx(OUTPUT_STATE *o_state)
 
 int free_fmtctx(OUTPUT_STATE *o_state)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   int status=0;
   if (o_state->fmtctx) 
     {
@@ -1162,7 +1162,7 @@ int free_fmtctx(OUTPUT_STATE *o_state)
 
 int32_t convert_flag(int32_t flags)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if (flags & MMAL_BUFFER_HEADER_FLAG_KEYFRAME)
     return AV_PKT_FLAG_KEY+AV_PKT_FLAG_TRUSTED;
   else
@@ -1171,7 +1171,7 @@ int32_t convert_flag(int32_t flags)
 
 queue_frame_s *append_frame(queue_frame_s *dst, queue_frame_s *src)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   int old_size=dst->size;
   int new_size=dst->size + src->size;
   queue_frame_s *new_frame = NULL;
@@ -1190,7 +1190,7 @@ queue_frame_s *append_frame(queue_frame_s *dst, queue_frame_s *src)
 
 int write_packet(OUTPUT_STATE *o_state)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   queue_frame_s *frame = get_tail(o_state->queue);
   if (!frame) log_error("no frame in queue");
 
@@ -1372,7 +1372,7 @@ int write_packet(OUTPUT_STATE *o_state)
 
 void *write_stream(void *arg)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   OUTPUT_STATE *o_state;
   o_state = (OUTPUT_STATE *) arg;
   
@@ -1444,7 +1444,7 @@ void *write_stream(void *arg)
 //MMAL stuff
 MMAL_COMPONENT_T *create_camera_component(RACECAM_STATE *state, int camera_type)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    MMAL_COMPONENT_T *camera = NULL;
    MMAL_ES_FORMAT_T *format;
    MMAL_PORT_T *preview_port = NULL, *video_port = NULL, *still_port = NULL;
@@ -1624,7 +1624,7 @@ error:
 
 MMAL_COMPONENT_T *create_hvs_component(RACECAM_STATE *state)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);   
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);   
    MMAL_COMPONENT_T *hvs = NULL; 
    MMAL_STATUS_T status;
            
@@ -1702,7 +1702,7 @@ error:
 
 MMAL_COMPONENT_T *create_encoder_component(RACECAM_STATE *state, MMAL_ES_FORMAT_T *format)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    MMAL_COMPONENT_T *encoder = 0;
    MMAL_PORT_T *encoder_input = NULL, *encoder_output = NULL;
    MMAL_STATUS_T status;
@@ -1854,7 +1854,7 @@ error:
 
 MMAL_COMPONENT_T *create_preview_component(RACECAM_STATE *state)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    MMAL_COMPONENT_T *preview = 0;
    MMAL_PORT_T *preview_port = NULL;
    MMAL_STATUS_T status;
@@ -1924,7 +1924,7 @@ error:
 
 MMAL_STATUS_T connect_ports(MMAL_PORT_T *output_port, MMAL_PORT_T *input_port, MMAL_CONNECTION_T **connection)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    MMAL_STATUS_T status;
    status =  mmal_connection_create(connection, output_port, input_port, MMAL_CONNECTION_FLAG_TUNNELLING | MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT);
    if (status == MMAL_SUCCESS)
@@ -1938,7 +1938,7 @@ MMAL_STATUS_T connect_ports(MMAL_PORT_T *output_port, MMAL_PORT_T *input_port, M
 
 MMAL_COMPONENT_T *create_splitter_component(MMAL_COMPONENT_T **splitter_pptr, MMAL_ES_FORMAT_T *format)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    MMAL_PORT_T *splitter_output = NULL;
    MMAL_STATUS_T status;
    int i;
@@ -2023,14 +2023,14 @@ error:
 
 void check_disable_port(MMAL_PORT_T *port)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    if (port && port->is_enabled)
       mmal_port_disable(port);
 }
 
 void get_sensor_defaults(int camera_num, char *camera_name, int *width, int *height )
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    MMAL_COMPONENT_T *camera_info;
    MMAL_STATUS_T status;
 
@@ -2086,7 +2086,7 @@ void get_sensor_defaults(int camera_num, char *camera_name, int *width, int *hei
 
 void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    MMAL_BUFFER_HEADER_T *new_buffer;
    int bytes_written;
    int64_t calc_pts;
@@ -2131,7 +2131,7 @@ void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 
 void destroy_component(MMAL_COMPONENT_T **comp_ptr)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    MMAL_COMPONENT_T *comp=*comp_ptr;
    MMAL_STATUS_T status;
    if (comp)
@@ -2147,7 +2147,7 @@ void destroy_component(MMAL_COMPONENT_T **comp_ptr)
 // void default_status(RASPIVID_STATE *state)
 void default_status(RACECAM_STATE *state)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    if (!state)
    {
       vcos_assert(0);

@@ -8,7 +8,7 @@
 
 QUEUE_STATE *alloc_queue(void)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);   
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);   
    QUEUE_STATE *queue=NULL;
    queue = malloc(sizeof(QUEUE_STATE));
 
@@ -39,7 +39,7 @@ QUEUE_STATE *alloc_queue(void)
 
 int queue_frame(QUEUE_STATE *queue, char *data, int size, int type, int64_t pts, int32_t flag)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    queue_frame_s *frame = malloc(size+sizeof(queue_frame_s));
    if (!frame)
       {
@@ -76,7 +76,7 @@ int queue_frame(QUEUE_STATE *queue, char *data, int size, int type, int64_t pts,
 
 int queue_end(QUEUE_STATE *queue)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    queue_frame_s *frame = malloc(sizeof(queue_frame_s));
    if (!frame)
       {
@@ -113,7 +113,7 @@ int queue_end(QUEUE_STATE *queue)
 
 queue_frame_s *get_tail(QUEUE_STATE *queue)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 
    pthread_mutex_lock(&queue->mutex);
    queue_frame_s *tail = queue->tail;
@@ -124,7 +124,7 @@ queue_frame_s *get_tail(QUEUE_STATE *queue)
 
 void free_frame(QUEUE_STATE *queue)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    int status=0;
 
    pthread_mutex_lock(&queue->mutex);
@@ -151,7 +151,7 @@ done:
 }
 queue_frame_s *unqueue_frame(QUEUE_STATE *queue)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    int status=0;
 
    pthread_mutex_lock(&queue->mutex);
@@ -174,7 +174,7 @@ done:
 
 int free_queue(QUEUE_STATE *queue)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    if (queue->length != 0) 
       {
       log_warning("Queue not empty when freed!");
@@ -205,7 +205,7 @@ int free_queue(QUEUE_STATE *queue)
 
 int queue_length(QUEUE_STATE *queue)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 
    pthread_mutex_lock(&queue->mutex);
    int length=queue->length;
@@ -216,7 +216,7 @@ int queue_length(QUEUE_STATE *queue)
 
 void empty_wait(QUEUE_STATE *queue)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 
    pthread_mutex_lock(&queue->mutex);
    while (!queue->length)

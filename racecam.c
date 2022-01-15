@@ -110,7 +110,7 @@ void cleanup_children(int s)
 
 void install_signal_handlers(void)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 // removed so system() would return correct RC
 //  signal (SIGCHLD, SIG_IGN);  /* kernel can deal with zombies  */
   signal(SIGINT, cleanup_children);
@@ -120,7 +120,7 @@ void install_signal_handlers(void)
 
 unsigned long launch_keyboard(void)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   int    i = 0, fd[2];
   int    stdout_pipe[2];
   int    stdin_pipe[2];
@@ -182,7 +182,7 @@ unsigned long launch_keyboard(void)
 
 void parms_to_state(RACECAM_STATE *state)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   switch (iparms.main_size)    // 2: 854x480 1: 1280x720 0: 1920x1080
     {
     case 0:
@@ -260,7 +260,7 @@ void parms_to_state(RACECAM_STATE *state)
 
 void dest_parms(void)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
     
   if (iparms.write_url)
 		{
@@ -292,7 +292,7 @@ void dest_parms(void)
 
 int read_parms(void)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   FILE *parm_file;
   parm_file=fopen("/home/pi/racecam.ini", "rb");
   if (parm_file)
@@ -312,7 +312,7 @@ int read_parms(void)
 
 int write_parms(char *mode, size_t size, void *ptr)
   {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   FILE *parm_file;
   parm_file=fopen("/home/pi/racecam.ini", mode);
   if (parm_file == NULL) return 1;
@@ -327,7 +327,7 @@ int write_parms(char *mode, size_t size, void *ptr)
 
 void *record_thread(void *argp)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 
   if (global_state.selected[FILE_STRM])
 		{
@@ -390,6 +390,8 @@ void *record_thread(void *argp)
     
   if (gps_enabled) 
 		{
+    gps_data.t_queue = global_state.hvs_textin_pool->queue;  
+    gps_data.t_port = global_state.hvs_component->input[2];
     gps_data.active = SENDING;
     }
     
@@ -479,7 +481,7 @@ err_aencode:
 
 void inc_val_lbl(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   limit *lmt=data;
   if (*lmt->val < *lmt->max)
     {
@@ -492,7 +494,7 @@ void inc_val_lbl(GtkWidget *widget, gpointer data)
 
 void dec_val_lbl(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   limit *lmt=data;
   if (*lmt->val > *lmt->min)
     {
@@ -505,7 +507,7 @@ void dec_val_lbl(GtkWidget *widget, gpointer data)
 
 void swap_cam(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   char *cptr=data;
   if (*cptr)
     {
@@ -521,50 +523,50 @@ void swap_cam(GtkWidget *widget, gpointer data)
 
 void check_status(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   check *chk=data;
   *chk->status = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(chk->button));  
 }
 
 void check_res0(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if(gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(data))) iparms.main_size=0;  
 }
 
 void check_res1(GtkWidget *widget, gpointer data)
 {
-// log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+ log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if(gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(data))) iparms.main_size=1;  
 }
 
 void check_res2(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if(gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(data))) iparms.main_size=2;  
 }
 
 void check_main(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if(gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(data))) iparms.preview=1;
 }
 
 void check_overlay(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if(gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(data))) iparms.preview=2; 
 }
 
 void check_composite(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if(gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(data))) iparms.preview=3; 
 }
 
 void draw_it(ovrl *ol)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   GtkWidget *widget=ol->draw_area;
   gdk_draw_rectangle (pixmap, widget->style->black_gc, TRUE, 0, 0, *ol->x, *ol->y); 		
   int ox=(*ol->x)*(*ol->o_x);
@@ -577,7 +579,7 @@ void draw_it(ovrl *ol)
 
 void inc_size(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   draw *dptr=data;
   if (*dptr->val < *dptr->max) 
     {
@@ -594,7 +596,7 @@ void inc_size(GtkWidget *widget, gpointer data)
 
 void dec_size(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   draw *dptr=data; 
   if (*dptr->val > *dptr->min) 
     {
@@ -607,7 +609,7 @@ void dec_size(GtkWidget *widget, gpointer data)
 
 void inc_xy(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   draw *dptr=data;
   if (*dptr->val < (*dptr->max-*dptr->ol->size)) 
     {
@@ -619,7 +621,7 @@ void inc_xy(GtkWidget *widget, gpointer data)
 
 void dec_xy(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   draw *dptr=data;
   if (*dptr->val > *dptr->min) 
     {
@@ -631,7 +633,7 @@ void dec_xy(GtkWidget *widget, gpointer data)
 
 int test_dest(const char *dest)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   AVIOContext *ioctx;
 
   if (avio_open(&ioctx,	dest, AVIO_FLAG_WRITE) < 0) 
@@ -652,7 +654,7 @@ int test_dest(const char *dest)
 }
 int warn_dest(GtkWindow *parent, int flag)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   char msg[256]={'\0'};
   int error=FALSE;
   
@@ -716,7 +718,7 @@ int warn_dest(GtkWindow *parent, int flag)
 
 void cancel_clicked(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if (read_parms()) log_error("read failed");
   gtk_widget_destroy(data);
   gtk_main_quit ();
@@ -724,7 +726,7 @@ void cancel_clicked(GtkWidget *widget, gpointer data)
 
 void save_clicked(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if (write_parms("r+b", sizeof(iparms), &iparms)) log_error("write failed");
   parms_to_state (&global_state);
   warn_dest(GTK_WINDOW(data), TRUE);
@@ -732,7 +734,7 @@ void save_clicked(GtkWidget *widget, gpointer data)
 
 void done_clicked(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if (write_parms("r+b", sizeof(iparms), &iparms)) log_error("write failed");
   parms_to_state (&global_state);
   if (!(warn_dest(GTK_WINDOW(data), FALSE))) 
@@ -744,6 +746,7 @@ void done_clicked(GtkWidget *widget, gpointer data)
 
 void stop_clicked(GtkWidget *widget, gpointer data)
 {
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   gtk_widget_destroy(data);
   data=NULL;
   gtk_main_quit();
@@ -751,7 +754,7 @@ void stop_clicked(GtkWidget *widget, gpointer data)
 
  void text_cb(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   char *cptr=data;
   const gchar *text;
   text = gtk_entry_get_text (GTK_ENTRY (widget));
@@ -760,7 +763,7 @@ void stop_clicked(GtkWidget *widget, gpointer data)
 
 void widget_destroy(GtkWidget *widget, gpointer data)
 {
-//   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    gtk_widget_destroy(widget);
    gtk_main_quit ();
 }
@@ -768,7 +771,7 @@ void widget_destroy(GtkWidget *widget, gpointer data)
 /* Create a new backing pixmap of the appropriate size */
 static gboolean configure_event(GtkWidget *widget, GdkEventConfigure *event, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   ovrl *ol=data;
   
   if (pixmap)
@@ -783,7 +786,7 @@ static gboolean configure_event(GtkWidget *widget, GdkEventConfigure *event, gpo
 /* Redraw the screen from the backing pixmap */
 static gboolean expose_event( GtkWidget *widget, GdkEventExpose *event, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   gdk_draw_drawable (widget->window,
 		     widget->style->fg_gc[gtk_widget_get_state (widget)],
 		     pixmap,
@@ -796,7 +799,7 @@ static gboolean expose_event( GtkWidget *widget, GdkEventExpose *event, gpointer
 
 void setup_clicked(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);  
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);  
   char num_buf[3];
   char intf[6]="%2.0f"; 
   char fltf[6]="%1.1f";
@@ -1138,7 +1141,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
 
 void stop_window(gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   gtk_widget_hide(data);
   /* stop window */
   stop_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
@@ -1165,7 +1168,7 @@ void stop_window(gpointer data)
 
 void preview_clicked(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 
   create_video_preview(&global_state);
 
@@ -1176,7 +1179,7 @@ void preview_clicked(GtkWidget *widget, gpointer data)
 
 void record_clicked(GtkWidget *widget, gpointer data)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   global_state.current_mode = RECORDING;
   
   pthread_t record_tid;
@@ -1190,7 +1193,7 @@ void record_clicked(GtkWidget *widget, gpointer data)
 
 int get_free(void)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   char buf[80];
   FILE *free_fd = popen("df --output=avail / | tail -1", "r");
   fgets(buf, sizeof(buf), free_fd);
@@ -1199,7 +1202,7 @@ int get_free(void)
 } 
 int copy_file(FILE *to, FILE *from, int size)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   char buf[201];
   size_t cnt=fread(buf, 1, size, from);
   if (cnt != size)
@@ -1221,7 +1224,7 @@ int copy_file(FILE *to, FILE *from, int size)
 
 int del_file(FILE *file)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   char buf[64];
   size_t cnt=fread(buf, 1, 64, file);
   if (cnt != 64)
@@ -1234,7 +1237,7 @@ int del_file(FILE *file)
 
 int clean_files(void)
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
 
   if (get_free() >= iparms.keep_free) return 0;
 
@@ -1301,7 +1304,7 @@ int clean_files(void)
   return 0;
   
 rename_back:
-//  log_error("open new ini file for cleanup failed"); 
+  log_error("open new ini file for cleanup failed"); 
   rc=rename("/home/pi/racecam.old", "/home/pi/racecam.init");
   if (rc) printf("rename back failed\n"); 
   if (fclose(init_f2)) log_error("close failed");
@@ -1314,15 +1317,15 @@ close_f1:
 int main(int argc, char **argv)
 {
  // set message levels as needed 
-	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
-//	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
-	logger_set_out_stdout();
+// logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
+	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
+//	logger_set_out_stdout();
   
 // AV_LOG_ QUIET, PANIC, FATAL, ERROR, WARNING, INFO, VERBOSE, DEBUG and TRACE
 	av_log_set_level(AV_LOG_ERROR);
 //  av_log_set_level(AV_LOG_TRACE);
     
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   
 /*  if (bcm2835_init()) 
     {
@@ -1342,20 +1345,23 @@ int main(int argc, char **argv)
 //  GPS_T gps_data;
 	
 //  gps_data.active = &global_state.current_mode;
-	gps_data.text_size = global_state.common_settings[MAIN_CAMERA].cam.height/20;
+
+  gps_data.text_size = global_state.common_settings[MAIN_CAMERA].cam.height/20;
 	gps_data.text.width = global_state.common_settings[MAIN_CAMERA].cam.width;
 	gps_data.text.height =  global_state.common_settings[MAIN_CAMERA].cam.height;
 	gps_data.text.x = 2000;
 	gps_data.text.y = 2000;
-  gps_data.t_queue = global_state.hvs_textin_pool->queue;
-  gps_data.t_port = global_state.hvs_component->input[2];
+  log_debug("gps 5");  //issue!!!!!
+//  gps_data.t_queue = global_state.hvs_textin_pool->queue;  
+//  gps_data.t_port = global_state.hvs_component->input[2];
 	pthread_t gps_tid;	
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 	if (gps_enabled) 
 		{
     gps_data.active = WAITING;
     pthread_create(&gps_tid, NULL, gps_thread, (void *)&gps_data);
-		} 
-    
+		}   
+
   FILE *url_file;
   size_t url_size=0;
   char url_new[64];
