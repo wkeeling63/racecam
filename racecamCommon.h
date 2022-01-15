@@ -149,7 +149,7 @@ typedef struct RACECAM_STATE_S
   
   ADJUST_Q_STATE adjust_q_state;
     
-  int selected[MAX_NUMBER_OF_STREAMS]; /// seleced to stream flags
+//  int selected[MAX_NUMBER_OF_STREAMS]; /// seleced to stream flags
   OUTPUT_STATE output_state[MAX_NUMBER_OF_STREAMS];
   PORT_USERDATA userdata[MAX_NUMBER_OF_STREAMS];
 

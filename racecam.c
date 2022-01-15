@@ -251,9 +251,11 @@ void parms_to_state(RACECAM_STATE *state)
   
   gps_enabled=iparms.gps;
   
-  state->selected[FILE_STRM] = iparms.write_file;
-  state->selected[URL_STRM] = iparms.write_url;
-  
+//  state->selected[FILE_STRM] = iparms.write_file;
+  state->output_state[FILE_STRM].run_state = iparms.write_file;
+//  state->selected[URL_STRM] = iparms.write_url;
+  state->output_state[URL_STRM].run_state = iparms.write_url;
+
   state->preview_mode=iparms.preview;
   state->adev = iparms.adev;
 }
@@ -328,8 +330,11 @@ int write_parms(char *mode, size_t size, void *ptr)
 void *record_thread(void *argp)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  
+  int file_selected = 0, url_selected = 0;
 
-  if (global_state.selected[FILE_STRM])
+//  if (global_state.selected[FILE_STRM])
+  if (global_state.output_state[FILE_STRM].run_state)
 		{
 		// setup states
     int length = 0;	
@@ -349,7 +354,8 @@ void *record_thread(void *argp)
     global_state.output_state[FILE_STRM].queue = global_state.userdata[FILE_STRM].queue = alloc_queue();
 		}
 		
-  if (global_state.selected[URL_STRM])
+//  if (global_state.selected[URL_STRM])
+  if (global_state.output_state[URL_STRM].run_state)
 		{
 		// setup states
 //    global_state.output_state[URL_STRM].dest = url;
@@ -398,12 +404,14 @@ void *record_thread(void *argp)
 	pthread_t file_tid;
   if (global_state.output_state[FILE_STRM].run_state == WRITING)
 		{
+    file_selected = 1;
     pthread_create(&file_tid, NULL, write_stream, (void *)&global_state.output_state[FILE_STRM]);
 		}  
 		
 	pthread_t url_tid, adjq_tid;
   if (global_state.output_state[URL_STRM].run_state == WRITING)
 		{
+    url_selected = 1;
 	  pthread_create(&url_tid, NULL, write_stream, (void *)&global_state.output_state[URL_STRM]);
 		global_state.adjust_q_state.queue = global_state.userdata[URL_STRM].queue;
     global_state.adjust_q_state.running = &global_state.output_state[URL_STRM].run_state;
@@ -465,12 +473,16 @@ err_alsa:
 err_aencode:
   free_audio_encode(&global_state);
 
-  if (global_state.selected[FILE_STRM]) 
+//  if (global_state.selected[FILE_STRM]) 
+//  if (global_state.output_state[FILE_STRM].run_state)
+  if (file_selected) 
 		{
 		pthread_join(file_tid, NULL);
 		}  
 		 
-  if (global_state.selected[URL_STRM])
+//  if (global_state.selected[URL_STRM])
+//  if (global_state.output_state[URL_STRM].run_state)
+  if (url_selected)
 		{
 		pthread_join(url_tid, NULL);
 		pthread_join(adjq_tid, NULL);

@@ -371,8 +371,8 @@ static void signal_handler(int sig)
 int main(int argc, char *argv[])
 {
 // set message levels as needed 	
-	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
-//	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
+//	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
+	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
 	logger_set_out_stdout();
 // AV_LOG_ QUIET, PANIC, FATAL, ERROR, WARNING, INFO, VERBOSE, DEBUG and TRACE
 	av_log_set_level(AV_LOG_ERROR);
@@ -380,6 +380,7 @@ int main(int argc, char *argv[])
 	log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 	
 	RACECAM_STATE state;
+	int url_selected = 0, file_selected = 0;
 
 	default_status(&state);
 	pstate = state.output_state[FILE_STRM].r_state = state.output_state[URL_STRM].r_state = &state;
@@ -393,19 +394,25 @@ int main(int argc, char *argv[])
 
 	parse_params(argc, argv, &state);
 
-	if (state.selected[FILE_STRM])
+//	if (state.selected[FILE_STRM])
+	if (state.output_state[FILE_STRM].run_state)
 		{
 		// setup states
+		log_debug("setup file stream");
 		state.output_state[FILE_STRM].dest = file;
 		state.output_state[FILE_STRM].run_state = WRITING;
+		file_selected = 1;
 		state.userdata[FILE_STRM].queue = state.output_state[FILE_STRM].queue = alloc_queue();
 		}
 		
-	if (state.selected[URL_STRM])
+//	if (state.selected[URL_STRM])
+	if (state.output_state[URL_STRM].run_state)
 		{
 		// setup states
+		log_debug("setup URL stream");
 		state.output_state[URL_STRM].dest = url;
 		state.output_state[URL_STRM].run_state = WRITING;
+		url_selected = 1;
 		state.userdata[URL_STRM].queue = state.output_state[URL_STRM].queue = alloc_queue();
 		}
 
@@ -457,20 +464,20 @@ int main(int argc, char *argv[])
 		}
 
 	GPS_T gps_data;
-	gps_data.active = 1;
 //	gps_data.active = &state.current_mode;
-	gps_data.text_size = state.common_settings[MAIN_CAMERA].cam.height/20;
-	gps_data.text.width = state.common_settings[MAIN_CAMERA].cam.width;
-	gps_data.text.height =  state.common_settings[MAIN_CAMERA].cam.height;
-	gps_data.text.x = 2000;
-	gps_data.text.y = 2000;
-	gps_data.t_queue = state.hvs_textin_pool->queue;
-	gps_data.t_port = state.hvs_component->input[2];
 	pthread_t gps_tid;	
 	if (gps_enabled) 
 		{
+		gps_data.active = SENDING;
+		gps_data.text_size = state.common_settings[MAIN_CAMERA].cam.height/20;
+		gps_data.text.width = state.common_settings[MAIN_CAMERA].cam.width;
+		gps_data.text.height =  state.common_settings[MAIN_CAMERA].cam.height;
+		gps_data.text.x = 2000;
+		gps_data.text.y = 2000;
+		gps_data.t_queue = state.hvs_textin_pool->queue;
+		gps_data.t_port = state.hvs_component->input[2];
 		pthread_create(&gps_tid, NULL, gps_thread, (void *)&gps_data);
-		} 
+		}  
 
 	pthread_t file_tid;
 // 	if (state.selected[FILE_STRM])
@@ -566,23 +573,29 @@ err_alsa:
 err_aencode:
 	free_audio_encode(&state);
 
-	if (state.selected[FILE_STRM]) 
+//	log_debug("here");
+//	if (state.selected[FILE_STRM]) 
+//	if (state.output_state[FILE_STRM].run_state) 
+	if (file_selected) 
 		{
 		pthread_join(file_tid, NULL);
 		}  
 		
-	if (state.selected[URL_STRM]) 
+//	log_debug("here2");
+//	if (state.selected[URL_STRM]) 
+//	if (state.output_state[URL_STRM].run_state) 
+	if (url_selected) 
 		{
 		pthread_join(url_tid, NULL);
 		pthread_join(adjq_tid, NULL);
 		}  	
-	
+//	log_debug("here3");
 	if (gpio_init) {
 		bcm2835_gpio_write(GPIO_LED, LOW);
 		bcm2835_gpio_write(GPIO_MODEM_LED, LOW);
 		bcm2835_gpio_write(GPIO_PWR_LED, LOW);
 		bcm2835_close();} 
-		
+//	log_debug("here4");
 	if (state.current_mode == CANCELLED) return EXIT_FAILURE;
 		
 	return EXIT_SUCCESS;  
