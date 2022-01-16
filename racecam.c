@@ -383,7 +383,7 @@ void *record_thread(void *argp)
     gps_data.t_queue = global_state.hvs_textin_pool->queue;  
     gps_data.t_port = global_state.hvs_component->input[2];
     gps_data.active = SENDING;
-    }
+    } */
     
 	pthread_t file_tid;
   if (global_state.output_state[FILE_STRM].run_state == WRITING)
@@ -403,7 +403,7 @@ void *record_thread(void *argp)
 		global_state.adjust_q_state.min_q = global_state.quantisationMin;
 		pthread_create(&adjq_tid, NULL, adjust_q, (void *)&global_state.adjust_q_state);
 		}  
-    */
+    
 
 	int64_t start_time = get_microseconds64()/1000;
 	
@@ -431,7 +431,7 @@ void *record_thread(void *argp)
 err_vstream:
   destroy_video_stream(&global_state);
 	
-/*  if (global_state.output_state[FILE_STRM].queue)
+  if (global_state.output_state[FILE_STRM].queue)
 		{
     if (queue_end(global_state.output_state[FILE_STRM].queue)) {log_error("End queue file stream failed");}
     if (global_state.output_state[FILE_STRM].run_state == WRITING) global_state.output_state[FILE_STRM].run_state = STOPPING_WRITE;
@@ -443,7 +443,7 @@ err_vstream:
 		{
 	  if (queue_end(global_state.output_state[URL_STRM].queue)) {log_error("End queue url stream failed");}
     if (global_state.output_state[URL_STRM].run_state == WRITING) global_state.output_state[URL_STRM].run_state = STOPPING_WRITE;
-		} */
+		} 
 		
 err_alsa:
   free_alsa(&global_state);
@@ -453,7 +453,7 @@ err_aencode:
 
 //  if (global_state.selected[FILE_STRM]) 
 //  if (global_state.output_state[FILE_STRM].run_state)
-/*  if (file_selected) 
+  if (file_selected) 
 		{
 		pthread_join(file_tid, NULL);
 		}  
@@ -467,7 +467,7 @@ err_aencode:
 		}  	
 	
   clean_files();
-  */
+  
 }
 
 void inc_val_lbl(GtkWidget *widget, gpointer data)
