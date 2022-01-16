@@ -373,11 +373,11 @@ void *record_thread(void *argp)
 		goto err_alsa;
 		}
 
-/*  if (create_video_stream(&global_state)) 
+  if (create_video_stream(&global_state)) 
 		{
 		goto err_vstream;
 		}
-    
+ /*   
     
   if (gps_enabled) 
 		{
@@ -414,8 +414,8 @@ void *record_thread(void *argp)
   snd_pcm_prepare(global_state.pcmhnd);
   snd_pcm_start(global_state.pcmhnd);
   global_state.sample_cnt = 0;
-//	mmal_port_parameter_set_boolean(global_state.camera_component[MAIN_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, START);
-//	mmal_port_parameter_set_boolean(global_state.camera_component[OVERLAY_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, START);
+	mmal_port_parameter_set_boolean(global_state.camera_component[MAIN_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, START);
+	mmal_port_parameter_set_boolean(global_state.camera_component[OVERLAY_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, START);
 	
 	while (global_state.current_mode > 0 ) 
 		{
@@ -423,14 +423,16 @@ void *record_thread(void *argp)
 //    check_output_status(&global_state);
 		}
     
-//  mmal_port_parameter_set_boolean(global_state.camera_component[MAIN_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, STOP);
-//	mmal_port_parameter_set_boolean(global_state.camera_component[OVERLAY_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, STOP);
+  mmal_port_parameter_set_boolean(global_state.camera_component[MAIN_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, STOP);
+	mmal_port_parameter_set_boolean(global_state.camera_component[OVERLAY_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, STOP);
 	
   encode_queue_audio(&global_state, TRUE); // flush audio encoder
 	
 			
 err_vstream:
-/*  destroy_video_stream(&global_state);
+  destroy_video_stream(&global_state);
+  
+  /*
 	
   if (global_state.output_state[FILE_STRM].queue)
 		{
