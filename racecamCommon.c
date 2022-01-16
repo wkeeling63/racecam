@@ -202,7 +202,7 @@ int create_video_stream(RACECAM_STATE *state)
       }
     }
 	      
-/*  if (state->preview_mode)
+  if (state->preview_mode)
     {
     state->preview_component = create_preview_component(state);
     if (!state->preview_component)
@@ -231,19 +231,19 @@ int create_video_stream(RACECAM_STATE *state)
       state->preview_connection = NULL;
       return -1;
       } 
-    } */
+    } 
   return 0;
 }
 
 void destroy_video_stream(RACECAM_STATE *state)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
-/*  if (state->preview_mode)
+  if (state->preview_mode)
     {
     if (state->preview_connection) mmal_connection_destroy(state->preview_connection);
     if (state->preview_component) check_disable_port(state->preview_component->input[0]);
     destroy_component(&state->preview_component);
-    } */
+    } 
 	
 	if (state->splitter_component) check_disable_port(state->splitter_component->output[2]);
 	if (state->splitter_connection) mmal_connection_destroy(state->splitter_connection);

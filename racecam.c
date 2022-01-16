@@ -1330,9 +1330,9 @@ close_f1:
 int main(int argc, char **argv)
 {
  // set message levels as needed 
- logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
-//	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
-//	logger_set_out_stdout();
+// logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
+	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
+//  logger_set_out_stdout();
   
 // AV_LOG_ QUIET, PANIC, FATAL, ERROR, WARNING, INFO, VERBOSE, DEBUG and TRACE
 	av_log_set_level(AV_LOG_ERROR);
