@@ -377,7 +377,6 @@ void *record_thread(void *argp)
 		{
 		goto err_vstream;
 		}
- /*   
     
   if (gps_enabled) 
 		{
@@ -385,15 +384,14 @@ void *record_thread(void *argp)
     gps_data.t_port = global_state.hvs_component->input[2];
     gps_data.active = SENDING;
     } 
-    */
-	pthread_t file_tid;
+    
+	pthread_t file_tid, url_tid, adjq_tid;
   if (global_state.output_state[FILE_STRM].run_state == WRITING)
 		{
     file_selected = 1;
     pthread_create(&file_tid, NULL, write_stream, (void *)&global_state.output_state[FILE_STRM]);
 		}  
-		
-	pthread_t url_tid, adjq_tid;
+
   if (global_state.output_state[URL_STRM].run_state == WRITING)
 		{
     url_selected = 1;
@@ -405,7 +403,6 @@ void *record_thread(void *argp)
 		pthread_create(&adjq_tid, NULL, adjust_q, (void *)&global_state.adjust_q_state);
 		}  
     
-
 	int64_t start_time = get_microseconds64()/1000;
 	
 	global_state.current_mode=RECORDING;
@@ -420,7 +417,7 @@ void *record_thread(void *argp)
 	while (global_state.current_mode > 0 ) 
 		{
     read_pcm(&global_state);
-//    check_output_status(&global_state);
+    check_output_status(&global_state);
 		}
     
   mmal_port_parameter_set_boolean(global_state.camera_component[MAIN_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, STOP);
@@ -454,7 +451,7 @@ err_aencode:
 
 //  if (global_state.selected[FILE_STRM]) 
 //  if (global_state.output_state[FILE_STRM].run_state)
-/*  if (file_selected) 
+  if (file_selected) 
 		{
 		pthread_join(file_tid, NULL);
 		}  
@@ -466,7 +463,7 @@ err_aencode:
 		pthread_join(url_tid, NULL);
 		pthread_join(adjq_tid, NULL);
 		}  	
-	*/
+	
   clean_files();
   
 }
@@ -1312,9 +1309,10 @@ close_f1:
 int main(int argc, char **argv)
 {
  // set message levels as needed 
-// logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
-	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
+  logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
+//	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
 //  logger_set_out_stdout();
+  logger_set_log_file("/home/pi/racecam.log");
   
 // AV_LOG_ QUIET, PANIC, FATAL, ERROR, WARNING, INFO, VERBOSE, DEBUG and TRACE
 	av_log_set_level(AV_LOG_ERROR);
