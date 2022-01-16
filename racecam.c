@@ -1175,13 +1175,13 @@ void record_clicked(GtkWidget *widget, gpointer data)
   
 //  global_state.preview_mode = 0;
 
-  pthread_t record_tid;
-  pthread_create(&record_tid, NULL, record_thread, (void *)&global_state);
+//  pthread_t record_tid;
+//  pthread_create(&record_tid, NULL, record_thread, (void *)&global_state);
 
   stop_window(data);
 
-  global_state.current_mode=STOPPED;
-  pthread_join(record_tid, NULL);
+//  global_state.current_mode=STOPPED;
+//  pthread_join(record_tid, NULL);
 
 }
 
