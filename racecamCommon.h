@@ -66,7 +66,8 @@ enum mode_enum {
   SWITCHING,
   RECORDING,
   PREVIEWING,
-  WRITING};
+  WRITING,
+  SELECTED};
 //  ADJUSTING}; 
   
 enum preview_emun {

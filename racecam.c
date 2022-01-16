@@ -334,7 +334,7 @@ void *record_thread(void *argp)
   int file_selected = 0, url_selected = 0;
 
 //  if (global_state.selected[FILE_STRM])
-  if (global_state.output_state[FILE_STRM].run_state)
+  if (global_state.output_state[FILE_STRM].run_state == SELECTED)
 		{
 		// setup states
     int length = 0;	
@@ -350,16 +350,14 @@ void *record_thread(void *argp)
 		length=strlen(file);
 		strcpy(file+length, ".flv"); 
     global_state.output_state[FILE_STRM].dest = file;
-		global_state.output_state[FILE_STRM].run_state = WRITING;
     global_state.output_state[FILE_STRM].queue = global_state.userdata[FILE_STRM].queue = alloc_queue();
 		}
 		
 //  if (global_state.selected[URL_STRM])
-  if (global_state.output_state[URL_STRM].run_state)
+  if (global_state.output_state[URL_STRM].run_state == SELECTED)
 		{
 		// setup states
 //    global_state.output_state[URL_STRM].dest = url;
-		global_state.output_state[URL_STRM].run_state = WRITING;
     global_state.output_state[URL_STRM].queue = global_state.userdata[URL_STRM].queue = alloc_queue();
 		}
 
@@ -386,15 +384,15 @@ void *record_thread(void *argp)
     } 
     
 	pthread_t file_tid, url_tid, adjq_tid;
-  if (global_state.output_state[FILE_STRM].run_state == WRITING)
+  if (global_state.output_state[FILE_STRM].run_state == SELECTED)
 		{
-    file_selected = 1;
+    file_selected = global_state.output_state[FILE_STRM].run_state = WRITING;
     pthread_create(&file_tid, NULL, write_stream, (void *)&global_state.output_state[FILE_STRM]);
 		}  
 
-  if (global_state.output_state[URL_STRM].run_state == WRITING)
+  if (global_state.output_state[URL_STRM].run_state == SELECTED)
 		{
-    url_selected = 1;
+    url_selected = global_state.output_state[URL_STRM].run_state = WRITING;
 	  pthread_create(&url_tid, NULL, write_stream, (void *)&global_state.output_state[URL_STRM]);
 		global_state.adjust_q_state.queue = global_state.userdata[URL_STRM].queue;
     global_state.adjust_q_state.running = &global_state.output_state[URL_STRM].run_state;
@@ -429,7 +427,8 @@ void *record_thread(void *argp)
 err_vstream:
   destroy_video_stream(&global_state);
 	
-  if (global_state.output_state[FILE_STRM].queue)
+//  if (global_state.output_state[FILE_STRM].queue)
+  if (file_selected)
 		{
     if (queue_end(global_state.output_state[FILE_STRM].queue)) {log_error("End queue file stream failed");}
     if (global_state.output_state[FILE_STRM].run_state == WRITING) global_state.output_state[FILE_STRM].run_state = STOPPING_WRITE;
@@ -437,7 +436,8 @@ err_vstream:
     strcpy(buf, global_state.output_state[FILE_STRM].dest+5);
     if (write_parms("ab", sizeof(buf), buf)) printf("write failed\n");
 		}
-  if (global_state.output_state[URL_STRM].queue)
+//  if (global_state.output_state[URL_STRM].queue)
+  if (url_selected)
 		{
 	  if (queue_end(global_state.output_state[URL_STRM].queue)) {log_error("End queue url stream failed");}
     if (global_state.output_state[URL_STRM].run_state == WRITING) global_state.output_state[URL_STRM].run_state = STOPPING_WRITE;
@@ -1169,6 +1169,9 @@ void preview_clicked(GtkWidget *widget, gpointer data)
 void record_clicked(GtkWidget *widget, gpointer data)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  
+  if (iparms.write_file) global_state.output_state[FILE_STRM].run_state = SELECTED;
+  if (iparms.write_url) global_state.output_state[URL_STRM].run_state = SELECTED;
   global_state.current_mode = RECORDING;
   
 //  global_state.preview_mode = 0;
