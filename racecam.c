@@ -383,7 +383,7 @@ void *record_thread(void *argp)
     gps_data.t_queue = global_state.hvs_textin_pool->queue;  
     gps_data.t_port = global_state.hvs_component->input[2];
     gps_data.active = SENDING;
-    } */
+    } 
     
 	pthread_t file_tid;
   if (global_state.output_state[FILE_STRM].run_state == WRITING)
@@ -403,7 +403,7 @@ void *record_thread(void *argp)
 		global_state.adjust_q_state.min_q = global_state.quantisationMin;
 		pthread_create(&adjq_tid, NULL, adjust_q, (void *)&global_state.adjust_q_state);
 		}  
-    
+    */
 
 	int64_t start_time = get_microseconds64()/1000;
 	
@@ -413,8 +413,8 @@ void *record_thread(void *argp)
   snd_pcm_prepare(global_state.pcmhnd);
   snd_pcm_start(global_state.pcmhnd);
   global_state.sample_cnt = 0;
-	mmal_port_parameter_set_boolean(global_state.camera_component[MAIN_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, START);
-	mmal_port_parameter_set_boolean(global_state.camera_component[OVERLAY_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, START);
+//	mmal_port_parameter_set_boolean(global_state.camera_component[MAIN_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, START);
+//	mmal_port_parameter_set_boolean(global_state.camera_component[OVERLAY_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, START);
 	
 	while (global_state.current_mode > 0 ) 
 		{
@@ -422,14 +422,14 @@ void *record_thread(void *argp)
     check_output_status(&global_state);
 		}
     
-  mmal_port_parameter_set_boolean(global_state.camera_component[MAIN_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, STOP);
-	mmal_port_parameter_set_boolean(global_state.camera_component[OVERLAY_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, STOP);
+//  mmal_port_parameter_set_boolean(global_state.camera_component[MAIN_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, STOP);
+//	mmal_port_parameter_set_boolean(global_state.camera_component[OVERLAY_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, STOP);
 	
   encode_queue_audio(&global_state, TRUE); // flush audio encoder
 	
 			
 err_vstream:
-  destroy_video_stream(&global_state);
+/*  destroy_video_stream(&global_state);
 	
   if (global_state.output_state[FILE_STRM].queue)
 		{
@@ -443,7 +443,7 @@ err_vstream:
 		{
 	  if (queue_end(global_state.output_state[URL_STRM].queue)) {log_error("End queue url stream failed");}
     if (global_state.output_state[URL_STRM].run_state == WRITING) global_state.output_state[URL_STRM].run_state = STOPPING_WRITE;
-		} 
+		} */
 		
 err_alsa:
   free_alsa(&global_state);
@@ -453,7 +453,7 @@ err_aencode:
 
 //  if (global_state.selected[FILE_STRM]) 
 //  if (global_state.output_state[FILE_STRM].run_state)
-  if (file_selected) 
+/*  if (file_selected) 
 		{
 		pthread_join(file_tid, NULL);
 		}  
@@ -465,7 +465,7 @@ err_aencode:
 		pthread_join(url_tid, NULL);
 		pthread_join(adjq_tid, NULL);
 		}  	
-	
+	*/
   clean_files();
   
 }
@@ -1175,13 +1175,13 @@ void record_clicked(GtkWidget *widget, gpointer data)
   
 //  global_state.preview_mode = 0;
 
-//  pthread_t record_tid;
-//  pthread_create(&record_tid, NULL, record_thread, (void *)&global_state);
+  pthread_t record_tid;
+  pthread_create(&record_tid, NULL, record_thread, (void *)&global_state);
 
   stop_window(data);
 
-//  global_state.current_mode=STOPPED;
-//  pthread_join(record_tid, NULL);
+  global_state.current_mode=STOPPED;
+  pthread_join(record_tid, NULL);
 
 }
 
