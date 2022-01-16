@@ -334,7 +334,7 @@ void *record_thread(void *argp)
   int file_selected = 0, url_selected = 0;
 
 //  if (global_state.selected[FILE_STRM])
-/*  if (global_state.output_state[FILE_STRM].run_state)
+  if (global_state.output_state[FILE_STRM].run_state)
 		{
 		// setup states
     int length = 0;	
@@ -362,7 +362,7 @@ void *record_thread(void *argp)
 		global_state.output_state[URL_STRM].run_state = WRITING;
     global_state.output_state[URL_STRM].queue = global_state.userdata[URL_STRM].queue = alloc_queue();
 		}
-*/
+
   if (allocate_audio_encode(&global_state)) 
 		{
 		goto err_aencode;
