@@ -330,7 +330,7 @@ int write_parms(char *mode, size_t size, void *ptr)
 void *record_thread(void *argp)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-  
+/*  
   int file_selected = 0, url_selected = 0;
 
 //  if (global_state.selected[FILE_STRM])
@@ -377,22 +377,6 @@ void *record_thread(void *argp)
 		{
 		goto err_vstream;
 		}
-
-/*	GPS_T gps_data;
-	gps_data.active = SENDING
-//  gps_data.active = &global_state.current_mode;
-	gps_data.text_size = global_state.common_settings[MAIN_CAMERA].cam.height/20;
-	gps_data.text.width = global_state.common_settings[MAIN_CAMERA].cam.width;
-	gps_data.text.height =  global_state.common_settings[MAIN_CAMERA].cam.height;
-	gps_data.text.x = 2000;
-	gps_data.text.y = 2000;
-  gps_data.t_queue = global_state.hvs_textin_pool->queue;
-  gps_data.t_port = global_state.hvs_component->input[2];
-	pthread_t gps_tid;	
-	if (gps_enabled) 
-		{
-		pthread_create(&gps_tid, NULL, gps_thread, (void *)&gps_data);
-		} */
     
   if (gps_enabled) 
 		{
@@ -430,20 +414,15 @@ void *record_thread(void *argp)
   global_state.sample_cnt = 0;
 	mmal_port_parameter_set_boolean(global_state.camera_component[MAIN_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, START);
 	mmal_port_parameter_set_boolean(global_state.camera_component[OVERLAY_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, START);
+  */
 	
 	while (global_state.current_mode > 0 ) 
 		{
-		//should flash LEDs?
-/*		if (gpio_init)
-			{
-			bcm2835_gpio_write(GPIO_LED, HIGH);
-			bcm2835_gpio_write(GPIO_MODEM_LED, HIGH);	
-			} */
-			
     read_pcm(&global_state);
     check_output_status(&global_state);
 		}
-
+    
+/*
   mmal_port_parameter_set_boolean(global_state.camera_component[MAIN_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, STOP);
 	mmal_port_parameter_set_boolean(global_state.camera_component[OVERLAY_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, STOP);
 	
@@ -489,6 +468,7 @@ err_aencode:
 		}  	
 	
   clean_files();
+  */
 }
 
 void inc_val_lbl(GtkWidget *widget, gpointer data)
@@ -1194,6 +1174,91 @@ void record_clicked(GtkWidget *widget, gpointer data)
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   global_state.current_mode = RECORDING;
   
+    int file_selected = 0, url_selected = 0;
+
+//  if (global_state.selected[FILE_STRM])
+  if (global_state.output_state[FILE_STRM].run_state)
+		{
+		// setup states
+    int length = 0;	
+		time_t time_uf;
+		struct tm *time_fmt;
+		time(&time_uf);
+		time_fmt = localtime(&time_uf);
+		strcpy(file, "file:");
+		length=strlen(file);
+		strcpy(file+length, iparms.file);
+		length=strlen(file);
+		strftime(file+length, 20,"%Y-%m-%d_%H_%M_%S", time_fmt);
+		length=strlen(file);
+		strcpy(file+length, ".flv"); 
+    global_state.output_state[FILE_STRM].dest = file;
+		global_state.output_state[FILE_STRM].run_state = WRITING;
+    global_state.output_state[FILE_STRM].queue = global_state.userdata[FILE_STRM].queue = alloc_queue();
+		}
+		
+//  if (global_state.selected[URL_STRM])
+  if (global_state.output_state[URL_STRM].run_state)
+		{
+		// setup states
+//    global_state.output_state[URL_STRM].dest = url;
+		global_state.output_state[URL_STRM].run_state = WRITING;
+    global_state.output_state[URL_STRM].queue = global_state.userdata[URL_STRM].queue = alloc_queue();
+		}
+
+  if (allocate_audio_encode(&global_state)) 
+		{
+		goto err_aencode;
+		}
+
+  if (allocate_alsa(&global_state)) 
+		{ 
+		goto err_alsa;
+		}
+
+  if (create_video_stream(&global_state)) 
+		{
+		goto err_vstream;
+		}
+    
+  if (gps_enabled) 
+		{
+    gps_data.t_queue = global_state.hvs_textin_pool->queue;  
+    gps_data.t_port = global_state.hvs_component->input[2];
+    gps_data.active = SENDING;
+    }
+    
+	pthread_t file_tid;
+  if (global_state.output_state[FILE_STRM].run_state == WRITING)
+		{
+    file_selected = 1;
+    pthread_create(&file_tid, NULL, write_stream, (void *)&global_state.output_state[FILE_STRM]);
+		}  
+		
+	pthread_t url_tid, adjq_tid;
+  if (global_state.output_state[URL_STRM].run_state == WRITING)
+		{
+    url_selected = 1;
+	  pthread_create(&url_tid, NULL, write_stream, (void *)&global_state.output_state[URL_STRM]);
+		global_state.adjust_q_state.queue = global_state.userdata[URL_STRM].queue;
+    global_state.adjust_q_state.running = &global_state.output_state[URL_STRM].run_state;
+		global_state.adjust_q_state.port = global_state.encoder_component[URL_STRM]->output[0];
+		global_state.adjust_q_state.min_q = global_state.quantisationMin;
+		pthread_create(&adjq_tid, NULL, adjust_q, (void *)&global_state.adjust_q_state);
+		}  
+
+	int64_t start_time = get_microseconds64()/1000;
+	
+	global_state.current_mode=RECORDING;
+
+  snd_pcm_drop(global_state.pcmhnd);
+  snd_pcm_prepare(global_state.pcmhnd);
+  snd_pcm_start(global_state.pcmhnd);
+  global_state.sample_cnt = 0;
+	mmal_port_parameter_set_boolean(global_state.camera_component[MAIN_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, START);
+	mmal_port_parameter_set_boolean(global_state.camera_component[OVERLAY_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, START);
+  
+  
 //  global_state.preview_mode = 0;
   pthread_t record_tid;
   pthread_create(&record_tid, NULL, record_thread, (void *)&global_state);
@@ -1202,6 +1267,51 @@ void record_clicked(GtkWidget *widget, gpointer data)
 
   global_state.current_mode=STOPPED;
   pthread_join(record_tid, NULL);
+    mmal_port_parameter_set_boolean(global_state.camera_component[MAIN_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, STOP);
+	mmal_port_parameter_set_boolean(global_state.camera_component[OVERLAY_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, STOP);
+	
+  encode_queue_audio(&global_state, TRUE); // flush audio encoder
+	
+			
+err_vstream:
+  destroy_video_stream(&global_state);
+	
+  if (global_state.output_state[FILE_STRM].queue)
+		{
+    if (queue_end(global_state.output_state[FILE_STRM].queue)) {log_error("End queue file stream failed");}
+    if (global_state.output_state[FILE_STRM].run_state == WRITING) global_state.output_state[FILE_STRM].run_state = STOPPING_WRITE;
+    char buf[64];
+    strcpy(buf, global_state.output_state[FILE_STRM].dest+5);
+    if (write_parms("ab", sizeof(buf), buf)) printf("write failed\n");
+		}
+  if (global_state.output_state[URL_STRM].queue)
+		{
+	  if (queue_end(global_state.output_state[URL_STRM].queue)) {log_error("End queue url stream failed");}
+    if (global_state.output_state[URL_STRM].run_state == WRITING) global_state.output_state[URL_STRM].run_state = STOPPING_WRITE;
+		}
+		
+err_alsa:
+  free_alsa(&global_state);
+	
+err_aencode:
+  free_audio_encode(&global_state);
+
+//  if (global_state.selected[FILE_STRM]) 
+//  if (global_state.output_state[FILE_STRM].run_state)
+  if (file_selected) 
+		{
+		pthread_join(file_tid, NULL);
+		}  
+		 
+//  if (global_state.selected[URL_STRM])
+//  if (global_state.output_state[URL_STRM].run_state)
+  if (url_selected)
+		{
+		pthread_join(url_tid, NULL);
+		pthread_join(adjq_tid, NULL);
+		}  	
+	
+  clean_files();
 }
 
 int get_free(void)
