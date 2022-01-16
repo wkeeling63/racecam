@@ -385,7 +385,7 @@ void *record_thread(void *argp)
     gps_data.t_port = global_state.hvs_component->input[2];
     gps_data.active = SENDING;
     } 
-    
+    */
 	pthread_t file_tid;
   if (global_state.output_state[FILE_STRM].run_state == WRITING)
 		{
@@ -404,7 +404,7 @@ void *record_thread(void *argp)
 		global_state.adjust_q_state.min_q = global_state.quantisationMin;
 		pthread_create(&adjq_tid, NULL, adjust_q, (void *)&global_state.adjust_q_state);
 		}  
-    */
+    
 
 	int64_t start_time = get_microseconds64()/1000;
 	
@@ -431,8 +431,6 @@ void *record_thread(void *argp)
 			
 err_vstream:
   destroy_video_stream(&global_state);
-  
-  /*
 	
   if (global_state.output_state[FILE_STRM].queue)
 		{
@@ -446,7 +444,7 @@ err_vstream:
 		{
 	  if (queue_end(global_state.output_state[URL_STRM].queue)) {log_error("End queue url stream failed");}
     if (global_state.output_state[URL_STRM].run_state == WRITING) global_state.output_state[URL_STRM].run_state = STOPPING_WRITE;
-		} */
+		} 
 		
 err_alsa:
   free_alsa(&global_state);
