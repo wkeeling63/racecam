@@ -334,7 +334,7 @@ void *record_thread(void *argp)
   int file_selected = 0, url_selected = 0;
 
 //  if (global_state.selected[FILE_STRM])
-  if (global_state.output_state[FILE_STRM].run_state)
+/*  if (global_state.output_state[FILE_STRM].run_state)
 		{
 		// setup states
     int length = 0;	
@@ -362,7 +362,7 @@ void *record_thread(void *argp)
 		global_state.output_state[URL_STRM].run_state = WRITING;
     global_state.output_state[URL_STRM].queue = global_state.userdata[URL_STRM].queue = alloc_queue();
 		}
-
+*/
   if (allocate_audio_encode(&global_state)) 
 		{
 		goto err_aencode;
@@ -373,12 +373,13 @@ void *record_thread(void *argp)
 		goto err_alsa;
 		}
 
-  if (create_video_stream(&global_state)) 
+/*  if (create_video_stream(&global_state)) 
 		{
 		goto err_vstream;
 		}
     
-/*  if (gps_enabled) 
+    
+  if (gps_enabled) 
 		{
     gps_data.t_queue = global_state.hvs_textin_pool->queue;  
     gps_data.t_port = global_state.hvs_component->input[2];
@@ -419,7 +420,7 @@ void *record_thread(void *argp)
 	while (global_state.current_mode > 0 ) 
 		{
     read_pcm(&global_state);
-    check_output_status(&global_state);
+//    check_output_status(&global_state);
 		}
     
 //  mmal_port_parameter_set_boolean(global_state.camera_component[MAIN_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, STOP);
@@ -1175,13 +1176,13 @@ void record_clicked(GtkWidget *widget, gpointer data)
   
 //  global_state.preview_mode = 0;
 
-//  pthread_t record_tid;
-//  pthread_create(&record_tid, NULL, record_thread, (void *)&global_state);
+  pthread_t record_tid;
+  pthread_create(&record_tid, NULL, record_thread, (void *)&global_state);
 
   stop_window(data);
 
-//  global_state.current_mode=STOPPED;
-//  pthread_join(record_tid, NULL);
+  global_state.current_mode=STOPPED;
+  pthread_join(record_tid, NULL);
 
 }
 
