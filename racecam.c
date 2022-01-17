@@ -1426,7 +1426,7 @@ int main(int argc, char **argv)
       exit(-1);
     }   
   
-  if (warn_dest(NULL, FALSE)) setup_clicked(NULL, NULL);
+//  if (warn_dest(NULL, FALSE)) setup_clicked(NULL, NULL);
 
   /*Main Window */
   main_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
