@@ -52,29 +52,24 @@ int queue_frame(QUEUE_STATE *queue, char *data, int size, int type, int64_t pts,
    frame->type = type;
    frame->pts = pts;
    frame->next_packet = NULL;
-//   log_debug("frame inited");
 
    pthread_mutex_lock(&queue->mutex);
       
    if (queue->head)
       {
-//      log_debug("frame has head");
       queue_frame_s *head_frame = queue->head;
       head_frame->next_packet = frame;
       queue->head = frame;
       }
    else
       {
-//      log_debug("frame has no head");
       queue->head = frame;
       queue->tail = frame;
       }
-//   log_debug("frame head of queue");
    queue->length++;
    pthread_cond_signal(&queue->cond);
    pthread_mutex_unlock(&queue->mutex);
 
-//   log_debug("%s Done %s in file:(%d)", __func__,  __FILE__, __LINE__);
    return 0;
 }
 
@@ -155,7 +150,7 @@ done:
 }
 queue_frame_s *unqueue_frame(QUEUE_STATE *queue)
 {
-  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    int status=0;
 
    pthread_mutex_lock(&queue->mutex);
@@ -174,7 +169,6 @@ done:
    pthread_mutex_unlock(&queue->mutex);
    return NULL;
 }
-
 
 int free_queue(QUEUE_STATE *queue)
 {

@@ -10,10 +10,10 @@
 
 enum {STOP, START};
 
-#define GPIO_MODEM_LED	RPI_BPLUS_GPIO_J8_18 
-#define GPIO_LED	RPI_BPLUS_GPIO_J8_13 
-#define GPIO_SWT	RPI_BPLUS_GPIO_J8_15
-#define GPIO_PWR_LED	RPI_BPLUS_GPIO_J8_16
+//#define GPIO_MODEM_LED	RPI_BPLUS_GPIO_J8_18 
+//#define GPIO_LED	RPI_BPLUS_GPIO_J8_13 
+//#define GPIO_SWT	RPI_BPLUS_GPIO_J8_15
+//#define GPIO_PWR_LED	RPI_BPLUS_GPIO_J8_16
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 480
@@ -100,7 +100,6 @@ void cleanup_children(int s)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   static int64_t kill_time = -1;
-//  log_debug("%d %d %d %lld %d", global_state.current_mode, global_state.output_state[FILE_STRM].run_state, global_state.output_state[URL_STRM].run_state, kill_time, s);
   if (global_state.current_mode) return;
   log_error("term signal in handler %d", s);
   kill(kbd_pid, SIGTERM);  
@@ -251,9 +250,7 @@ void parms_to_state(RACECAM_STATE *state)
   
   gps_enabled=iparms.gps;
   
-//  state->selected[FILE_STRM] = iparms.write_file;
   state->output_state[FILE_STRM].run_state = iparms.write_file;
-//  state->selected[URL_STRM] = iparms.write_url;
   state->output_state[URL_STRM].run_state = iparms.write_url;
 
   state->preview_mode=iparms.preview;
@@ -313,7 +310,7 @@ int read_parms(void)
 }
 
 int write_parms(char *mode, size_t size, void *ptr)
-  {
+{
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   FILE *parm_file;
   parm_file=fopen("/home/pi/racecam.ini", mode);
@@ -324,7 +321,7 @@ int write_parms(char *mode, size_t size, void *ptr)
   if (fclose(parm_file)) return 1;
   dest_parms();
   return 0;
-  }
+}
   
 
 void *record_thread(void *argp)
@@ -333,7 +330,6 @@ void *record_thread(void *argp)
   
   int file_selected = 0, url_selected = 0;
 
-//  if (global_state.selected[FILE_STRM])
   if (global_state.output_state[FILE_STRM].run_state == SELECTED)
 		{
 		// setup states
@@ -353,11 +349,9 @@ void *record_thread(void *argp)
     global_state.output_state[FILE_STRM].queue = global_state.userdata[FILE_STRM].queue = alloc_queue();
 		}
 		
-//  if (global_state.selected[URL_STRM])
   if (global_state.output_state[URL_STRM].run_state == SELECTED)
 		{
 		// setup states
-//    global_state.output_state[URL_STRM].dest = url;
     global_state.output_state[URL_STRM].queue = global_state.userdata[URL_STRM].queue = alloc_queue();
 		}
 
@@ -400,9 +394,7 @@ void *record_thread(void *argp)
 		global_state.adjust_q_state.min_q = global_state.quantisationMin;
 		pthread_create(&adjq_tid, NULL, adjust_q, (void *)&global_state.adjust_q_state);
 		}  
-    
-	int64_t start_time = get_microseconds64()/1000;
-	
+    	
 	global_state.current_mode=RECORDING;
 
   snd_pcm_drop(global_state.pcmhnd);
@@ -427,7 +419,6 @@ void *record_thread(void *argp)
 err_vstream:
   destroy_video_stream(&global_state);
 	
-//  if (global_state.output_state[FILE_STRM].queue)
   if (file_selected)
 		{
     if (queue_end(global_state.output_state[FILE_STRM].queue)) {log_error("End queue file stream failed");}
@@ -436,7 +427,7 @@ err_vstream:
     strcpy(buf, global_state.output_state[FILE_STRM].dest+5);
     if (write_parms("ab", sizeof(buf), buf)) printf("write failed\n");
 		}
-//  if (global_state.output_state[URL_STRM].queue)
+
   if (url_selected)
 		{
 	  if (queue_end(global_state.output_state[URL_STRM].queue)) {log_error("End queue url stream failed");}
@@ -449,15 +440,11 @@ err_alsa:
 err_aencode:
   free_audio_encode(&global_state);
 
-//  if (global_state.selected[FILE_STRM]) 
-//  if (global_state.output_state[FILE_STRM].run_state)
   if (file_selected) 
 		{
 		pthread_join(file_tid, NULL);
 		}  
 		 
-//  if (global_state.selected[URL_STRM])
-//  if (global_state.output_state[URL_STRM].run_state)
   if (url_selected)
 		{
 		pthread_join(url_tid, NULL);
@@ -537,7 +524,7 @@ void check_res2(GtkWidget *widget, gpointer data)
 
 void check_main(GtkWidget *widget, gpointer data)
 {
-  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+ log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if(gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(data))) iparms.preview=1;
 }
 
@@ -671,24 +658,24 @@ int warn_dest(GtkWindow *parent, int flag)
       {
       sprintf(msg+length, "File:%s\n selected but unable to validate!\n\n", file);
       error=TRUE;
-      }
+      } 
     }
   int response=0;
   if (error)
     {
     length=strlen(msg);
     GtkWidget *dlg=NULL;
-    if (flag)
+   if (flag)
       {
       strcpy(msg+length, "Select OK to proceed to setup");
       dlg = gtk_dialog_new_with_buttons(NULL, GTK_WINDOW(parent), 
-        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT, "OK", 0, NULL);
+        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT, "OK", 1, NULL);
       }
     else
-      {
-      strcpy(msg+length, "Select Ignore error or proceed to Setup");
+      { 
+      strcpy(msg+length, "Select Ignore error or Cancel to return");
       dlg = gtk_dialog_new_with_buttons(NULL, GTK_WINDOW(parent), 
-        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT, "Ignore", 0, "Setup", 1, NULL);
+             GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT, "Ignore", 0, "Cancel", 1, NULL);
       }
     GtkWidget *lbl = gtk_label_new(msg);
     gtk_container_add(GTK_CONTAINER(gtk_dialog_get_content_area(GTK_DIALOG(dlg))), lbl);
@@ -726,11 +713,9 @@ void done_clicked(GtkWidget *widget, gpointer data)
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if (write_parms("r+b", sizeof(iparms), &iparms)) log_error("write failed");
   parms_to_state (&global_state);
-  if (!(warn_dest(GTK_WINDOW(data), FALSE))) 
-    {
-    gtk_widget_destroy(data);
-    gtk_main_quit();
-    }
+  if (warn_dest(GTK_WINDOW(data), FALSE)) return;
+  gtk_widget_destroy(data);
+  gtk_main_quit();
 }
 
 void stop_clicked(GtkWidget *widget, gpointer data)
@@ -1168,14 +1153,14 @@ void preview_clicked(GtkWidget *widget, gpointer data)
 
 void record_clicked(GtkWidget *widget, gpointer data)
 {
-  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+ log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  
+  if (warn_dest(GTK_WINDOW(data), FALSE)) return;
   
   if (iparms.write_file) global_state.output_state[FILE_STRM].run_state = SELECTED;
   if (iparms.write_url) global_state.output_state[URL_STRM].run_state = SELECTED;
   global_state.current_mode = RECORDING;
   
-//  global_state.preview_mode = 0;
-
   pthread_t record_tid;
   pthread_create(&record_tid, NULL, record_thread, (void *)&global_state);
 
@@ -1312,46 +1297,26 @@ close_f1:
 int main(int argc, char **argv)
 {
  // set message levels as needed 
-  logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
-//	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
+//  logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
+	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
 //  logger_set_out_stdout();
-  logger_set_log_file("/home/pi/racecam.log");
+//  logger_set_log_file("/home/pi/racecam.log");
   
 // AV_LOG_ QUIET, PANIC, FATAL, ERROR, WARNING, INFO, VERBOSE, DEBUG and TRACE
-	av_log_set_level(AV_LOG_ERROR);
+  av_log_set_level(AV_LOG_PANIC);
+//	av_log_set_level(AV_LOG_ERROR);
 //  av_log_set_level(AV_LOG_TRACE);
     
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   
-/*  if (bcm2835_init()) 
-    {
-    gpio_init = 1;    
-    bcm2835_gpio_fsel(GPIO_SWT, BCM2835_GPIO_FSEL_INPT);
-    bcm2835_gpio_set_pud(GPIO_SWT, BCM2835_GPIO_PUD_UP);
-    bcm2835_gpio_fsel(GPIO_LED, BCM2835_GPIO_FSEL_OUTP);
-    bcm2835_gpio_fsel(GPIO_MODEM_LED, BCM2835_GPIO_FSEL_OUTP);
-    bcm2835_gpio_fsel(GPIO_PWR_LED, BCM2835_GPIO_FSEL_OUTP);
-    bcm2835_gpio_write(GPIO_PWR_LED, HIGH);
-    }
-	else 
-    {
-    log_error ("bcm2835 init failed");
-    } */
-    
-//  GPS_T gps_data;
-	
-//  gps_data.active = &global_state.current_mode;
-
   gps_data.text_size = global_state.common_settings[MAIN_CAMERA].cam.height/20;
 	gps_data.text.width = global_state.common_settings[MAIN_CAMERA].cam.width;
 	gps_data.text.height =  global_state.common_settings[MAIN_CAMERA].cam.height;
 	gps_data.text.x = 2000;
 	gps_data.text.y = 2000;
-  log_debug("gps 5");  //issue!!!!!
-//  gps_data.t_queue = global_state.hvs_textin_pool->queue;  
-//  gps_data.t_port = global_state.hvs_component->input[2];
+
 	pthread_t gps_tid;	
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+
 	if (gps_enabled) 
 		{
     gps_data.active = WAITING;
@@ -1426,8 +1391,6 @@ int main(int argc, char **argv)
       exit(-1);
     }   
   
-//  if (warn_dest(NULL, FALSE)) setup_clicked(NULL, NULL);
-
   /*Main Window */
   main_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 
@@ -1469,16 +1432,9 @@ int main(int argc, char **argv)
   gtk_widget_show_all(main_win);
 
   gtk_main();
-
-/*  if (gpio_init) {
-    bcm2835_gpio_write(GPIO_LED, LOW);
-    bcm2835_gpio_write(GPIO_MODEM_LED, LOW);
-    bcm2835_gpio_write(GPIO_PWR_LED, LOW);
-    bcm2835_close();} */
     
   if (gps_enabled) 
 		{
-//    gps_data.active=&global_state.current_mode;
 		gps_data.active=0;
 		pthread_join(gps_tid, NULL);
 		} 

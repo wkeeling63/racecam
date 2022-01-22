@@ -109,7 +109,6 @@ int create_video_stream(RACECAM_STATE *state)
 
 
 // should the format be copied from HVS or splitter???
-//  if (state->selected[FILE_STRM])
   if (state->output_state[FILE_STRM].run_state)
     {
     state->encoder_component[FILE_STRM] = create_encoder_component(state, state->hvs_component->output[0]->format);
@@ -136,6 +135,7 @@ int create_video_stream(RACECAM_STATE *state)
       }
 
     state->userdata[FILE_STRM].pool = state->encoder_pool[FILE_STRM];
+    state->userdata[FILE_STRM].s_time = 0;
 	
     state->encoder_component[FILE_STRM]->output[0]->userdata = (struct MMAL_PORT_USERDATA_T *)&state->userdata[FILE_STRM];
 
@@ -155,7 +155,6 @@ int create_video_stream(RACECAM_STATE *state)
       }
     }
   	
-//  if (state->selected[URL_STRM])
   if (state->output_state[URL_STRM].run_state)
     {
       // create url encoder and  pool 
@@ -183,6 +182,7 @@ int create_video_stream(RACECAM_STATE *state)
       }
 
     state->userdata[URL_STRM].pool = state->encoder_pool[URL_STRM];
+    state->userdata[URL_STRM].s_time = 0;
 	
     state->encoder_component[URL_STRM]->output[0]->userdata = (struct MMAL_PORT_USERDATA_T *)&state->userdata[URL_STRM];
 
@@ -248,7 +248,6 @@ void destroy_video_stream(RACECAM_STATE *state)
 	if (state->splitter_component) check_disable_port(state->splitter_component->output[2]);
 	if (state->splitter_connection) mmal_connection_destroy(state->splitter_connection);
 	
-//	if (state->selected[FILE_STRM])
   if (state->output_state[FILE_STRM].run_state)
 		{
 		if (state->encoder_component[FILE_STRM]) check_disable_port(state->encoder_component[FILE_STRM]->output[0]);
@@ -260,7 +259,6 @@ void destroy_video_stream(RACECAM_STATE *state)
 		destroy_component(&state->encoder_component[FILE_STRM]);
 		}
 	
-//	if (state->selected[URL_STRM])
   if (state->output_state[URL_STRM].run_state)
     {
     if (state->encoder_component[URL_STRM]) check_disable_port(state->encoder_component[URL_STRM]->output[0]);
@@ -395,7 +393,6 @@ int create_video_preview(RACECAM_STATE *state)
   if (!state->preview_component)
     {
     log_error("failed to create preview");
-//    state->recording=-1;
     return -1;
     }
   switch (state->preview_mode)
@@ -463,7 +460,6 @@ void *adjust_q(void *arg)
   int atlimit=0;
   int avg_q=0;
 
-//  while (q_state->running)
   while (*ptr_status > 0)
     {
     vcos_sleep(Q_WAIT);
@@ -684,25 +680,23 @@ void suspend(snd_pcm_t *handle)
     }
 }
 
-// void read_pcm(ALSA_STATE *alsa)
 void read_pcm(RACECAM_STATE *state)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 // *  currently setup for blocking (0) reads [see allocate_alsa snd_pcm_open()]
 // * so all the logic is included even wait that would be unneed unless
 // * open set too non-blocked (SND_PCM_NONBLOCK) 
-  snd_pcm_status_t *pcm_status;
-  snd_pcm_status_alloca(&pcm_status);
+
   snd_pcm_t *handle = state->pcmhnd;
   u_char *data_in = state->pcmbuf;
   ssize_t r; 
   size_t result = 0;
   size_t count=256;
-	
-  while (count > 0) 
+  
+	while (count > 0) 
     {
     r = snd_pcm_readi(handle, data_in, count);
-
+    
     if (r == -EAGAIN || (r >= 0 && (size_t)r < count)) 
       {
       log_error("ALSA in wait");
@@ -746,7 +740,7 @@ void read_pcm(RACECAM_STATE *state)
       ++data_in;}
       if (lr) {lr=0;}
       else {lr=1;}}	
- 
+
 // data_out[0] = data_in;
 // data_out[1] = NULL;
   int status=av_audio_fifo_write(state->fifo, (void **)data_out, r);
@@ -767,7 +761,7 @@ void read_pcm(RACECAM_STATE *state)
 
 int allocate_audio_encode(RACECAM_STATE *state) 
 {
-//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   int status=0;
   
   last_pts = 0;
@@ -1028,7 +1022,7 @@ int allocate_fmtctx(OUTPUT_STATE *o_state)
     return -1;
     }	
 
-  vctx->codec_id = AV_CODEC_ID_H264;
+  vctx->codec_id = AV_CODEC_ID_H264;  //try MPEG4 for fvlcheck issue 
   vctx->bit_rate = 0;
   vctx->qmin = state->quantisationMin;
   vctx->qmax = 39;
@@ -1096,13 +1090,19 @@ int allocate_fmtctx(OUTPUT_STATE *o_state)
   if (o_state->fmtctx->oformat->flags & AVFMT_GLOBALHEADER)  // Some container formats (like MP4) require global headers to be present.
     o_state->fmtctx->oformat->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 	
+  if ((status = avcodec_open2(actx, aac_codec, NULL) < 0)) 
+    {
+    log_error("Could not open output codec (error '%s')\n", av_err2str(status));
+    return -1;
+    }
+  
   status = avcodec_parameters_from_context(aac_audio_strm->codecpar, actx);
   if (status < 0) 
     {
     log_error("Could not initialize stream parameters");
     return -1;
     }
-    
+   
     avcodec_free_context(&actx);
 		
   AVDictionary *options = NULL;
@@ -1244,7 +1244,7 @@ int write_packet(OUTPUT_STATE *o_state)
 	unqueue_frame(o_state->queue);
 	return 0;
 	}
-      if (frame->flag & MMAL_BUFFER_HEADER_FLAG_FRAME_END) 
+  if (frame->flag & MMAL_BUFFER_HEADER_FLAG_FRAME_END) 
 	{ //write frame
 	packet.dts = AV_NOPTS_VALUE;
 	packet.duration=0;
@@ -2030,74 +2030,74 @@ void check_disable_port(MMAL_PORT_T *port)
 
 void get_sensor_defaults(int camera_num, char *camera_name, int *width, int *height )
 {
-   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-   MMAL_COMPONENT_T *camera_info;
-   MMAL_STATUS_T status;
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  MMAL_COMPONENT_T *camera_info;
+  MMAL_STATUS_T status;
 
    // Default to the OV5647 setup
-   strncpy(camera_name, "OV5647", MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
+  strncpy(camera_name, "OV5647", MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
 
    // Try to get the camera name and maximum supported resolution
-   status = mmal_component_create(MMAL_COMPONENT_DEFAULT_CAMERA_INFO, &camera_info);
-   if (status == MMAL_SUCCESS)
-   {
-      MMAL_PARAMETER_CAMERA_INFO_T param;
-      param.hdr.id = MMAL_PARAMETER_CAMERA_INFO;
-      param.hdr.size = sizeof(param)-4;  // Deliberately undersize to check firmware version
-      status = mmal_port_parameter_get(camera_info->control, &param.hdr);
+  status = mmal_component_create(MMAL_COMPONENT_DEFAULT_CAMERA_INFO, &camera_info);
+  if (status == MMAL_SUCCESS)
+  {
+    MMAL_PARAMETER_CAMERA_INFO_T param;
+    param.hdr.id = MMAL_PARAMETER_CAMERA_INFO;
+    param.hdr.size = sizeof(param)-4;  // Deliberately undersize to check firmware version
+    status = mmal_port_parameter_get(camera_info->control, &param.hdr);
 
-      if (status != MMAL_SUCCESS)
+    if (status != MMAL_SUCCESS)
       {
-         // Running on newer firmware
-         param.hdr.size = sizeof(param);
-         status = mmal_port_parameter_get(camera_info->control, &param.hdr);
-         if (status == MMAL_SUCCESS && param.num_cameras > camera_num)
-         {
-            // Take the parameters from the first camera listed.
-            if (*width == 0)
-               *width = param.cameras[camera_num].max_width;
-            if (*height == 0)
-               *height = param.cameras[camera_num].max_height;
-            strncpy(camera_name, param.cameras[camera_num].camera_name, MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
-            camera_name[MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN-1] = 0;
-         }
-         else
-            log_error("Cannot read camera info, keeping the defaults for OV5647");
-      }
+      // Running on newer firmware
+      param.hdr.size = sizeof(param);
+      status = mmal_port_parameter_get(camera_info->control, &param.hdr);
+      if (status == MMAL_SUCCESS && param.num_cameras > camera_num)
+        {
+        // Take the parameters from the first camera listed.
+        if (*width == 0)
+          *width = param.cameras[camera_num].max_width;
+        if (*height == 0)
+          *height = param.cameras[camera_num].max_height;
+        strncpy(camera_name, param.cameras[camera_num].camera_name, MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
+        camera_name[MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN-1] = 0;
+        }
       else
+        log_error("Cannot read camera info, keeping the defaults for OV5647");
+      }
+    else
       {
          // Older firmware
          // Nothing to do here, keep the defaults for OV5647
       }
 
-      mmal_component_destroy(camera_info);
-   }
-   else
-   {
-      log_error("Failed to create camera_info component");
-   }
+    mmal_component_destroy(camera_info);
+    }
+  else
+    {
+    log_error("Failed to create camera_info component");
+    }
 
    // default to OV5647 if nothing detected..
-   if (*width == 0)
-      *width = 2592;
-   if (*height == 0)
-      *height = 1944; 
+  if (*width == 0)
+    *width = 2592;
+  if (*height == 0)
+    *height = 1944; 
 }
 
 void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
-   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-   MMAL_BUFFER_HEADER_T *new_buffer;
-   int bytes_written;
-   int64_t calc_pts;
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  MMAL_BUFFER_HEADER_T *new_buffer;
+  int bytes_written;
+  int64_t calc_pts;
 	
-   PORT_USERDATA *pData = (PORT_USERDATA *)port->userdata;
-   QUEUE_STATE *queue = pData->queue;
+  PORT_USERDATA *pData = (PORT_USERDATA *)port->userdata;
+  QUEUE_STATE *queue = pData->queue;
   
   if (buffer->pts && (!pData->s_time))
-   {
-   pData->s_time = buffer->pts-1000;
-   }
+    {
+    pData->s_time = buffer->pts-1000;
+    }
   if (buffer->pts) 
     calc_pts = (buffer->pts-pData->s_time)/1000;
   else
@@ -2109,7 +2109,7 @@ void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
     log_error("Queue video data failed!\n");
     }
   else
-    {
+    { 
     bytes_written = buffer->length;
     }
 
@@ -2131,91 +2131,89 @@ void encoder_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 
 void destroy_component(MMAL_COMPONENT_T **comp_ptr)
 {
-   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-   MMAL_COMPONENT_T *comp=*comp_ptr;
-   MMAL_STATUS_T status;
-   if (comp)
-   {
-      status=mmal_component_destroy(comp);
-      if (status == MMAL_SUCCESS)
-         comp = NULL;
-      else
-         log_error("component not destroyed :%s", comp->name);
-   }
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  MMAL_COMPONENT_T *comp=*comp_ptr;
+  MMAL_STATUS_T status;
+  if (comp)
+    {
+    status=mmal_component_destroy(comp);
+    if (status == MMAL_SUCCESS)
+      comp = NULL;
+    else
+      log_error("component not destroyed :%s", comp->name);
+    }
 } 
 
-// void default_status(RASPIVID_STATE *state)
 void default_status(RACECAM_STATE *state)
 {
-   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-   if (!state)
-   {
-      vcos_assert(0);
-      return;
-   }
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  if (!state)
+    {
+    vcos_assert(0);
+    return;
+    }
 
    // Default everything to zero
- //  memset(state, 0, sizeof(RASPIVID_STATE));
-   memset(state, 0, sizeof(RACECAM_STATE));
+  memset(state, 0, sizeof(RACECAM_STATE));
    
-   strncpy(state->common_settings[0].camera_name, "(Unknown)", MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
-   strncpy(state->common_settings[1].camera_name, "(Unknown)", MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
+  strncpy(state->common_settings[0].camera_name, "(Unknown)", MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
+  strncpy(state->common_settings[1].camera_name, "(Unknown)", MMAL_PARAMETER_CAMERA_INFO_MAX_STR_LEN);
 
    // Now set anything non-zero
 	state->common_settings[0].cameraNum = 0;
 	state->common_settings[1].cameraNum = 1;
-   state->common_settings[0].sensor_mode = 5;
-   state->common_settings[1].sensor_mode = 5;
-   state->timeout = -1; 
-   state->common_settings[0].cam.width = 1920;    
-   state->common_settings[0].cam.height = 1080; 
-   state->common_settings[1].cam.width = 480;    
-   state->common_settings[1].cam.height = 270;    
-   state->encoding = MMAL_ENCODING_H264;
-   state->bitrate = 0; // 0 for variable bit rate
-   state->intraperiod = 15;    // Not set
-   state->quantisationParameter = 30;
-   state->quantisationMin = 20;
-   state->immutableInput = 1;
-   state->profile = MMAL_VIDEO_PROFILE_H264_HIGH;
-   state->level = MMAL_VIDEO_LEVEL_H264_41;
-   state->bInlineHeaders = 0;
-   state->framerate=30;
+  state->common_settings[0].sensor_mode = 5;
+  state->common_settings[1].sensor_mode = 5;
+  state->timeout = -1; 
+  state->common_settings[0].cam.width = 1920;    
+  state->common_settings[0].cam.height = 1080; 
+  state->common_settings[1].cam.width = 480;    
+  state->common_settings[1].cam.height = 270;    
+  state->encoding = MMAL_ENCODING_H264;
+  state->bitrate = 0; // 0 for variable bit rate
+  state->intraperiod = 15;    // Not set
+  state->quantisationParameter = 30;
+  state->quantisationMin = 20;
+  state->immutableInput = 1;
+  state->profile = MMAL_VIDEO_PROFILE_H264_HIGH;
+  state->level = MMAL_VIDEO_LEVEL_H264_41;
+  state->bInlineHeaders = 0;
+  state->framerate=30;
 
-   // Set up the camera_parameters to default
-   state->camera_parameters.sharpness = 0;
-   state->camera_parameters.contrast = 0;
-   state->camera_parameters.brightness = 50;
-   state->camera_parameters.saturation = 25;
-   state->camera_parameters.ISO = 0;                    // 0 = auto
-   state->camera_parameters.videoStabilisation = 0;
-   state->camera_parameters.exposureCompensation = 0;
-   state->camera_parameters.exposureMode = MMAL_PARAM_EXPOSUREMODE_AUTO;
-   state->camera_parameters.flickerAvoidMode = MMAL_PARAM_FLICKERAVOID_OFF;
-   state->camera_parameters.exposureMeterMode = MMAL_PARAM_EXPOSUREMETERINGMODE_SPOT;  //from MMAL_PARAM_EXPOSUREMETERINGMODE_AVERAGE
-   state->camera_parameters.awbMode = MMAL_PARAM_AWBMODE_AUTO;
-   state->camera_parameters.imageEffect = MMAL_PARAM_IMAGEFX_NONE;
-   state->camera_parameters.colourEffects.enable = 0;
-   state->camera_parameters.colourEffects.u = 128;
-   state->camera_parameters.colourEffects.v = 128;
-   state->camera_parameters.rotation = 0;
-   state->camera_parameters.hflip[0] = state->camera_parameters.vflip[0] = 0;
-   state->camera_parameters.hflip[1] = state->camera_parameters.vflip[1] = 0;
-   state->camera_parameters.roi.x = state->camera_parameters.roi.y = 0.0;
-   state->camera_parameters.roi.w = state->camera_parameters.roi.h = 1.0;
-   state->camera_parameters.shutter_speed = 0;          // 0 = auto
-   state->camera_parameters.awb_gains_r = 0;      // Only have any function if AWB OFF is used.
-   state->camera_parameters.awb_gains_b = 0;
-   state->camera_parameters.drc_level = MMAL_PARAMETER_DRC_STRENGTH_OFF;
-   state->camera_parameters.stats_pass = MMAL_FALSE;
-   state->camera_parameters.enable_annotate = 0;
-   state->camera_parameters.annotate_string[0] = '\0';
-   state->camera_parameters.annotate_text_size = 0;	//Use firmware default
-   state->camera_parameters.annotate_text_colour = -1;   //Use firmware default
-   state->camera_parameters.annotate_bg_colour = -1;     //Use firmware default
-   state->camera_parameters.stereo_mode.mode = MMAL_STEREOSCOPIC_MODE_NONE;
-   state->camera_parameters.stereo_mode.decimate = MMAL_FALSE;
-   state->camera_parameters.stereo_mode.swap_eyes = MMAL_FALSE;
+  // Set up the camera_parameters to default
+  state->camera_parameters.sharpness = 0;
+  state->camera_parameters.contrast = 0;
+  state->camera_parameters.brightness = 50;
+  state->camera_parameters.saturation = 25;
+  state->camera_parameters.ISO = 0;                    // 0 = auto
+  state->camera_parameters.videoStabilisation = 0;
+  state->camera_parameters.exposureCompensation = 0;
+  state->camera_parameters.exposureMode = MMAL_PARAM_EXPOSUREMODE_AUTO;
+  state->camera_parameters.flickerAvoidMode = MMAL_PARAM_FLICKERAVOID_OFF;
+  state->camera_parameters.exposureMeterMode = MMAL_PARAM_EXPOSUREMETERINGMODE_SPOT;  //from MMAL_PARAM_EXPOSUREMETERINGMODE_AVERAGE
+  state->camera_parameters.awbMode = MMAL_PARAM_AWBMODE_AUTO;
+  state->camera_parameters.imageEffect = MMAL_PARAM_IMAGEFX_NONE;
+  state->camera_parameters.colourEffects.enable = 0;
+  state->camera_parameters.colourEffects.u = 128;
+  state->camera_parameters.colourEffects.v = 128;
+  state->camera_parameters.rotation = 0;
+  state->camera_parameters.hflip[0] = state->camera_parameters.vflip[0] = 0;
+  state->camera_parameters.hflip[1] = state->camera_parameters.vflip[1] = 0;
+  state->camera_parameters.roi.x = state->camera_parameters.roi.y = 0.0;
+  state->camera_parameters.roi.w = state->camera_parameters.roi.h = 1.0;
+  state->camera_parameters.shutter_speed = 0;          // 0 = auto
+  state->camera_parameters.awb_gains_r = 0;      // Only have any function if AWB OFF is used.
+  state->camera_parameters.awb_gains_b = 0;
+  state->camera_parameters.drc_level = MMAL_PARAMETER_DRC_STRENGTH_OFF;
+  state->camera_parameters.stats_pass = MMAL_FALSE;
+  state->camera_parameters.enable_annotate = 0;
+  state->camera_parameters.annotate_string[0] = '\0';
+  state->camera_parameters.annotate_text_size = 0;	//Use firmware default
+  state->camera_parameters.annotate_text_colour = -1;   //Use firmware default
+  state->camera_parameters.annotate_bg_colour = -1;     //Use firmware default
+  state->camera_parameters.stereo_mode.mode = MMAL_STEREOSCOPIC_MODE_NONE;
+  state->camera_parameters.stereo_mode.decimate = MMAL_FALSE;
+  state->camera_parameters.stereo_mode.swap_eyes = MMAL_FALSE;
 }
 
 
