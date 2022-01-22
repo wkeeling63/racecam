@@ -57,7 +57,6 @@ enum encoder_emun {
 
 enum mode_enum {
   CANCELLED = -99,
-//  STOPPING_ADJUST = -5,
   STOPPING_WRITE = -4,
   STOPPING_PREVIEW,
   STOPPING_RECORD,
@@ -68,7 +67,6 @@ enum mode_enum {
   PREVIEWING,
   WRITING,
   SELECTED};
-//  ADJUSTING}; 
   
 enum preview_emun {
    NO_PREVIEW,
@@ -150,7 +148,6 @@ typedef struct RACECAM_STATE_S
   
   ADJUST_Q_STATE adjust_q_state;
     
-//  int selected[MAX_NUMBER_OF_STREAMS]; /// seleced to stream flags
   OUTPUT_STATE output_state[MAX_NUMBER_OF_STREAMS];
   PORT_USERDATA userdata[MAX_NUMBER_OF_STREAMS];
 
@@ -168,7 +165,6 @@ typedef struct RACECAM_STATE_S
                                        /// the camera output or the encoder output (with compression artifacts)
   int profile;                        /// H264 profile to use for encoding
   int level;                          /// H264 level to use for encoding
-//  int recording;            // 0=stopped 1=GUIRecording 2=SwitchRecording
   int current_mode;            // 0=stopped 1=GUIRecording 2=SwitchRecording
 
    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
