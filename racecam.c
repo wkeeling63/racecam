@@ -328,12 +328,12 @@ void *record_thread(void *argp)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   
-  int file_selected = 0, url_selected = 0;
+  int file_selected = 0, url_selected = 0, length = 0;
 
   if (global_state.output_state[FILE_STRM].run_state == SELECTED)
 		{
 		// setup states
-    int length = 0;	
+//    int length = 0;	
 		time_t time_uf;
 		struct tm *time_fmt;
 		time(&time_uf);
@@ -352,6 +352,10 @@ void *record_thread(void *argp)
   if (global_state.output_state[URL_STRM].run_state == SELECTED)
 		{
 		// setup states
+    strcpy(url, "rtmp://");
+		length=strlen(url);
+    strcpy(url+length, iparms.url);
+    global_state.output_state[URL_STRM].dest = url;
     global_state.output_state[URL_STRM].queue = global_state.userdata[URL_STRM].queue = alloc_queue();
 		}
 
@@ -502,6 +506,7 @@ void check_status(GtkWidget *widget, gpointer data)
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   check *chk=data;
   *chk->status = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(chk->button));  
+  log_status("Check value %d", *chk->status);
 }
 
 void check_res0(GtkWidget *widget, gpointer data)
@@ -1300,7 +1305,7 @@ int main(int argc, char **argv)
 //  logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
 	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
 //  logger_set_out_stdout();
-//  logger_set_log_file("/home/pi/racecam.log");
+  logger_set_log_file("/home/pi/racecam.log");
   
 // AV_LOG_ QUIET, PANIC, FATAL, ERROR, WARNING, INFO, VERBOSE, DEBUG and TRACE
   av_log_set_level(AV_LOG_PANIC);
@@ -1316,13 +1321,7 @@ int main(int argc, char **argv)
 	gps_data.text.y = 2000;
 
 	pthread_t gps_tid;	
-
-	if (gps_enabled) 
-		{
-    gps_data.active = WAITING;
-    pthread_create(&gps_tid, NULL, gps_thread, (void *)&gps_data);
-		}   
-
+  
   FILE *url_file;
   size_t url_size=0;
   char url_new[64];
@@ -1382,6 +1381,15 @@ int main(int argc, char **argv)
   
   install_signal_handlers();
   gtk_init (&argc, &argv);
+  
+  log_status("gps_flag %d %d", gps_enabled, iparms.gps);
+
+	if (gps_enabled) 
+		{
+    log_status("gps_starting");
+    gps_data.active = WAITING;
+    pthread_create(&gps_tid, NULL, gps_thread, (void *)&gps_data);
+		}   
   
   kb_xid = launch_keyboard();
 

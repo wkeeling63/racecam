@@ -66,6 +66,7 @@ int close_gps(int *fd_data, int *fd_cntl)
 int read_gps(int *fd_data)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    int cnt, i, c=0;
    int index[20];
    char buf[255];
@@ -102,6 +103,7 @@ int read_gps(int *fd_data)
 void send_text(int speed, int max_width, GPS_T *gps)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    MMAL_BUFFER_HEADER_T *buffer_header=NULL;
 
    if ((buffer_header = mmal_queue_get(gps->t_queue)) != NULL)
@@ -152,6 +154,7 @@ void send_text(int speed, int max_width, GPS_T *gps)
 void *gps_thread(void *argp)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
+   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
    GPS_T *gps = (GPS_T *)argp;
    int fd_data, fd_cntl;
    int speed = -1, last_speed = -1;

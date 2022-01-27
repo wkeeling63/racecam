@@ -1376,6 +1376,7 @@ void *write_stream(void *arg)
   OUTPUT_STATE *o_state;
   o_state = (OUTPUT_STATE *) arg;
   
+  log_debug("here1 %s ", o_state->dest);
   if (!(strncmp(o_state->dest, "rtmp://", 7)))
     {
     int keep_waiting = 9000, not_done_waiting=1;
@@ -1412,6 +1413,7 @@ void *write_stream(void *arg)
       }
     }
     
+  log_debug("here2");
   if (allocate_fmtctx(o_state) < 0)
     {
     o_state->run_state = STOPPED;
