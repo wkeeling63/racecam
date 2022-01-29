@@ -1317,13 +1317,7 @@ int main(int argc, char **argv)
   log_status("Starting....");
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   
-  gps_data.text_size = global_state.common_settings[MAIN_CAMERA].cam.height/20;
-	gps_data.text.width = global_state.common_settings[MAIN_CAMERA].cam.width;
-	gps_data.text.height =  global_state.common_settings[MAIN_CAMERA].cam.height;
-	gps_data.text.x = 2000;
-	gps_data.text.y = 2000;
-
-	pthread_t gps_tid;	
+	
   
   FILE *url_file;
   size_t url_size=0;
@@ -1385,11 +1379,19 @@ int main(int argc, char **argv)
   install_signal_handlers();
   gtk_init (&argc, &argv);
   
-  log_status("gps_flag %d %d", gps_enabled, iparms.gps);
+//  log_status("gps_flag %d %d", gps_enabled, iparms.gps);
+
+  gps_data.text_size = global_state.common_settings[MAIN_CAMERA].cam.height/20;
+	gps_data.text.width = global_state.common_settings[MAIN_CAMERA].cam.width;
+	gps_data.text.height =  global_state.common_settings[MAIN_CAMERA].cam.height;
+	gps_data.text.x = 2000;
+	gps_data.text.y = 2000;
+
+	pthread_t gps_tid;
 
 	if (gps_enabled) 
 		{
-    log_status("gps_starting");
+//    log_status("gps_starting");
     gps_data.active = WAITING;
     pthread_create(&gps_tid, NULL, gps_thread, (void *)&gps_data);
 		}   
