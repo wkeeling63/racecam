@@ -182,6 +182,8 @@ void *gps_thread(void *argp)
    int max_below_o=(double)extents.height-((double)extents.y_bearing*-1);  // why 51-40=10???
    cairo_destroy(temp_context);
    cairo_surface_destroy(temp_surface);
+   
+   log_status("%d %d %d %d %d", max_width, gps->text.width, gps->text.height, gps->text.x, gps->text.y);
 
    if (gps->text.x > (gps->text.width-max_width)) gps->text.x = gps->text.width-max_width; 
    if (gps->text.x < 0) gps->text.x = 0; 
