@@ -165,7 +165,7 @@ void *gps_thread(void *argp)
    int fd_data, fd_cntl;
    int speed = -1, last_speed = -1;
 //   int *ptr_state=gps->active;
-//   int64_t start = get_microseconds64()/100000;
+   int64_t start = get_microseconds64()/100000;
    if (open_gps(&fd_data, &fd_cntl)) return NULL;
   
    cairo_surface_t *temp_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, VCOS_ALIGN_UP(gps->text.width,32), VCOS_ALIGN_UP(gps->text.height,16));
@@ -190,8 +190,8 @@ void *gps_thread(void *argp)
  //  while (gps->active) 
    while (gps->active > 0) 
       { 
-//      speed = get_microseconds64()/100000 - start;
-      speed = read_gps(&fd_data);
+      speed = get_microseconds64()/100000 - start;
+//      speed = read_gps(&fd_data);
       log_status("post read speed %d last %d", speed, last_speed);
       if (speed != -2)  
          {
@@ -205,7 +205,7 @@ void *gps_thread(void *argp)
                }
             }
          }
- //     vcos_sleep(1000);
+      vcos_sleep(1000);
       }
  
    close_gps(&fd_data, &fd_cntl);
