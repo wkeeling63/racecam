@@ -67,6 +67,7 @@ int read_gps(int *fd_data)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 //   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+
    int cnt, i, c=0;
    int index[20];
    char buf[255];
@@ -75,7 +76,7 @@ int read_gps(int *fd_data)
    buf[cnt]=0;
    if ((cnt) && (!(strncmp(buf,"$GPRMC",6))))
       {
-      log_status("msg b4 %s", buf);
+//      log_status("msg b4 %s", buf);
       index[0]=0;
       for (i=0;i<cnt;i++)
          {
@@ -87,7 +88,7 @@ int read_gps(int *fd_data)
             }
          }
  //        log_status("%s %s", buf[index[2]], buf[index[7]]);
-         if (buf[index[2]]== 'A')
+         if (buf[index[2]]=='A')
             {
             float fspd=0;
             sscanf(buf+index[7], "%f", &fspd);
@@ -138,7 +139,7 @@ void send_text(int speed, int max_width, GPS_T *gps)
          cairo_show_text(cr, buffer);
          cairo_destroy(cr);
          buffer_header->data=cairo_image_surface_get_data(surface);
- //      buffer_header->user_data = surface;
+         buffer_header->user_data = surface;
          buffer_header->length=buffer_header->alloc_size=
          cairo_image_surface_get_height(surface)*cairo_image_surface_get_stride(surface);
          } 
@@ -190,14 +191,15 @@ void *gps_thread(void *argp)
 //      speed = get_microseconds64()/100000 - start;
       speed = read_gps(&fd_data);
 
-      if (!(speed == last_speed)) 
+      if (gps->active == SENDING) 
          {
-         if (gps->active == SENDING)
+         if (speed != last_speed)
             {
             log_status("speed %d last %d", speed, last_speed);
             send_text(speed, max_width, gps);
+            last_speed = speed;
             }
-         last_speed = speed;
+         
          }
  //     vcos_sleep(1000);
       }
