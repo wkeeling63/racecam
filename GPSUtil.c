@@ -192,16 +192,18 @@ void *gps_thread(void *argp)
       { 
 //      speed = get_microseconds64()/100000 - start;
       speed = read_gps(&fd_data);
-      log_status("speed %d last %d", speed, last_speed);
-
-      if (gps->active == SENDING) 
+      if (speed != -2)  
          {
-         if (speed != last_speed)
+         log_status("speed %d last %d", speed, last_speed);
+
+         if (gps->active == SENDING) 
             {
-            send_text(speed, max_width, gps);
-            last_speed = speed;
+            if (speed != last_speed)
+               {
+               send_text(speed, max_width, gps);
+               last_speed = speed;
+               }
             }
-         
          }
  //     vcos_sleep(1000);
       }
