@@ -1381,17 +1381,15 @@ int main(int argc, char **argv)
   
 //  log_status("gps_flag %d %d", gps_enabled, iparms.gps);
 
-  gps_data.text_size = global_state.common_settings[MAIN_CAMERA].cam.height/20;
-	gps_data.text.width = global_state.common_settings[MAIN_CAMERA].cam.width;
-	gps_data.text.height =  global_state.common_settings[MAIN_CAMERA].cam.height;
-	gps_data.text.x = 2000;
-	gps_data.text.y = 2000;
-
 	pthread_t gps_tid;
 
 	if (gps_enabled) 
 		{
 //    log_status("gps_starting");
+    gps_data.text_size = global_state.common_settings[MAIN_CAMERA].cam.height/20; //set size of text
+    gps_data.text.width = global_state.common_settings[MAIN_CAMERA].cam.width;
+    gps_data.text.height =  global_state.common_settings[MAIN_CAMERA].cam.height;
+    gps_data.text.x = gps_data.text.y = 2000;    // location of text overlay if greater then window size it is move back into window at lower and/or right limit 
     gps_data.active = WAITING;
     pthread_create(&gps_tid, NULL, gps_thread, (void *)&gps_data);
 		}   

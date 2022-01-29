@@ -91,6 +91,7 @@ int read_gps(int *fd_data)
 //      log_status("%s %s", buf+statusi, buf+speedi);
       if (*buf+index[2]=='A')
          {
+         log_status("valid GPS %s", buf+index[7]); 
          float fspd=0;
          sscanf(buf+index[7], "%f", &fspd);
          return fspd*1.15078;   
@@ -166,7 +167,7 @@ void *gps_thread(void *argp)
    int fd_data, fd_cntl;
    int speed = -1, last_speed = -1;
 //   int *ptr_state=gps->active;
-   int64_t start = get_microseconds64()/100000;
+   
    if (open_gps(&fd_data, &fd_cntl)) return NULL;
   
    cairo_surface_t *temp_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, VCOS_ALIGN_UP(gps->text.width,32), VCOS_ALIGN_UP(gps->text.height,16));
@@ -190,25 +191,27 @@ void *gps_thread(void *argp)
    if (gps->text.y > (gps->text.height-max_below_o)) gps->text.y = gps->text.height-max_below_o; 
    if (gps->text.y < max_above_o) gps->text.y = max_above_o; 
 
+//   int64_t start = get_microseconds64()/100000;
  //  while (gps->active) 
    while (gps->active > 0) 
       { 
-      speed = get_microseconds64()/100000 - start;
-//      speed = read_gps(&fd_data);
+//      speed = get_microseconds64()/100000 - start;
+      speed = read_gps(&fd_data);
 //      log_status("post read speed %d last %d", speed, last_speed);
       if (speed != -2)  
          {
-//         log_status("in if speed %d last %d", speed, last_speed);
+         log_status("valid GPS message speed %d last %d", speed, last_speed);
          if (gps->active == SENDING) 
             {
             if (speed != last_speed)
                {
                send_text(speed, max_width, gps);
+               vcos_sleep(100);  //wait needed due to 2 thread MMAL release of buffer and create in this thread
                last_speed = speed;
                }
             }
          }
-      vcos_sleep(1000);
+//     vcos_sleep(1000);
       }
  
    close_gps(&fd_data, &fd_cntl);
