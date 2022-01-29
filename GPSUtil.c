@@ -87,7 +87,8 @@ int read_gps(int *fd_data)
             index[c]=i+1;
             }
          }
- //        log_status("%s %s", buf[index[2]], buf[index[7]]);
+         int statusi=index[2], speedi=index[7]; 
+         log_status("%s %s", buf[statusi], buf[speedi]);
          if (buf[index[2]]=='A')
             {
             float fspd=0;
