@@ -76,7 +76,7 @@ int read_gps(int *fd_data)
    buf[cnt]=0;
    if ((cnt) && (!(strncmp(buf,"$GPRMC",6))))
       {
-      log_status("msg b4 %s", buf);
+//      log_status("msg b4 %s", buf);
       index[0]=0;
       for (i=0;i<cnt;i++)
          {
@@ -87,9 +87,9 @@ int read_gps(int *fd_data)
             index[c]=i+1;
             }
          }
-      int statusi=index[2], speedi=index[7]; 
-      log_status("%s %s", buf+statusi, buf+speedi);
-      if (buf[index[2]]=='A')
+//      int statusi=index[2], speedi=index[7]; 
+//      log_status("%s %s", buf+statusi, buf+speedi);
+      if (*buf+index[2]=='A')
          {
          float fspd=0;
          sscanf(buf+index[7], "%f", &fspd);
@@ -192,10 +192,10 @@ void *gps_thread(void *argp)
       { 
 //      speed = get_microseconds64()/100000 - start;
       speed = read_gps(&fd_data);
+      log_status("post read speed %d last %d", speed, last_speed);
       if (speed != -2)  
          {
-         log_status("speed %d last %d", speed, last_speed);
-
+         log_status("in if speed %d last %d", speed, last_speed);
          if (gps->active == SENDING) 
             {
             if (speed != last_speed)
