@@ -66,7 +66,7 @@ int close_gps(int *fd_data, int *fd_cntl)
 int read_gps(int *fd_data)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+//   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    int cnt, i, c=0;
    int index[20];
    char buf[255];
@@ -190,7 +190,8 @@ void *gps_thread(void *argp)
       if (!(speed == last_speed)) 
          {
          if (gps->active == SENDING)
-            {  
+            {
+            log_status("speed %d last %d", speed, last_speed);
             send_text(speed, max_width, gps);
             }
          last_speed = speed;

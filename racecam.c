@@ -1302,6 +1302,7 @@ close_f1:
 int main(int argc, char **argv)
 {
  // set message levels as needed 
+  logger_reset_state();
 //  logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
 	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
 //  logger_set_out_stdout();
@@ -1311,7 +1312,8 @@ int main(int argc, char **argv)
   av_log_set_level(AV_LOG_PANIC);
 //	av_log_set_level(AV_LOG_ERROR);
 //  av_log_set_level(AV_LOG_TRACE);
-    
+
+  log_status("Starting....");
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   
   gps_data.text_size = global_state.common_settings[MAIN_CAMERA].cam.height/20;
