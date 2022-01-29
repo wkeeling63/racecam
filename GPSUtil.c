@@ -146,6 +146,7 @@ void send_text(int speed, int max_width, GPS_T *gps)
       buffer_header->cmd=buffer_header->offset=0;
 
       int status=mmal_port_send_buffer(gps->t_port, buffer_header);
+      log_status("text send status %s" , mmal_status_to_string(status));
       if (status) log_error("buffer send of text overlay failed %s", mmal_status_to_string(status));
       }
    else

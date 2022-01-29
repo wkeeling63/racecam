@@ -418,7 +418,8 @@ void *record_thread(void *argp)
 	mmal_port_parameter_set_boolean(global_state.camera_component[OVERLAY_CAMERA]->output[MMAL_CAMERA_VIDEO_PORT], MMAL_PARAMETER_CAPTURE, STOP);
 	
   encode_queue_audio(&global_state, TRUE); // flush audio encoder
-	
+  
+	 if (gps_enabled) gps_data.active = WAITING;
 			
 err_vstream:
   destroy_video_stream(&global_state);
