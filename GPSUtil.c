@@ -108,6 +108,7 @@ void send_text(int speed, int max_width, GPS_T *gps)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_status("%d %d %d %d %d %d", speed, max_width, gps->text.width, gps->text.height, gps->text.x, gps->text.y);
    MMAL_BUFFER_HEADER_T *buffer_header=NULL;
 
    if ((buffer_header = mmal_queue_get(gps->t_queue)) != NULL)
@@ -192,10 +193,10 @@ void *gps_thread(void *argp)
       { 
       speed = get_microseconds64()/100000 - start;
 //      speed = read_gps(&fd_data);
-      log_status("post read speed %d last %d", speed, last_speed);
+//      log_status("post read speed %d last %d", speed, last_speed);
       if (speed != -2)  
          {
-         log_status("in if speed %d last %d", speed, last_speed);
+//         log_status("in if speed %d last %d", speed, last_speed);
          if (gps->active == SENDING) 
             {
             if (speed != last_speed)
