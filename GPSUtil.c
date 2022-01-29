@@ -75,6 +75,7 @@ int read_gps(int *fd_data)
    buf[cnt]=0;
    if ((cnt) && (!(strncmp(buf,"$GPRMC",6))))
       {
+      log_status("msg b4 %s", buf);
       index[0]=0;
       for (i=0;i<cnt;i++)
          {
@@ -85,6 +86,7 @@ int read_gps(int *fd_data)
             index[c]=i+1;
             }
          }
+         log_status("%s %s", buf[index[2]], buf[index[7]]);
          if (buf[index[2]]== 'A')
             {
             float fspd=0;
@@ -136,6 +138,7 @@ void send_text(int speed, int max_width, GPS_T *gps)
          cairo_show_text(cr, buffer);
          cairo_destroy(cr);
          buffer_header->data=cairo_image_surface_get_data(surface);
+ //      buffer_header->user_data = surface;
          buffer_header->length=buffer_header->alloc_size=
          cairo_image_surface_get_height(surface)*cairo_image_surface_get_stride(surface);
          } 

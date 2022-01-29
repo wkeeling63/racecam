@@ -6,6 +6,7 @@ int64_t adjust_pts = 1;
 void hvs_input_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if (buffer->user_data)
     {
     cairo_surface_destroy(buffer->user_data);
