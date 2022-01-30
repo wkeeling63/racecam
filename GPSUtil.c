@@ -72,9 +72,10 @@ int read_gps(int *fd_data)
    int index[20];
    char buf[255];
    cnt = read(*fd_data,buf,255);
-   buf[cnt]='\0';
+   
 //   log_status("GPS read cnt %d data %s", cnt, buf);
    if (cnt==1) return -2;
+   buf[cnt-2]='\0';
    log_status("GPS read cnt %d data %s", cnt, buf);
    cnt--;
 //   buf[cnt]=0;
@@ -91,8 +92,8 @@ int read_gps(int *fd_data)
             index[c]=i+1;
             }
          }
-//      int statusi=index[2], speedi=index[7]; 
-//      log_status("%s %s", buf+statusi, buf+speedi);
+      int statusi=index[2], speedi=index[7]; 
+      log_status("%s %s", buf+statusi, buf+speedi);
       if (*buf+index[2]=='A')
          {
          log_status("valid GPS %s", buf+index[7]); 
