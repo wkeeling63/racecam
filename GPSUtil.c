@@ -94,7 +94,7 @@ int read_gps(int *fd_data)
          }
       int statusi=index[2], speedi=index[7]; 
       log_status("%s %s", buf+statusi, buf+speedi);
-      if (*buf+index[2]=='A')
+      if (buf[index[2]]=='A')
          {
          log_status("valid GPS %s", buf+index[7]); 
          float fspd=-1.1;
