@@ -72,6 +72,7 @@ int read_gps(int *fd_data)
    int index[20];
    char buf[255];
    cnt = read(*fd_data,buf,255);
+   if (cnt=1) return -1;
    buf[cnt]=0;
    log_status("GPS read cnt %d data %s", cnt, buf);
    cnt--;
@@ -100,7 +101,7 @@ int read_gps(int *fd_data)
          }
       else
          {
-         return-1;
+         return -1;
          }
       } 
       
