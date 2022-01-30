@@ -66,13 +66,13 @@ int close_gps(int *fd_data, int *fd_cntl)
 int read_gps(int *fd_data)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-//   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 
    int cnt, i, c=0;
    int index[20];
    char buf[255];
    cnt = read(*fd_data,buf,255);
-   if (cnt=1) return -1;
+   if (cnt=1) return -2;
    buf[cnt]=0;
    log_status("GPS read cnt %d data %s", cnt, buf);
    cnt--;
@@ -196,6 +196,7 @@ void *gps_thread(void *argp)
 
 //   int64_t start = get_microseconds64()/100000;
  //  while (gps->active) 
+   log_status("GPS flag %d", gps->active);
    while (gps->active > 0) 
       { 
 //      speed = get_microseconds64()/100000 - start;

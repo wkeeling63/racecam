@@ -1303,7 +1303,7 @@ close_f1:
 int main(int argc, char **argv)
 {
  // set message levels as needed 
-  logger_reset_state();
+  logger_reset_state(); 
 //  logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
 	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
 //  logger_set_out_stdout(); 
