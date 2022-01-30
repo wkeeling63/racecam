@@ -72,9 +72,10 @@ int read_gps(int *fd_data)
    int index[20];
    char buf[255];
    cnt = read(*fd_data,buf,255);
-   log_status("GPS read cnt %d data %s", cnt, buf);
+//   log_status("GPS read cnt %d data %s", cnt, buf);
    if (cnt=1) return -2;
    buf[cnt]=0;
+   log_status("GPS read cnt %d data %s", cnt, buf);
    cnt--;
 //   buf[cnt]=0;
    if ((cnt) && (!(strncmp(buf,"$GPRMC",6))))
@@ -201,7 +202,7 @@ void *gps_thread(void *argp)
       { 
 //      speed = get_microseconds64()/100000 - start;
       speed = read_gps(&fd_data);
-//      log_status("post read speed %d last %d", speed, last_speed);
+      log_status("post read speed %d last %d", speed, last_speed);
       if (speed != -2)  
          {
          log_status("valid GPS message speed %d last %d", speed, last_speed);
@@ -210,7 +211,7 @@ void *gps_thread(void *argp)
             if (speed != last_speed)
                {
                send_text(speed, max_width, gps);
-               vcos_sleep(100);  //wait needed due to 2 thread MMAL release of buffer and create in this thread
+               vcos_sleep(100);  //wait needed due to 2 threads MMAL release of buffer and create in this thread
                last_speed = speed;
                }
             }
