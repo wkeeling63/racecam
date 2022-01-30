@@ -97,8 +97,9 @@ int read_gps(int *fd_data)
       if (*buf+index[2]=='A')
          {
          log_status("valid GPS %s", buf+index[7]); 
-         float fspd=0;
+         float fspd=-1.1;
          sscanf(buf+index[7], "%f", &fspd);
+         log_status("speed after sscanf %f", fspd);
          return fspd*1.15078;   
          }
       else
