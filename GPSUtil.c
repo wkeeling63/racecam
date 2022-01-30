@@ -73,7 +73,7 @@ int read_gps(int *fd_data)
    char buf[255];
    cnt = read(*fd_data,buf,255);
    buf[cnt]=0;
-   log_status("msg b4 cnt %d %s", cnt, buf);
+   log_status("GPS read cnt %d data %s", cnt, buf);
    cnt--;
 //   buf[cnt]=0;
    if ((cnt) && (!(strncmp(buf,"$GPRMC",6))))
@@ -186,7 +186,7 @@ void *gps_thread(void *argp)
    cairo_destroy(temp_context);
    cairo_surface_destroy(temp_surface);
    
-   log_status("%d %d %d %d %d", max_width, gps->text.width, gps->text.height, gps->text.x, gps->text.y);
+//   log_status("%d %d %d %d %d", max_width, gps->text.width, gps->text.height, gps->text.x, gps->text.y);
 
    if (gps->text.x > (gps->text.width-max_width)) gps->text.x = gps->text.width-max_width; 
    if (gps->text.x < 0) gps->text.x = 0; 

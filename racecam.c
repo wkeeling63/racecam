@@ -1306,7 +1306,7 @@ int main(int argc, char **argv)
   logger_reset_state();
 //  logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
 	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
-//  logger_set_out_stdout();
+//  logger_set_out_stdout(); 
   logger_set_log_file("/home/pi/racecam.log");
   
 // AV_LOG_ QUIET, PANIC, FATAL, ERROR, WARNING, INFO, VERBOSE, DEBUG and TRACE

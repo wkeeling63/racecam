@@ -83,7 +83,7 @@ int create_video_stream(RACECAM_STATE *state)
 	
 	
 //    call pool func 	
-  log_status("text buffers %d %d %d %d", state->hvs_component->input[2]->buffer_num_recommended, state->hvs_component->input[2]->buffer_size_recommended, state->hvs_component->input[2]->buffer_num_min,state->hvs_component->input[2]->buffer_size_min); 
+//  log_status("text buffers %d %d %d %d", state->hvs_component->input[2]->buffer_num_recommended, state->hvs_component->input[2]->buffer_size_recommended, state->hvs_component->input[2]->buffer_num_min,state->hvs_component->input[2]->buffer_size_min); 
  
   state->hvs_component->input[2]->buffer_num = state->hvs_component->input[2]->buffer_num_min+10;
   state->hvs_component->input[2]->buffer_size = state->hvs_component->input[2]->buffer_size_min;
