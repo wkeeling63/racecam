@@ -72,7 +72,7 @@ int read_gps(int *fd_data)
    int index[20];
    char buf[255];
    cnt = read(*fd_data,buf,255);
-   buf[cnt]=0;
+   buf[cnt]='\0';
 //   log_status("GPS read cnt %d data %s", cnt, buf);
    if (cnt==1) return -2;
    log_status("GPS read cnt %d data %s", cnt, buf);
@@ -86,7 +86,7 @@ int read_gps(int *fd_data)
          {
           if (buf[i]==',')
             {
-            buf[i]=0;
+            buf[i]='\0';
             c++;
             index[c]=i+1;
             }
@@ -197,7 +197,7 @@ void *gps_thread(void *argp)
 
 //   int64_t start = get_microseconds64()/100000;
  //  while (gps->active) 
-   log_status("GPS flag %d", gps->active);
+//   log_status("GPS flag %d", gps->active);
    while (gps->active > 0) 
       { 
 //      speed = get_microseconds64()/100000 - start;
