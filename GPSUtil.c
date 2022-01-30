@@ -72,11 +72,13 @@ int read_gps(int *fd_data)
    int index[20];
    char buf[255];
    cnt = read(*fd_data,buf,255);
-   cnt--;
    buf[cnt]=0;
+   log_status("msg b4 %s", buf);
+   cnt--;
+//   buf[cnt]=0;
    if ((cnt) && (!(strncmp(buf,"$GPRMC",6))))
       {
-      log_status("msg b4 %s", buf);
+//      log_status("msg b4 %s", buf);
       index[0]=0;
       for (i=0;i<cnt;i++)
          {
