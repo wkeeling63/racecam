@@ -68,13 +68,13 @@ int read_gps(int *fd_data)
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 
-   int cnt, i, c=0;
+   int cnt=0, i, c=0;
    int index[20];
    char buf[255];
    cnt = read(*fd_data,buf,255);
-//   log_status("GPS read cnt %d data %s", cnt, buf);
-   if (cnt=1) return -2;
    buf[cnt]=0;
+   log_status("GPS read cnt %d data %s", cnt, buf);
+   if (cnt=1) return -2;
    log_status("GPS read cnt %d data %s", cnt, buf);
    cnt--;
 //   buf[cnt]=0;
