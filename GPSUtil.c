@@ -66,7 +66,7 @@ int close_gps(int *fd_data, int *fd_cntl)
 int read_gps(int *fd_data)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+//   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 
    int cnt=0, i, c=0;
    int index[20];
@@ -74,10 +74,14 @@ int read_gps(int *fd_data)
    cnt = read(*fd_data,buf,255);
    cnt--;
    buf[cnt]='\0';
-   log_status("post read cnt %d data %s", cnt, buf);
-   if (!(cnt)) return -2;
+//   log_status("post read cnt %d data %s", cnt, buf);
+   if (!(cnt))
+      {
+      vcos_sleep(50);
+      return -2;
+      }
 //   buf[cnt-2]='\0';
-   log_status("GPS read cnt %d data %s", cnt, buf);
+//   log_status("GPS read cnt %d data %s", cnt, buf);
 //   cnt--;
    if ((cnt) && (!(strncmp(buf,"$GPRMC",6))))
       {
@@ -92,14 +96,14 @@ int read_gps(int *fd_data)
             index[c]=i+1;
             }
          }
-      int statusi=index[2], speedi=index[7]; 
-      log_status("%s %s", buf+statusi, buf+speedi);
+//      int statusi=index[2], speedi=index[7]; 
+//      log_status("%s %s", buf+statusi, buf+speedi);
       if (buf[index[2]]=='A')
          {
-         log_status("valid GPS %s", buf+index[7]); 
-         float fspd=-1.1;
+//         log_status("valid GPS %s", buf+index[7]); 
+         float fspd=0;
          sscanf(buf+index[7], "%f", &fspd);
-         log_status("speed after sscanf %f", fspd);
+//         log_status("speed after sscanf %f", fspd);
          return fspd*1.15078;   
          }
       else
@@ -114,8 +118,8 @@ int read_gps(int *fd_data)
 void send_text(int speed, int max_width, GPS_T *gps)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-   log_status("%d %d %d %d %d %d", speed, max_width, gps->text.width, gps->text.height, gps->text.x, gps->text.y);
+//   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+//   log_status("%d %d %d %d %d %d", speed, max_width, gps->text.width, gps->text.height, gps->text.x, gps->text.y);
    MMAL_BUFFER_HEADER_T *buffer_header=NULL;
 
    if ((buffer_header = mmal_queue_get(gps->t_queue)) != NULL)
@@ -155,7 +159,7 @@ void send_text(int speed, int max_width, GPS_T *gps)
       buffer_header->cmd=buffer_header->offset=0;
 
       int status=mmal_port_send_buffer(gps->t_port, buffer_header);
-      log_status("text send status %s" , mmal_status_to_string(status));
+//      log_status("text send status %s" , mmal_status_to_string(status));
       if (status) log_error("buffer send of text overlay failed %s", mmal_status_to_string(status));
       }
    else
@@ -168,7 +172,10 @@ void send_text(int speed, int max_width, GPS_T *gps)
 void *gps_thread(void *argp)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
-   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
+//   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
+   
+   vcos_sleep(3000);
+
    GPS_T *gps = (GPS_T *)argp;
    int fd_data, fd_cntl;
    int speed = -1, last_speed = -1;
@@ -213,7 +220,7 @@ void *gps_thread(void *argp)
             if (speed != last_speed)
                {
                send_text(speed, max_width, gps);
-               vcos_sleep(100);  //wait needed due to 2 threads MMAL release of buffer and create in this thread
+               vcos_sleep(50);  //wait needed due to 2 threads MMAL release of buffer and create in this thread
                last_speed = speed;
                }
             }

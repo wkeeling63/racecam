@@ -507,7 +507,6 @@ void check_status(GtkWidget *widget, gpointer data)
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   check *chk=data;
   *chk->status = gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON(chk->button));  
-  log_status("Check value %d", *chk->status);
 }
 
 void check_res0(GtkWidget *widget, gpointer data)
