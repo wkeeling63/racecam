@@ -74,7 +74,7 @@ int read_gps(int *fd_data)
    cnt = read(*fd_data,buf,255);
    cnt--;
    buf[cnt]='\0';
-//   log_status("post read cnt %d data %s", cnt, buf);
+   log_status("all GPS messages size %d data %s", cnt, buf);
    if (!(cnt))
       {
       vcos_sleep(50);
@@ -85,7 +85,7 @@ int read_gps(int *fd_data)
 //   cnt--;
    if ((cnt) && (!(strncmp(buf,"$GPRMC",6))))
       {
-      log_status("msg b4 %s", buf);
+      log_status("valid GPS message %s", buf);
       index[0]='\0';
       for (i=0;i<cnt;i++)
          {
@@ -175,6 +175,7 @@ void *gps_thread(void *argp)
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
 //   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
    
+   log_status("Starting GPS thread...");
    vcos_sleep(3000);
 
    GPS_T *gps = (GPS_T *)argp;
@@ -230,4 +231,5 @@ void *gps_thread(void *argp)
       }
  
    close_gps(&fd_data, &fd_cntl);
+   log_status("Ending GPS thread");
 }

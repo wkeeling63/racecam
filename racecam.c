@@ -327,6 +327,7 @@ int write_parms(char *mode, size_t size, void *ptr)
 void *record_thread(void *argp)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_status("Starting record thread...");
   
   int file_selected = 0, url_selected = 0, length = 0;
 
@@ -457,7 +458,7 @@ err_aencode:
 		}  	
 	
   clean_files();
-  
+  log_status("Ending record thread");
 }
 
 void inc_val_lbl(GtkWidget *widget, gpointer data)
@@ -1148,12 +1149,14 @@ void stop_window(gpointer data)
 void preview_clicked(GtkWidget *widget, gpointer data)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_status("Starting preview...");
 
   create_video_preview(&global_state);
 
   stop_window(data);
 
   destroy_video_preview(&global_state);
+  log_status("Ending preview");
 }
 
 void record_clicked(GtkWidget *widget, gpointer data)
