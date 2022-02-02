@@ -1381,13 +1381,13 @@ int main(int argc, char **argv)
   install_signal_handlers();
   gtk_init (&argc, &argv);
   
-  log_status("gps_flag %d %d", gps_enabled, iparms.gps);
+//  log_status("gps_flag %d %d", gps_enabled, iparms.gps);
 
 	pthread_t gps_tid;
 
 	if (gps_enabled) 
 		{
-    log_status("main gps..."); 
+//    log_status("main gps..."); 
     gps_data.text_size = global_state.common_settings[MAIN_CAMERA].cam.height/20; //set size of text
     gps_data.text.width = global_state.common_settings[MAIN_CAMERA].cam.width;
     gps_data.text.height =  global_state.common_settings[MAIN_CAMERA].cam.height;
