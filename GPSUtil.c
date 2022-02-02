@@ -214,7 +214,7 @@ void *gps_thread(void *argp)
       { 
 //      speed = get_microseconds64()/100000 - start;
       speed = read_gps(&fd_data);
-//      log_status("post read speed %d last %d", speed, last_speed);
+      log_status("post read speed %d last %d", speed, last_speed);
       if (speed != -2)  
          {
 //         log_status("valid GPS message speed %d last %d", speed, last_speed);
