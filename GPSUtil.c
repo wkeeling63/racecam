@@ -77,8 +77,8 @@ int read_gps(int *fd_data)
    log_status("all GPS messages size %d data %s", cnt, buf);
    if (!(cnt))
       {
-      log_status("no GPS message waiting! 100");
-      vcos_sleep(100);
+      log_status("no GPS message 200 waiting!");
+      vcos_sleep(200);
       return -2;
       }
 //   buf[cnt-2]='\0';

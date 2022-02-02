@@ -1381,7 +1381,7 @@ int main(int argc, char **argv)
   install_signal_handlers();
   gtk_init (&argc, &argv);
   
-//  log_status("gps_flag %d %d", gps_enabled, iparms.gps);  
+//  log_status("gps_flag %d %d", gps_enabled, iparms.gps);    
 
 	pthread_t gps_tid;
 
