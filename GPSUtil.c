@@ -44,10 +44,11 @@ int open_gps(int *fd_data, int *fd_cntl)
    char buf[255];
    int cnt = 0;
    cnt = read(*fd_cntl,buf,255);
-   buf[cnt] = '\0';
-   log_status("AT+QGPS=1 result size %d message->%s<", cnt, buf);
-   
-   //try reading return ?
+   buf[cnt-1] = '\0';
+   log_status("result size %d message->%s<", cnt, buf);
+   buf[cnt-1] = '\0';
+   log_status("result size %d message->%s<", cnt, buf);
+   log_status("done");
    
    return 0;
 }
