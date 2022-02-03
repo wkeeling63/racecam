@@ -305,7 +305,6 @@ int read_parms(void)
     {
     return 1;
     } 
-  iparms.ifs=2;
   dest_parms();
   return 0;
 }
