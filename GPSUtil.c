@@ -41,6 +41,8 @@ int open_gps(int *fd_data, int *fd_cntl)
    
    write(*fd_cntl, "AT+QGPS=1\r", 10);
    
+   //try reading return ?
+   
    return 0;
 }
 

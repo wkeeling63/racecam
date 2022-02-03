@@ -460,8 +460,8 @@ void *adjust_q(void *arg)
   ADJUST_Q_STATE *q_state;
   q_state = (ADJUST_Q_STATE *) arg;
   int *ptr_status=q_state->running;
-  int atlimit=0;
-  int avg_q=0;
+  int atlimit = 0;
+  int adj_q = 0, avg_length = 0;
 
   while (*ptr_status > 0)
     {
@@ -476,20 +476,20 @@ void *adjust_q(void *arg)
       if (param.value > q_state->min_q && param.value < MAX_Q)
         {
         atlimit = 0;
-        avg_q = 0;
+        adj_q = 0, avg_length = 0;
         int i;
         for (i=0 ; i<NUM_SAMPLES ; i++)
           {
-          avg_q += q_state->samples[i];
+          avg_length += q_state->samples[i];
           }
-        avg_q /= NUM_SAMPLES;
-        avg_q = (avg_q/Q_FACTOR)-1;
-        param.value += avg_q;
+        avg_length /= NUM_SAMPLES;
+        adj_q = (avg_length/Q_FACTOR)-1;
+        param.value += adj_q;
         if (param.value > MAX_Q) param.value = MAX_Q;
         status = mmal_port_parameter_set(q_state->port, &param.hdr);
         if (status == MMAL_SUCCESS)
           {
-          log_status("New QP %d", param.value);
+          log_status("Average queue length %d and sdjusting by value %d New QP %d", avg_length, adj_q, param.value);
           }
         else
           {
