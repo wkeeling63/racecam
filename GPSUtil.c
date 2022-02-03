@@ -41,6 +41,12 @@ int open_gps(int *fd_data, int *fd_cntl)
    
    write(*fd_cntl, "AT+QGPS=1\r", 10);
    
+   char buf[255];
+   int cnt = 0;
+   cnt = read(*fd_cntl,buf,255);
+   buf[cnt] = '\0';
+   log_status("AT+QGPS=1 result size %d message->%s<", cnt, buf);
+   
    //try reading return ?
    
    return 0;
@@ -215,9 +221,9 @@ void *gps_thread(void *argp)
    while (gps->active > 0) 
       { 
 //      speed = get_microseconds64()/100000 - start;
-      log_status("about to read");
+//      log_status("about to read");
       speed = read_gps(&fd_data);
-      log_status("post read speed %d last %d", speed, last_speed);
+//      log_status("post read speed %d last %d", speed, last_speed);
       if (speed != -2)  
          {
 //         log_status("valid GPS message speed %d last %d", speed, last_speed);
