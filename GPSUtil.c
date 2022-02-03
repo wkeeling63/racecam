@@ -76,7 +76,7 @@ int read_gps(int *fd_data)
    cnt = read(*fd_data,buf,255);
    cnt--;
    buf[cnt]='\0';
-   log_status("all GPS messages size %d data %s", cnt, buf);
+//   log_status("all GPS messages size %d data %s", cnt, buf);
    if (!(cnt))
       {
       log_status("no GPS message 1000 waiting!");    
@@ -88,7 +88,7 @@ int read_gps(int *fd_data)
 //   cnt--;
    if ((cnt) && (!(strncmp(buf,"$GPRMC",6))))
       {
-      log_status("valid GPS message %s", buf);
+//      log_status("valid GPS message %s", buf);
       index[0]='\0';
       for (i=0;i<cnt;i++)
          {
@@ -111,7 +111,7 @@ int read_gps(int *fd_data)
          }
       else
          {
-         log_status("not A -->%s", buf+index[2]);
+//         log_status("not A -->%s", buf+index[2]);
          return -1;
          }
       } 
@@ -211,10 +211,11 @@ void *gps_thread(void *argp)
 
 //   int64_t start = get_microseconds64()/100000;
  //  while (gps->active) 
-   log_status("GPS flag %d", gps->active);
+//   log_status("GPS flag %d", gps->active);
    while (gps->active > 0) 
       { 
 //      speed = get_microseconds64()/100000 - start;
+      log_status("about to read");
       speed = read_gps(&fd_data);
       log_status("post read speed %d last %d", speed, last_speed);
       if (speed != -2)  
