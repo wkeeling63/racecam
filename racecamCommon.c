@@ -489,7 +489,7 @@ void *adjust_q(void *arg)
         status = mmal_port_parameter_set(q_state->port, &param.hdr);
         if (status == MMAL_SUCCESS)
           {
-          log_status("Average queue length %d and sdjusting by value %d New QP %d", avg_length, adj_q, param.value);
+          log_status("Current queue %d average queue %d and sdjusting by value %d New QP %d", queue_length(q_state->queue), avg_length, adj_q, param.value);
           }
         else
           {
