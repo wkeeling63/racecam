@@ -5,7 +5,7 @@ int64_t adjust_pts = 1;
 
 void hvs_input_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer)
 {
-  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+//  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   if (buffer->user_data)
     {
@@ -1543,7 +1543,11 @@ MMAL_COMPONENT_T *create_camera_component(RACECAM_STATE *state, int camera_type)
    format->es->video.crop.y = 0;
    format->es->video.crop.width = state->common_settings[camera_type].cam.width;
    format->es->video.crop.height = state->common_settings[camera_type].cam.height;
-   format->es->video.frame_rate.num = state->framerate;
+//   format->es->video.frame_rate.num = state->framerate;
+  if (camera_type)
+    format->es->video.frame_rate.num = (state->framerate * 1.1) > 60 ? 60 : state->framerate * 1.1;
+  else
+    format->es->video.frame_rate.num = state->framerate;
    format->es->video.frame_rate.den = VIDEO_FRAME_RATE_DEN;
    
    status = mmal_port_format_commit(preview_port);
@@ -1565,7 +1569,11 @@ MMAL_COMPONENT_T *create_camera_component(RACECAM_STATE *state, int camera_type)
    format->es->video.crop.y = 0;
    format->es->video.crop.width = state->common_settings[camera_type].cam.width;
    format->es->video.crop.height = state->common_settings[camera_type].cam.height;
-   format->es->video.frame_rate.num = state->framerate;
+//   format->es->video.frame_rate.num = state->framerate;
+  if (camera_type)
+    format->es->video.frame_rate.num = (state->framerate * 1.1) > 60 ? 60 : state->framerate * 1.1;
+  else
+    format->es->video.frame_rate.num = state->framerate;
    format->es->video.frame_rate.den = VIDEO_FRAME_RATE_DEN;
 
    status = mmal_port_format_commit(video_port);

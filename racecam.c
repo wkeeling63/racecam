@@ -74,6 +74,18 @@ struct {
   char gps;
   char preview;
   } iparms;
+  
+typedef struct {
+  GtkWidget *lbl;
+  GtkWidget *pbar;
+  } pbar_type;
+  
+char save_url[64];
+char save_file[64];
+
+int reboot = FALSE;
+
+PangoFontDescription *nb, *mb, *lb;
 
 GtkWidget *main_win=NULL, *stop_win=NULL;
 
@@ -177,6 +189,30 @@ unsigned long launch_keyboard(void)
   kbd_pid = atol(buf);
 
   return result;
+}
+
+void complete_file(char *dst, char *src)
+{
+  int length;
+  time_t time_uf;
+  struct tm *time_fmt;
+  time(&time_uf);
+  time_fmt = localtime(&time_uf);
+  strcpy(dst, "file:");
+  length=strlen(dst);
+  strcpy(dst+length, src);
+  length=strlen(dst);
+  strftime(dst+length, 20,"%Y-%m-%d_%H_%M_%S", time_fmt);
+  length=strlen(dst);
+  strcpy(dst+length, ".flv"); 
+}
+
+void complete_url(char *dst, char *src)
+{
+  int length;
+  strcpy(dst, "rtmp://");
+  length=strlen(dst);
+  strcpy(dst+length, src);
 }
 
 void parms_to_state(RACECAM_STATE *state)
@@ -334,29 +370,16 @@ void *record_thread(void *argp)
   if (global_state.output_state[FILE_STRM].run_state == SELECTED)
 		{
 		// setup states
-//    int length = 0;	
-		time_t time_uf;
-		struct tm *time_fmt;
-		time(&time_uf);
-		time_fmt = localtime(&time_uf);
-		strcpy(file, "file:");
-		length=strlen(file);
-		strcpy(file+length, iparms.file);
-		length=strlen(file);
-		strftime(file+length, 20,"%Y-%m-%d_%H_%M_%S", time_fmt);
-		length=strlen(file);
-		strcpy(file+length, ".flv"); 
-    global_state.output_state[FILE_STRM].dest = file;
+    complete_file(file, iparms.file);
+    global_state.output_state[FILE_STRM].dest = file; 
     global_state.output_state[FILE_STRM].queue = global_state.userdata[FILE_STRM].queue = alloc_queue();
 		}
 		
   if (global_state.output_state[URL_STRM].run_state == SELECTED)
 		{
 		// setup states
-    strcpy(url, "rtmp://");
-		length=strlen(url);
-    strcpy(url+length, iparms.url);
-    global_state.output_state[URL_STRM].dest = url;
+    complete_file(url,iparms.url);
+    global_state.output_state[URL_STRM].dest = url;  
     global_state.output_state[URL_STRM].queue = global_state.userdata[URL_STRM].queue = alloc_queue();
 		}
 
@@ -613,89 +636,141 @@ void dec_xy(GtkWidget *widget, gpointer data)
     }
 }
 
-int test_dest(const char *dest)
+int ping_address(const char *addr)
+{
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  char cmd[80];
+  sprintf(cmd, "ping -c 1 %s > /dev/null 2>&1", addr);
+  log_debug("cmd %s", cmd);
+  if (system(cmd)) return 1;
+  return 0;
+}
+
+void *check_network(void  *parg)
+{
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  pbar_type *chk_win = (pbar_type *)parg;
+
+  int no_network = TRUE;
+  while (no_network)
+    {
+    if (ping_address("8.8.8.8"))
+      {
+      gtk_label_set_text(GTK_LABEL(chk_win->lbl), "Waiting for network");
+      gtk_widget_show((GtkWidget *)chk_win->lbl);
+      }
+    else
+      no_network = FALSE;
+    gtk_progress_bar_pulse(GTK_PROGRESS_BAR(chk_win->pbar));
+    }
+  no_network = TRUE;
+  while (no_network)
+    {
+    if (ping_address("dns.google"))
+      {
+      gtk_label_set_text(GTK_LABEL(chk_win->lbl), "Waiting for name resolution");
+      gtk_widget_show((GtkWidget *)chk_win->lbl);
+      }
+    else
+      no_network = FALSE;
+    gtk_progress_bar_pulse(GTK_PROGRESS_BAR(chk_win->pbar));
+    }
+  gtk_label_set_text(GTK_LABEL(chk_win->lbl), "Network is up :)");
+  gtk_widget_show((GtkWidget *)chk_win->lbl);
+  vcos_sleep(1000);
+  gtk_main_quit();
+}
+
+void network_progress(void)
+{
+  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  pbar_type chk_win;
+//  PangoFontDescription *df = pango_font_description_from_string("Monospace");
+//  pango_font_description_set_size(df,20*PANGO_SCALE);
+//  pango_font_description_set_weight (df, PANGO_WEIGHT_HEAVY);
+   
+  GtkWidget *win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+  gtk_window_set_decorated (GTK_WINDOW(win), FALSE); 
+  chk_win.pbar = gtk_progress_bar_new();
+  gtk_progress_bar_set_pulse_step (GTK_PROGRESS_BAR(chk_win.pbar), .2);
+  chk_win.lbl = gtk_label_new("Checking Network");
+  gtk_widget_modify_font(chk_win.lbl, mb);
+  GtkWidget *vbox = gtk_vbox_new(FALSE, 20);
+  gtk_container_add (GTK_CONTAINER (win), vbox);
+  gtk_box_pack_start (GTK_BOX(vbox), chk_win.lbl, TRUE, TRUE, 2);
+  gtk_box_pack_start (GTK_BOX(vbox), chk_win.pbar, TRUE, TRUE, 2);
+
+  gtk_window_set_default_size (GTK_WINDOW (win), WINDOW_WIDTH/2, WINDOW_HEIGHT/2);
+  gtk_container_set_border_width (GTK_CONTAINER (win), 20);
+  gtk_widget_show_all(win);
+  pthread_t network_tid;
+  pthread_create(&network_tid, NULL, check_network, (void *)&chk_win); 
+  gtk_main();  
+  gtk_widget_destroy(win);
+
+  pthread_join(network_tid, NULL); 
+}
+
+int check_dest(GtkWidget *parent)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   AVIOContext *ioctx;
-
-  if (avio_open(&ioctx,	dest, AVIO_FLAG_WRITE) < 0) 
+  int inerror = FALSE;
+  log_debug("%s %s", save_file, iparms.file);
+  log_debug("%d", strcmp(save_file, iparms.file));
+  char msg[256]={'\0'};
+  if (strcmp(save_url, iparms.url))
     {
-    return 1;
-    }
-  else 
-    {
-    avio_close(ioctx);
-    if (!(strncmp(dest, "file:", 5)))
+    complete_url(url, iparms.url);
+    if (ping_address("dns.google")) network_progress(); 
+    if (avio_open(&ioctx,	url, AVIO_FLAG_WRITE) < 0) 
       {
-      char *only_file=strstr(dest, ":");
+      inerror = TRUE;
+      sprintf(msg, "Stream URL is invalid\n%s", url);
+      }
+    else 
+      {
+      avio_close(ioctx);
+      strcpy(save_url, iparms.url);
+      }
+    }
+  if (strcmp(save_file, iparms.file))
+    {
+    log_debug("in file check if");
+    complete_file(file, iparms.file);
+    if (avio_open(&ioctx,	file, AVIO_FLAG_WRITE) < 0) 
+      {
+      inerror = TRUE;
+      if (strlen(msg)) sprintf(msg+strlen(msg), "\n\n");
+      sprintf(msg+strlen(msg), "File path is invalid\n%s", file);
+ 
+      }
+    else 
+      {
+      avio_close(ioctx);
+      strcpy(save_file, iparms.file);
+      char *only_file=strstr(file, ":");
       only_file++;    
       if (remove(only_file)) log_error("remove %s failed %d", only_file, errno);
-      }
-    }
-  return 0;
-}
-int warn_dest(GtkWindow *parent, int flag)
-{
-  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-  char msg[256]={'\0'};
-  int error=FALSE;
-  
-  if (iparms.write_url) 
-    {
-    if (system("ping -c 1 8.8.8.8 > /dev/null 2>&1")) 
-      {
-      strcpy(msg, "URL selected but unable to validate as network unavailable!\n\n");
-      error=TRUE;
-      }
-    else
-      {
-      if (test_dest(url))
-        {
-        sprintf(msg, "URL:%s\n selected but unable to validate!\n\n", url);
-        error=TRUE;
-        }
-      }
-    }
-    
-  int length=strlen(msg);
-  if (iparms.write_file)
-    {
-    if (test_dest(file))
-      {
-      sprintf(msg+length, "File:%s\n selected but unable to validate!\n\n", file);
-      error=TRUE;
       } 
     }
-  int response=0;
-  if (error)
+  if (inerror)
     {
-    length=strlen(msg);
-    GtkWidget *dlg=NULL;
-   if (flag)
-      {
-      strcpy(msg+length, "Select OK to proceed to setup");
-      dlg = gtk_dialog_new_with_buttons(NULL, GTK_WINDOW(parent), 
-        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT, "OK", 1, NULL);
-      }
-    else
-      { 
-      strcpy(msg+length, "Select Ignore error or Cancel to return");
-      dlg = gtk_dialog_new_with_buttons(NULL, GTK_WINDOW(parent), 
-             GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT, "Ignore", 0, "Cancel", 1, NULL);
-      }
+    PangoFontDescription *df = pango_font_description_from_string("Monospace");
+    pango_font_description_set_size(df,10*PANGO_SCALE);
+    pango_font_description_set_weight (df, PANGO_WEIGHT_HEAVY);
+    GtkWidget *dlg = gtk_dialog_new_with_buttons(NULL, GTK_WINDOW(parent), 
+      GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,"OK", 1, NULL);
+    gtk_window_set_default_size (GTK_WINDOW (dlg), WINDOW_WIDTH-50, WINDOW_HEIGHT/4);
     GtkWidget *lbl = gtk_label_new(msg);
+    gtk_widget_modify_font(lbl, df);
+//  gtk_label_set_text(lbl, msg);
+    gtk_widget_show((GtkWidget *)lbl);
     gtk_container_add(GTK_CONTAINER(gtk_dialog_get_content_area(GTK_DIALOG(dlg))), lbl);
- /*   GValue val = G_VALUE_INIT;
-    g_value_init (&val, G_TYPE_ENUM);
-    g_value_set_enum (&val, GTK_ALIGN_CENTER);
-    g_object_set_property(GTK_OBJECT(gtk_dialog_get_action_area(GTK_DIALOG(dlg))), "halign", &val); */
-//    gtk_widget_set_halign(gtk_dialog_get_action_area(GTK_DIALOG(dlg)), GTK_ALIGN_CENTER);
-//    gtk_widget_set_halign(gtk_dialog_get_action_area(GTK_DIALOG(dlg)), 3);
-    gtk_widget_show(lbl);
-    error=gtk_dialog_run(GTK_DIALOG(dlg));
+    gtk_dialog_run(GTK_DIALOG(dlg));
     gtk_widget_destroy(dlg);
     }
-  return error;
+  return inerror;
 }
 
 void cancel_clicked(GtkWidget *widget, gpointer data)
@@ -709,17 +784,17 @@ void cancel_clicked(GtkWidget *widget, gpointer data)
 void save_clicked(GtkWidget *widget, gpointer data)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  if (check_dest(data)) return;
   if (write_parms("r+b", sizeof(iparms), &iparms)) log_error("write failed");
   parms_to_state (&global_state);
-  warn_dest(GTK_WINDOW(data), TRUE);
 }
 
 void done_clicked(GtkWidget *widget, gpointer data)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  if (check_dest(data)) return;
   if (write_parms("r+b", sizeof(iparms), &iparms)) log_error("write failed");
   parms_to_state (&global_state);
-  if (warn_dest(GTK_WINDOW(data), FALSE)) return;
   gtk_widget_destroy(data);
   gtk_main_quit();
 }
@@ -803,6 +878,9 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   draw dsize = {&iparms.ovrl_size, &da_ovrl, &size_min, &size_max, &xymin, &xymax, .01};
   draw dx = {&iparms.ovrl_x, &da_ovrl, &xymin, &xymax, &xymin, &xymax, .05};
   draw dy = {&iparms.ovrl_y, &da_ovrl, &xymin, &xymax, &xymin, &xymax, .05};
+  
+  strcpy(save_url, iparms.url);
+  strcpy(save_file, iparms.file);
    
   if (data) gtk_widget_hide(data);
   /* setup window */
@@ -843,7 +921,13 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   gtk_box_pack_start (GTK_BOX(vbox1), table, FALSE, TRUE, 5);
   
   /* setup window  URL stuff */
+//  PangoFontDescription *mb = pango_font_description_from_string("Monospace");
+//  pango_font_description_set_size(mb,20*PANGO_SCALE);
+//  pango_font_description_set_weight (mb, PANGO_WEIGHT_HEAVY);
+  
   url_check.button=gtk_check_button_new_with_label ("Stream to URL RTMP://");
+//  gtk_widget_modify_font(url_check.button, mb);
+//  gtk_widget_set_size_request(url_check.button, 70, 70);
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(url_check.button), iparms.write_url);
   g_signal_connect(url_check.button, "toggled", G_CALLBACK(check_status), &url_check);
   gtk_table_attach_defaults (GTK_TABLE (table), url_check.button, 0, 1, 0, 1);
@@ -855,6 +939,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   
   /* setup window file stuff */
   file_check.button=gtk_check_button_new_with_label ("Stream to file   FILE:");
+  gtk_widget_modify_font(file_check.button, mb);
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(file_check.button), iparms.write_file);
   g_signal_connect(file_check.button, "toggled", G_CALLBACK(check_status), &file_check);
   gtk_table_attach_defaults (GTK_TABLE (table), file_check.button, 0, 1, 1, 2);
@@ -1163,7 +1248,7 @@ void record_clicked(GtkWidget *widget, gpointer data)
 {
  log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   
-  if (warn_dest(GTK_WINDOW(data), FALSE)) return;
+//  if (warn_dest(GTK_WINDOW(data), FALSE)) return;
   
   if (iparms.write_file) global_state.output_state[FILE_STRM].run_state = SELECTED;
   if (iparms.write_url) global_state.output_state[URL_STRM].run_state = SELECTED;
@@ -1177,6 +1262,14 @@ void record_clicked(GtkWidget *widget, gpointer data)
   global_state.current_mode=STOPPED;
   pthread_join(record_tid, NULL);
 
+}
+
+void reboot_clicked(GtkWidget *widget, gpointer data)
+{
+   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   reboot = TRUE;
+   gtk_widget_destroy(widget);
+   gtk_main_quit ();
 }
 
 int get_free(void)
@@ -1319,8 +1412,16 @@ int main(int argc, char **argv)
   log_status("Starting....");
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   
-	
-  
+  PangoFontDescription *nb = pango_font_description_from_string("Monospace");
+  pango_font_description_set_size(nb,10*PANGO_SCALE);
+  pango_font_description_set_weight (nb, PANGO_WEIGHT_HEAVY);
+  PangoFontDescription *mb = pango_font_description_from_string("Monospace");
+  pango_font_description_set_size(mb,20*PANGO_SCALE);
+  pango_font_description_set_weight (mb, PANGO_WEIGHT_HEAVY);
+  PangoFontDescription *lb = pango_font_description_from_string("Monospace");
+  pango_font_description_set_size(lb,40*PANGO_SCALE);
+  pango_font_description_set_weight (lb, PANGO_WEIGHT_HEAVY);
+  	
   FILE *url_file;
   size_t url_size=0;
   char url_new[64];
@@ -1402,7 +1503,11 @@ int main(int argc, char **argv)
     {
       perror ("### 'matchbox-keyboard --xid', failed to return valid window ID. ### ");
       exit(-1);
-    }   
+    }  
+     
+//  strcpy(save_url, iparms.url);
+//  strcpy(save_file, iparms.file);
+  if (ping_address("dns.google")) network_progress();  
   
   /*Main Window */
   main_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
@@ -1415,35 +1520,42 @@ int main(int argc, char **argv)
   GtkWidget *vbox = gtk_vbox_new(FALSE, 20);
   gtk_container_add (GTK_CONTAINER (main_win), vbox);
   
-  PangoFontDescription *df = pango_font_description_from_string("Monospace");
-  pango_font_description_set_size(df,40*PANGO_SCALE);
-  pango_font_description_set_weight (df, PANGO_WEIGHT_HEAVY);
+//  PangoFontDescription *df = pango_font_description_from_string("Monospace");
+//  pango_font_description_set_size(df,40*PANGO_SCALE);
+//  pango_font_description_set_weight (df, PANGO_WEIGHT_HEAVY);
   
   GtkWidget *button, *label; 
   
   button = gtk_button_new ();
   label = gtk_label_new("RECORD");
-  gtk_widget_modify_font(label, df);
+  gtk_widget_modify_font(label, lb);
   gtk_container_add(GTK_CONTAINER(button), label);
   g_signal_connect(button, "clicked", G_CALLBACK(record_clicked), main_win);
   gtk_box_pack_start (GTK_BOX(vbox), button, TRUE, TRUE, 2);
   
   button = gtk_button_new();
   label = gtk_label_new("PREVIEW");
-  gtk_widget_modify_font(label, df);
+  gtk_widget_modify_font(label, lb);
   gtk_container_add(GTK_CONTAINER(button), label);
   g_signal_connect(button, "clicked", G_CALLBACK(preview_clicked), main_win);
   gtk_box_pack_start (GTK_BOX(vbox), button, TRUE, TRUE, 2);
 
   button= gtk_button_new ();
   label = gtk_label_new("SETUP");
-  gtk_widget_modify_font(label, df);
+  gtk_widget_modify_font(label, lb);
   gtk_container_add(GTK_CONTAINER(button), label);
   g_signal_connect(button, "clicked", G_CALLBACK(setup_clicked), main_win);
   gtk_box_pack_start (GTK_BOX(vbox), button, TRUE, TRUE, 2);
   
+  button= gtk_button_new ();
+  label = gtk_label_new("REBOOT");
+  gtk_widget_modify_font(label, lb);
+  gtk_container_add(GTK_CONTAINER(button), label);
+  g_signal_connect(button, "clicked", G_CALLBACK(reboot_clicked), main_win);
+  gtk_box_pack_start (GTK_BOX(vbox), button, TRUE, TRUE, 2);
+  
   gtk_widget_show_all(main_win);
-
+  
   gtk_main();
     
   if (gps_enabled) 
@@ -1456,5 +1568,8 @@ int main(int argc, char **argv)
 
   kill(kbd_pid, 15);
   kill(sh_pid, 15);
-  return 0;
+  if (reboot)
+    system("sudo reboot");
+  else
+    return 0;
 }

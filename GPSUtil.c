@@ -39,6 +39,7 @@ int open_gps(int *fd_data, int *fd_cntl)
    tcflush(*fd_cntl, TCIFLUSH);
    tcsetattr(*fd_cntl,TCSANOW,&options); 
    
+   write(*fd_cntl, "AT+QGPSCFG=\"gpsnmeatype\",2\r", 27);
    write(*fd_cntl, "AT+QGPS=1\r", 10);
    
 /*   char buf[255];
@@ -83,7 +84,7 @@ int read_gps(int *fd_data)
    cnt = read(*fd_data,buf,255);
    cnt--;
    buf[cnt]='\0';
-//   log_status("all GPS messages size %d data %s", cnt, buf);
+   log_status("all GPS messages size %d data %s", cnt, buf);
    if (!(cnt))
       {
 //      log_status("no GPS message 1000 waiting!");    
@@ -106,8 +107,8 @@ int read_gps(int *fd_data)
             index[c]=i+1;
             }
          }
-//      int statusi=index[2], speedi=index[7]; 
-//      log_status("%s %s", buf+statusi, buf+speedi);
+      int statusi=index[2], speedi=index[7]; 
+      log_status("valid GPS message %s %s", buf+statusi, buf+speedi);
       if (buf[index[2]]=='A')
          {
 //         log_status("valid GPS %s", buf+index[7]); 
