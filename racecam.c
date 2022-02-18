@@ -1404,7 +1404,7 @@ int main(int argc, char **argv)
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   
   mb = pango_font_description_from_string("Monospace");
-  pango_font_description_set_size(mb,20*PANGO_SCALE);
+  pango_font_description_set_size(mb,30*PANGO_SCALE);
   pango_font_description_set_weight (mb, PANGO_WEIGHT_HEAVY);
   
   lb = pango_font_description_from_string("Monospace");
@@ -1469,14 +1469,16 @@ int main(int argc, char **argv)
   parms_to_state(&global_state);
   
   install_signal_handlers();
+  char gtk_rc[PATH_MAX];
+  int path_size = readlink("/proc/self/exe", gtk_rc, PATH_MAX-1);
+  gtk_rc[path_size] = '\0';
+  strcat(gtk_rc, ".rc");
+  printf("%d %s\n", PATH_MAX, gtk_rc);
+  
   gtk_init (&argc, &argv);
-  gtk_rc_parse("/home/pi/racecam/racecam.rc");
-//  char cwd[256];
-//  printf("%s %s\n", getcwd(cwd, 255), argv[0]);
-//  char path[256];
-//  int pathsize = readlink("/proc/self/exe", path, 255);
-//  path[pathsize-8] = '\0';
-//  printf("%s\n", path);
+  gtk_rc_parse(gtk_rc);
+
+ 
   
 //  log_status("gps_flag %d %d", gps_enabled, iparms.gps);
 
