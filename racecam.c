@@ -697,7 +697,7 @@ void network_progress(void)
   gtk_box_pack_start (GTK_BOX(vbox), chk_win.lbl, TRUE, TRUE, 2);
   gtk_box_pack_start (GTK_BOX(vbox), chk_win.pbar, TRUE, TRUE, 2);
 
-  gtk_window_set_default_size (GTK_WINDOW (win), WINDOW_WIDTH/2, WINDOW_HEIGHT/2);
+  gtk_window_set_default_size (GTK_WINDOW (win), WINDOW_WIDTH, WINDOW_HEIGHT);
   gtk_container_set_border_width (GTK_CONTAINER (win), 20);
   gtk_widget_show_all(win);
   
