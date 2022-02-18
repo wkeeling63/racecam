@@ -654,36 +654,30 @@ void *check_network(void  *parg)
   int no_network = TRUE;
   while (no_network)
     {
-    if (ping_address("8.8.8.8"))
-      {
-      gtk_label_set_text(GTK_LABEL(chk_win->lbl), "Waiting for network");
-      gtk_widget_show((GtkWidget *)chk_win->lbl);
-      }
-    else
+    gtk_label_set_text(GTK_LABEL(chk_win->lbl), "Waiting for network");
+    gtk_widget_show((GtkWidget *)chk_win->lbl);
+    gtk_progress_bar_pulse(GTK_PROGRESS_BAR(chk_win->pbar));
+    if (!(ping_address("8.8.8.8")))
       {
       no_network = FALSE;
       }
-    gtk_progress_bar_pulse(GTK_PROGRESS_BAR(chk_win->pbar));
     vcos_sleep(500);
     }
   no_network = TRUE;
   while (no_network)
     {
-    if (ping_address("dns.google"))
-      {
-      gtk_label_set_text(GTK_LABEL(chk_win->lbl), "Waiting for name resolution");
-      gtk_widget_show((GtkWidget *)chk_win->lbl);
-      }
-    else
+    gtk_label_set_text(GTK_LABEL(chk_win->lbl), "Waiting for name resolution");
+    gtk_widget_show((GtkWidget *)chk_win->lbl);
+    gtk_progress_bar_pulse(GTK_PROGRESS_BAR(chk_win->pbar));
+    if (!(ping_address("dns.google")))
       {
       no_network = FALSE;
       }
-    gtk_progress_bar_pulse(GTK_PROGRESS_BAR(chk_win->pbar));
     vcos_sleep(500);
     }
   gtk_label_set_text(GTK_LABEL(chk_win->lbl), "Network is up :)");
   gtk_widget_show((GtkWidget *)chk_win->lbl);
-  vcos_sleep(1000);
+  vcos_sleep(500);
   gtk_main_quit();
 }
 
