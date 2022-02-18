@@ -1,0 +1,10 @@
+style "default-style"
+{
+        font_name = "Monospace Bold 10"
+        GtkCheckButton::indicator-size = 26
+	GtkRadioButton::indicator-size = 26
+}
+
+class "*" style "default-style"
+
+

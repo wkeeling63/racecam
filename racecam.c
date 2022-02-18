@@ -886,8 +886,8 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   /* setup window */
   GtkWidget *setup_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
   g_signal_connect (G_OBJECT (setup_win), "destroy", G_CALLBACK (cancel_clicked), setup_win);
-//  gtk_window_set_default_size (GTK_WINDOW (setup_win), WINDOW_WIDTH, WINDOW_HEIGHT);
-  gtk_window_set_default_size (GTK_WINDOW (setup_win), 800, 400);
+  gtk_window_set_default_size (GTK_WINDOW (setup_win), WINDOW_WIDTH, WINDOW_HEIGHT);
+//  gtk_window_set_default_size (GTK_WINDOW (setup_win), 800, 400);
   gtk_container_set_border_width (GTK_CONTAINER (setup_win), 20);
   
   GtkWidget *vbox = gtk_vbox_new(FALSE, 5);
@@ -921,13 +921,12 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   gtk_box_pack_start (GTK_BOX(vbox1), table, FALSE, TRUE, 5);
   
   /* setup window  URL stuff */
-//  PangoFontDescription *mb = pango_font_description_from_string("Monospace");
-//  pango_font_description_set_size(mb,20*PANGO_SCALE);
-//  pango_font_description_set_weight (mb, PANGO_WEIGHT_HEAVY);
-  
-  url_check.button=gtk_check_button_new_with_label ("Stream to URL RTMP://");
-//  gtk_widget_modify_font(url_check.button, mb);
-//  gtk_widget_set_size_request(url_check.button, 70, 70);
+
+  url_check.button=gtk_check_button_new_with_label ("Stream URL RTMP://");
+//  url_check.button=gtk_check_button_new();
+//  GtkWidget *label = gtk_label_new("Stream to URL RTMP://");
+//  gtk_widget_modify_font(label, mb);
+//  gtk_container_add(GTK_CONTAINER(url_check.button), label);
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(url_check.button), iparms.write_url);
   g_signal_connect(url_check.button, "toggled", G_CALLBACK(check_status), &url_check);
   gtk_table_attach_defaults (GTK_TABLE (table), url_check.button, 0, 1, 0, 1);
@@ -938,8 +937,8 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   gtk_table_attach_defaults (GTK_TABLE (table), wptr, 1, 4, 0, 1);
   
   /* setup window file stuff */
-  file_check.button=gtk_check_button_new_with_label ("Stream to file   FILE:");
-  gtk_widget_modify_font(file_check.button, mb);
+  file_check.button=gtk_check_button_new_with_label ("Stream to   FILE:");
+//  gtk_widget_modify_font(file_check.button, mb);
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(file_check.button), iparms.write_file);
   g_signal_connect(file_check.button, "toggled", G_CALLBACK(check_status), &file_check);
   gtk_table_attach_defaults (GTK_TABLE (table), file_check.button, 0, 1, 1, 2);
@@ -961,7 +960,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   gtk_button_set_image(GTK_BUTTON(wptr), gtk_image_new_from_stock(GTK_STOCK_REMOVE, GTK_ICON_SIZE_BUTTON));
   gtk_box_pack_start (GTK_BOX(hbox), wptr, FALSE, FALSE, 0);
   
-  sprintf(num_buf, "%2.0f", iparms.keep_free);
+  sprintf(num_buf, "%2.0f ", iparms.keep_free);
   fk_lmt.label = gtk_label_new (num_buf);
   gtk_box_pack_start (GTK_BOX(hbox), fk_lmt.label, FALSE, FALSE, 0);
     
@@ -1054,7 +1053,7 @@ void setup_clicked(GtkWidget *widget, gpointer data)
   hbox = gtk_hbox_new(FALSE, 0);
   gtk_box_pack_start (GTK_BOX(vbox), hbox, FALSE, TRUE, 2);
   
-  gtk_box_pack_start (GTK_BOX(hbox), gtk_label_new ("Quantization Min "), FALSE, TRUE, 2);
+  gtk_box_pack_start (GTK_BOX(hbox), gtk_label_new ("Q Min "), FALSE, TRUE, 2);
   
   wptr = gtk_button_new();
   g_signal_connect(wptr, "clicked", G_CALLBACK(dec_val_lbl), &qmin_lmt);
@@ -1412,13 +1411,15 @@ int main(int argc, char **argv)
   log_status("Starting....");
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   
-  PangoFontDescription *nb = pango_font_description_from_string("Monospace");
+  nb = pango_font_description_from_string("Monospace");
   pango_font_description_set_size(nb,10*PANGO_SCALE);
   pango_font_description_set_weight (nb, PANGO_WEIGHT_HEAVY);
-  PangoFontDescription *mb = pango_font_description_from_string("Monospace");
+  
+  mb = pango_font_description_from_string("Monospace");
   pango_font_description_set_size(mb,20*PANGO_SCALE);
   pango_font_description_set_weight (mb, PANGO_WEIGHT_HEAVY);
-  PangoFontDescription *lb = pango_font_description_from_string("Monospace");
+  
+  lb = pango_font_description_from_string("Monospace");
   pango_font_description_set_size(lb,40*PANGO_SCALE);
   pango_font_description_set_weight (lb, PANGO_WEIGHT_HEAVY);
   	
@@ -1481,6 +1482,13 @@ int main(int argc, char **argv)
   
   install_signal_handlers();
   gtk_init (&argc, &argv);
+  gtk_rc_parse("/home/pi/racecam/racecam.rc");
+//  char cwd[256];
+//  printf("%s %s\n", getcwd(cwd, 255), argv[0]);
+  char path[256];
+  int pathsize = readlink("/proc/self/exe", path, 255);
+  path[pathsize-8] = '\0';
+  printf("%s\n", path);
   
 //  log_status("gps_flag %d %d", gps_enabled, iparms.gps);
 
@@ -1513,11 +1521,11 @@ int main(int argc, char **argv)
   main_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);
 
   gtk_window_set_default_size (GTK_WINDOW (main_win), WINDOW_WIDTH, WINDOW_HEIGHT);
-  gtk_container_set_border_width (GTK_CONTAINER (main_win), 20);
+  gtk_container_set_border_width (GTK_CONTAINER (main_win), 10);
 
   g_signal_connect (G_OBJECT (main_win), "destroy", G_CALLBACK (widget_destroy), NULL);
 
-  GtkWidget *vbox = gtk_vbox_new(FALSE, 20);
+  GtkWidget *vbox = gtk_vbox_new(FALSE, 10);
   gtk_container_add (GTK_CONTAINER (main_win), vbox);
   
 //  PangoFontDescription *df = pango_font_description_from_string("Monospace");
