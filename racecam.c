@@ -1561,7 +1561,10 @@ int main(int argc, char **argv)
   kill(kbd_pid, 15);
   kill(sh_pid, 15);
   if (reboot)
-    system("sudo reboot");
+    {
+    system("/usr/bin/sudo /usr/sbin/reboot");
+    log_error("after reboot");
+    }
   else
     return 0;
 }
