@@ -1540,7 +1540,7 @@ int main(int argc, char **argv)
   gtk_box_pack_start (GTK_BOX(vbox), button, TRUE, TRUE, 2);
   
   button= gtk_button_new ();
-  label = gtk_label_new("REBOOT");
+  label = gtk_label_new("RESTART");
   gtk_widget_modify_font(label, lb);
   gtk_container_add(GTK_CONTAINER(button), label);
   g_signal_connect(button, "clicked", G_CALLBACK(reboot_clicked), main_win);
@@ -1561,10 +1561,11 @@ int main(int argc, char **argv)
   kill(kbd_pid, 15);
   kill(sh_pid, 15);
   if (reboot)
-    {
+    return 128;
+/*    {
     system("/usr/bin/sudo /usr/sbin/reboot");
     log_error("after reboot");
-    }
+    } */
   else
     return 0;
 }
