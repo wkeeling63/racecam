@@ -1560,8 +1560,13 @@ int main(int argc, char **argv)
 
   kill(kbd_pid, 15);
   kill(sh_pid, 15);
+  log_status("about to exit %d", reboot);
   if (reboot)
+    {
+    log_status("pre return 128");
     return 128;
+    log_status("post return 128");
+    }
 /*    {
     system("/usr/bin/sudo /usr/sbin/reboot");
     log_error("after reboot");
