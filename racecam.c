@@ -378,7 +378,7 @@ void *record_thread(void *argp)
   if (global_state.output_state[URL_STRM].run_state == SELECTED)
 		{
 		// setup states
-    complete_file(url,iparms.url);
+    complete_url(url,iparms.url);
     global_state.output_state[URL_STRM].dest = url;  
     global_state.output_state[URL_STRM].queue = global_state.userdata[URL_STRM].queue = alloc_queue();
 		}
@@ -1267,7 +1267,7 @@ int get_free(void)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   char buf[80];
-  FILE *free_fd = popen("df --output=avail / | tail -1", "r");
+  FILE *free_fd = popen("/usr/bin/df --output=avail / | /usr/bin/tail -1", "r");
   fgets(buf, sizeof(buf), free_fd);
   pclose(free_fd);
   return (atoi(buf))/1048576;
