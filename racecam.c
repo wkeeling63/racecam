@@ -1269,6 +1269,7 @@ int get_free(void)
   char buf[80];
   FILE *free_fd = popen("/usr/bin/df --output=avail / | /usr/bin/tail -1", "r");
   fgets(buf, sizeof(buf), free_fd);
+  log_debug("df output %s", buf);
   pclose(free_fd);
   return (atoi(buf))/1048576;
 } 
@@ -1390,10 +1391,10 @@ int main(int argc, char **argv)
 {
  // set message levels as needed 
   logger_reset_state(); 
-//  logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
-	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
+  logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS_DEBUG);	
+//	logger_set_log_level(LOG_MAX_LEVEL_ERROR_WARNING_STATUS);	
 //  logger_set_out_stdout(); 
-//  logger_set_log_file("/home/pi/racecam.log");
+  logger_set_log_file("/home/pi/racecam.log");
   
 // AV_LOG_ QUIET, PANIC, FATAL, ERROR, WARNING, INFO, VERBOSE, DEBUG and TRACE
   av_log_set_level(AV_LOG_PANIC);
@@ -1562,15 +1563,16 @@ int main(int argc, char **argv)
   kill(sh_pid, 15);
   log_status("about to exit %d", reboot);
   if (reboot)
-    {
+ /*   {
     log_status("pre return 128");
     return 128;
     log_status("post return 128");
-    }
-/*    {
-    system("/usr/bin/sudo /usr/sbin/reboot");
-    log_error("after reboot");
     } */
+    {
+    log_debug("about to reboot");
+    system("/usr/bin/sudo /usr/sbin/reboot");
+    log_debug("after reboot");
+    } 
   else
     return 0;
 }
