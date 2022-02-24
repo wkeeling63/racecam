@@ -1261,6 +1261,7 @@ void reboot_clicked(GtkWidget *widget, gpointer data)
   reboot = TRUE;
   gtk_widget_destroy(widget);
   gtk_main_quit ();
+  log_debug("done with reboot_clicked");
 }
 
 int get_free(void)
@@ -1551,9 +1552,11 @@ int main(int argc, char **argv)
   
   gtk_main();
     
+  log_debug("post gtk_main");
   if (gps_enabled) 
 		{
 		gps_data.active=0;
+    log_debug("gps about to join");
 		pthread_join(gps_tid, NULL);
 		} 
 
