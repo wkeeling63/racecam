@@ -641,7 +641,7 @@ int ping_address(const char *addr)
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   char cmd[80];
   sprintf(cmd, "ping -c 1 %s > /dev/null 2>&1", addr);
-  log_debug("cmd %s", cmd);
+//  log_debug("cmd %s", cmd);
   if (system(cmd)) return 1;
   return 0;
 }
@@ -714,8 +714,8 @@ int check_dest(GtkWidget *parent)
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
   AVIOContext *ioctx;
   int inerror = FALSE;
-  log_debug("%s %s", save_file, iparms.file);
-  log_debug("%d", strcmp(save_file, iparms.file));
+//  log_debug("%s %s", save_file, iparms.file);
+//  log_debug("%d", strcmp(save_file, iparms.file));
   char msg[256]={'\0'};
   if (strcmp(save_url, iparms.url))
     {
@@ -1270,7 +1270,7 @@ int get_free(void)
   char buf[80];
   FILE *free_fd = popen("/usr/bin/df --output=avail / | /usr/bin/tail -1", "r");
   fgets(buf, sizeof(buf), free_fd);
-  log_debug("df output %s", buf);
+  log_debug("df output %s %d", buf, (atoi(buf))/1048576);
   pclose(free_fd);
   return (atoi(buf))/1048576;
 } 
@@ -1312,6 +1312,8 @@ int del_file(FILE *file)
 int clean_files(void)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
+  
+  log_debug("%d >= %d", get_free(), iparms.keep_free);
 
   if (get_free() >= iparms.keep_free) return 0;
 
@@ -1552,31 +1554,24 @@ int main(int argc, char **argv)
   
   gtk_main();
     
-  log_debug("post gtk_main");
-  if (gps_enabled) 
-		{
-		gps_data.active=0;
-    log_debug("gps about to join");
-		pthread_join(gps_tid, NULL);
-		} 
-
   clean_files();
 
   kill(kbd_pid, 15);
   kill(sh_pid, 15);
-  log_status("about to exit %d", reboot);
+
   if (reboot)
- /*   {
-    log_status("pre return 128");
-    return 128;
-    log_status("post return 128");
-    } */
     {
     log_debug("about to reboot");
     system("/usr/bin/sudo /usr/sbin/reboot");
     log_debug
     ("after reboot");
-    } 
-  else
-    return 0;
+    }
+  if (gps_enabled) 
+		{
+		gps_data.active=0;
+    log_debug("gps about to join");
+		pthread_join(gps_tid, NULL);
+		}    
+
+  return 0;
 }
