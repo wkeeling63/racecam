@@ -337,7 +337,7 @@ int read_parms(void)
     if (cnt!=sizeof(iparms)) return 1;
     if (fclose(parm_file)) return 1;
     }
-  else
+  else 
     {
     return 1;
     } 
@@ -348,7 +348,7 @@ int read_parms(void)
 int write_parms(char *mode, size_t size, void *ptr)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-  log_debug("iparms.keep_free %d", iparms.keep_free);
+  log_debug("iparms.keep_free %f", iparms.keep_free);
   FILE *parm_file;
   parm_file=fopen("/home/pi/racecam.ini", mode);
   if (parm_file == NULL) return 1;
@@ -1314,7 +1314,7 @@ void clean_files(void)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
   
-  log_debug("%d >= %d", get_free(), iparms.keep_free);
+  log_debug("%d >= %f", get_free(), iparms.keep_free);
 
   if (get_free() >= iparms.keep_free) 
     {
