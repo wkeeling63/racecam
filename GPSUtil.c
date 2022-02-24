@@ -219,7 +219,7 @@ void *gps_thread(void *argp)
 
 //   int64_t start = get_microseconds64()/100000;
  //  while (gps->active) 
-//   log_status("GPS flag %d", gps->active);
+   log_debug("GPS flag %d", gps->active);
    while (gps->active > 0) 
       { 
 //      speed = get_microseconds64()/100000 - start;
