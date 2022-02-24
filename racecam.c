@@ -1571,7 +1571,8 @@ int main(int argc, char **argv)
     {
     log_debug("about to reboot");
     system("/usr/bin/sudo /usr/sbin/reboot");
-    log_debug("after reboot");
+    log_debug
+    ("after reboot");
     } 
   else
     return 0;
