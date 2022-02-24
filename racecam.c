@@ -348,6 +348,7 @@ int read_parms(void)
 int write_parms(char *mode, size_t size, void *ptr)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+  log_debug("iparms.keep_free %d", iparms.keep_free);
   FILE *parm_file;
   parm_file=fopen("/home/pi/racecam.ini", mode);
   if (parm_file == NULL) return 1;
