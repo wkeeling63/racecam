@@ -106,7 +106,7 @@ char url[64];
 
 GPS_T gps_data;
 	
-static int clean_files(void);
+static void clean_files(void);
 
 void cleanup_children(int s)
 {
@@ -1309,33 +1309,38 @@ int del_file(FILE *file)
   return 0;
 }
 
-int clean_files(void)
+void clean_files(void)
 {
   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
   
   log_debug("%d >= %d", get_free(), iparms.keep_free);
 
-  if (get_free() >= iparms.keep_free) return 0;
+  if (get_free() >= iparms.keep_free) 
+    {
+    log_debug("skipping clean files");
+    return;
+    }
+  log_debug(" not skipping clean files");
 
   FILE *init_f1, *init_f2;
   init_f1=fopen("/home/pi/racecam.ini", "rb");
   if (!init_f1) 
     {
     log_error("open ini file for cleanup failed");
-    return 1;
+    return;
     }
     
   if (fseek(init_f1, 0, SEEK_END))
     {
     log_error("seek end failed");
-    return 1;
+    return;
     }
 
   int num_of_files=ftell(init_f1);
   if (num_of_files<0)
     {
     log_error("file size check failed");
-    return 1;
+    return;
     }
   num_of_files=(num_of_files-sizeof(iparms))/64;
   int files_left=num_of_files;
@@ -1344,7 +1349,7 @@ int clean_files(void)
   if (rc) 
     {
     log_error("rename failed");
-    return 1;
+    return;
     } 
 
   init_f2=fopen("/home/pi/racecam.ini", "wb");
@@ -1377,7 +1382,7 @@ int clean_files(void)
   if (fclose(init_f2)) log_error("close failed");
   if (remove("/home/pi/racecam.old")) 
     log_error("remove old init file");
-  return 0;
+  return;
   
 rename_back:
   log_error("open new ini file for cleanup failed"); 
@@ -1387,7 +1392,7 @@ rename_back:
   goto close_f1;
 close_f1:
   if (fclose(init_f1)) log_error("close failed");
-  return 1;
+  return;
 }
 
 int main(int argc, char **argv)
