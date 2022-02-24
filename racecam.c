@@ -1270,7 +1270,7 @@ int get_free(void)
   char buf[80];
   FILE *free_fd = popen("/usr/bin/df --output=avail / | /usr/bin/tail -1", "r");
   fgets(buf, sizeof(buf), free_fd);
-  log_debug("df output %s %d", buf, (atoi(buf))/1048576);
+//  log_debug("df output %s %d", buf, (atoi(buf))/1048576);
   pclose(free_fd);
   return (atoi(buf))/1048576;
 } 
@@ -1320,7 +1320,7 @@ void clean_files(void)
     log_debug("skipping clean files");
     return;
     }
-  log_debug(" not skipping clean files");
+  log_debug(" not skipping clean files %d", (get_free() >= iparms.keep_free));
 
   FILE *init_f1, *init_f2;
   init_f1=fopen("/home/pi/racecam.ini", "rb");
