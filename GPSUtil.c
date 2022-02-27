@@ -5,6 +5,7 @@
 int open_gps(int *fd_data, int *fd_cntl)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    struct termios options, ops;
    memset(&options, 0, sizeof(options));
    options.c_cflag = BAUDRATE | CRTSCTS | CS8 | CLOCAL | CREAD;
@@ -13,7 +14,7 @@ int open_gps(int *fd_data, int *fd_cntl)
    options.c_cc[VEOF]     = 4;     // Ctrl-d  
    options.c_cc[VMIN]     = 1; 
     
-   *fd_data = open(GPSDATA, O_RDWR | O_NOCTTY ); 
+   *fd_data = open(GPSDATA, O_RDWR | O_NOCTTY ); // add O_NONBLOCK try O_RDONLY, 
    if (*fd_data <0) 
       {
       log_error("Open of GPS data failed! RC=%d", *fd_data);
@@ -36,6 +37,8 @@ int open_gps(int *fd_data, int *fd_cntl)
       log_error("Open of GPS control failed! RC=%d", *fd_cntl);
       return -1;
       }
+      
+   //need get??
    tcflush(*fd_cntl, TCIFLUSH);
    tcsetattr(*fd_cntl,TCSANOW,&options); 
    
@@ -76,7 +79,7 @@ int close_gps(int *fd_data, int *fd_cntl)
 int read_gps(int *fd_data)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-//   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 
    int cnt=0, i, c=0;
    int index[20];
@@ -130,7 +133,7 @@ int read_gps(int *fd_data)
 void send_text(int speed, int max_width, GPS_T *gps)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-//   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 //   log_status("%d %d %d %d %d %d", speed, max_width, gps->text.width, gps->text.height, gps->text.x, gps->text.y);
    MMAL_BUFFER_HEADER_T *buffer_header=NULL;
 
@@ -184,7 +187,7 @@ void send_text(int speed, int max_width, GPS_T *gps)
 void *gps_thread(void *argp)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
-//   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
+   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
    
    log_status("Starting GPS thread...");
    vcos_sleep(3000);
@@ -219,7 +222,7 @@ void *gps_thread(void *argp)
 
 //   int64_t start = get_microseconds64()/100000;
  //  while (gps->active) 
-   log_debug("GPS flag %d", gps->active);
+   log_status("GPS flag %d", gps->active);
    while (gps->active > 0) 
       { 
 //      speed = get_microseconds64()/100000 - start;
