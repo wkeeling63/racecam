@@ -49,6 +49,10 @@ int open_gps(int *fd_data, int *fd_cntl)
    status = write(*fd_cntl, "AT+QGPS=1\r\n", 11);
    log_status("QGPS=1 status %d", status);
    
+   vcos_sleep(2000);
+   
+   log_status("done with wait");
+   
 /*   char buf[255];
    int cnt = 0;
    cnt = read(*fd_cntl,buf,255);
