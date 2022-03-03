@@ -43,25 +43,21 @@ int open_gps(int *fd_data, int *fd_cntl)
    tcsetattr(*fd_cntl,TCSANOW,&options); 
    
 //   log_status("AT+QGPSCFG=\"gpsnmeatype\",2\r");
+   char buf[255];
+   int cnt = 0;
    size_t status=0;
+   
    status = write(*fd_cntl, "AT+QGPSCFG=\"gpsnmeatype\",2\r\n", 28);
    log_status("gpsnmea type status %d", status);
-   status = write(*fd_cntl, "AT+QGPS=1\r\n", 11);
-   log_status("QGPS=1 status %d", status);
-   
-   vcos_sleep(2000);
-   
-   log_status("done with wait");
-   
-/*   char buf[255];
-   int cnt = 0;
    cnt = read(*fd_cntl,buf,255);
    buf[cnt-1] = '\0';
    log_status("result size %d message->%s<", cnt, buf);
+   
+   status = write(*fd_cntl, "AT+QGPS=1\r\n", 11);
+   log_status("QGPS=1 status %d", status);
    buf[cnt-1] = '\0';
    log_status("result size %d message->%s<", cnt, buf);
-   log_status("done"); */
-   
+
    return 0;
 }
 
