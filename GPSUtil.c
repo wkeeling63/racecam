@@ -45,7 +45,7 @@ int open_gps(int *fd_data, int *fd_cntl)
    log_status("AT+QGPSCFG=\"gpsnmeatype\",2\r");
    
 //   write(*fd_cntl, "AT+QGPSCFG=\"gpsnmeatype\",2\r", 27);
-   write(*fd_cntl, "AT+QGPS=1\r", 10);
+   write(*fd_cntl, "AT+QGPS=1\r\n", 11);
    
 /*   char buf[255];
    int cnt = 0;
