@@ -42,7 +42,9 @@ int open_gps(int *fd_data, int *fd_cntl)
    tcflush(*fd_cntl, TCIFLUSH);
    tcsetattr(*fd_cntl,TCSANOW,&options); 
    
-   write(*fd_cntl, "AT+QGPSCFG=\"gpsnmeatype\",2\r", 27);
+   log_status("AT+QGPSCFG=\"gpsnmeatype\",2\r");
+   
+//   write(*fd_cntl, "AT+QGPSCFG=\"gpsnmeatype\",2\r", 27);
    write(*fd_cntl, "AT+QGPS=1\r", 10);
    
 /*   char buf[255];
