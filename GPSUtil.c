@@ -6,31 +6,38 @@ int open_gps(int *fd_data, int *fd_cntl)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-   struct termios options, ops;
-   memset(&options, 0, sizeof(options));
-   options.c_cflag = BAUDRATE | CRTSCTS | CS8 | CLOCAL | CREAD;
-   options.c_iflag = IGNPAR | ICRNL;
-   options.c_lflag = ICANON;
-   options.c_cc[VEOF]     = 4;     // Ctrl-d  
-   options.c_cc[VMIN]     = 1; 
-    
-   *fd_data = open(GPSDATA, O_RDWR | O_NOCTTY ); // add O_NONBLOCK try O_RDONLY, 
+   
+   //   *fd_data = open(GPSDATA, O_RDWR | O_NOCTTY ); // add O_NONBLOCK try O_RDONLY, 
+   *fd_data = open(GPSDATA, O_RDONLY | O_NOCTTY );
    if (*fd_data <0) 
       {
       log_error("Open of GPS data failed! RC=%d", *fd_data);
       return -1;
       }
-   tcgetattr(*fd_data,&ops);   //needed???
-   tcflush(*fd_data, TCIFLUSH);
-   tcsetattr(*fd_data,TCSANOW,&options); 
-   
-   memset(&options, 0, sizeof(options));
-   options.c_cflag = BAUDRATE | CRTSCTS | CS8 | CLOCAL | CREAD;
-   options.c_iflag = IGNPAR | ICRNL;
-   options.c_lflag = ICANON;
-   options.c_cc[VEOF]     = 4;     // Ctrl-d 
-   options.c_cc[VMIN]     = 1; 
       
+   struct termios options_data, options_cntl;
+   
+   tcgetattr(*fd_data,&options_data);
+//   memset(&options, 0, sizeof(options));
+//   options_data.c_cflag = BAUDRATE | CRTSCTS | CS8 | CLOCAL | CREAD;
+   options_data.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
+   options_data.c_cflag |= CS8 | CRTSCTS | CLOCAL | CREAD;
+//   options_data.c_iflag = IGNPAR | ICRNL;
+   options_data.c_iflag &= ~(IXON | IXOFF | IXANY | IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+   options_data.c_iflag |= IGNPAR | ICRNL;
+   options_data.c_oflag &= (OPOST | ONLCR);  // new
+//   options_data.c_lflag = ICANON;
+   options_data.c_lflag &= ~(ECHO | ECHOE | ECHONL | ISIG);
+   options_data.c_lflag |= ICANON;
+   options_data.c_cc[VEOF]     = 4;     // Ctrl-d  
+   options_data.c_cc[VMIN]     = 1; 
+   options_data.c_cc[VTIME]    = 5;
+   
+   cfsetspeed(&options_data, B115200);
+    
+   tcflush(*fd_data, TCIFLUSH);
+   tcsetattr(*fd_data,TCSANOW,&options_data); 
+   
    *fd_cntl = open(GPSCNTL, O_RDWR | O_NOCTTY ); 
    if (*fd_cntl <0) 
       {
@@ -38,9 +45,28 @@ int open_gps(int *fd_data, int *fd_cntl)
       return -1;
       }
       
-   //need get??
+   tcgetattr(*fd_data,&options_cntl); 
+//   memset(&options, 0, sizeof(options));
+/*   options_cntl.c_cflag = BAUDRATE | CRTSCTS | CS8 | CLOCAL | CREAD;
+   options_cntl.c_iflag = IGNPAR | ICRNL;
+   options_cntl.c_lflag = ICANON;
+   options_cntl.c_cc[VEOF]     = 4;     // Ctrl-d 
+   options_cntl.c_cc[VMIN]     = 1; */
+   options_cntl.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
+   options_cntl.c_cflag |= CS8 | CRTSCTS | CLOCAL | CREAD;
+   options_cntl.c_iflag &= ~(IXON | IXOFF | IXANY | IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+   options_cntl.c_iflag |= IGNPAR | ICRNL;
+   options_cntl.c_oflag &= (OPOST | ONLCR);  // new
+   options_cntl.c_lflag &= ~(ECHO | ECHOE | ECHONL | ISIG);
+   options_cntl.c_lflag |= ICANON;
+   options_cntl.c_cc[VEOF]     = 4;     // Ctrl-d  
+   options_cntl.c_cc[VMIN]     = 1; 
+   options_cntl.c_cc[VTIME]    = 10;
+   
+   cfsetspeed(&options_data, B115200);      
+
    tcflush(*fd_cntl, TCIFLUSH);
-   tcsetattr(*fd_cntl,TCSANOW,&options); 
+   tcsetattr(*fd_cntl,TCSANOW,&options_cntl); 
    
 //   log_status("AT+QGPSCFG=\"gpsnmeatype\",2\r");
    char buf[255];
@@ -94,8 +120,8 @@ int read_gps(int *fd_data)
    log_status("all GPS messages size %d data %s", cnt, buf);
    if (!(cnt))
       {
-      log_status("no GPS message .5 waiting!");    
-      vcos_sleep(500);
+      log_status("no GPS message waiting!");    
+      vcos_sleep(1000);
       return -2;
       }
 //   buf[cnt-2]='\0';
