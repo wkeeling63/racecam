@@ -30,7 +30,7 @@ int open_gps(int *fd_data, int *fd_cntl)
    options_data.c_lflag &= ~(ECHO | ECHOE | ECHONL | ISIG);
    options_data.c_lflag |= ICANON;
    options_data.c_cc[VEOF]     = 4;     // Ctrl-d  
-   options_data.c_cc[VMIN]     = 1; 
+   options_data.c_cc[VMIN]     = 0; 
    options_data.c_cc[VTIME]    = 5;
    
    cfsetspeed(&options_data, B115200);
@@ -60,7 +60,7 @@ int open_gps(int *fd_data, int *fd_cntl)
    options_cntl.c_lflag &= ~(ECHO | ECHOE | ECHONL | ISIG);
    options_cntl.c_lflag |= ICANON;
    options_cntl.c_cc[VEOF]     = 4;     // Ctrl-d  
-   options_cntl.c_cc[VMIN]     = 1; 
+   options_cntl.c_cc[VMIN]     = 0; 
    options_cntl.c_cc[VTIME]    = 10;
    
    cfsetspeed(&options_data, B115200);      
@@ -72,6 +72,7 @@ int open_gps(int *fd_data, int *fd_cntl)
    char buf[255];
    int cnt = 0;
    size_t status=0;
+   off_t offset=0;
    
    status = write(*fd_cntl, "AT+QGPSCFG=\"gpsnmeatype\",2\r\n", 28);
    log_status("gpsnmea type status %d", status);
@@ -81,6 +82,7 @@ int open_gps(int *fd_data, int *fd_cntl)
    
    status = write(*fd_cntl, "AT+QGPS=1\r\n", 11);
    log_status("QGPS=1 status %d", status);
+   cnt = read(*fd_cntl,buf,255);
    buf[cnt-1] = '\0';
    log_status("result size %d message->%s<", cnt, buf);
 
@@ -91,7 +93,7 @@ int close_gps(int *fd_data, int *fd_cntl)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    int status=0;
-   write(*fd_cntl, "AT+QGPSEND\r", 11);
+   write(*fd_cntl, "AT+QGPSEND\r\n", 12);
      
    status=close(*fd_cntl);
    if (status)
