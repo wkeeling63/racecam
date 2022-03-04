@@ -1560,24 +1560,26 @@ int main(int argc, char **argv)
   
   gtk_main();
     
+  if (gps_enabled) 
+		{
+		gps_data.active=0;
+    log_debug("gps about to join");
+		pthread_join(gps_tid, NULL);
+		}  
+    
   clean_files();
 
   kill(kbd_pid, 15);
   kill(sh_pid, 15);
-
-  if (reboot)
+  
+   if (reboot)
     {
     log_debug("about to reboot");
     system("/usr/bin/sudo /usr/sbin/reboot");
     log_debug
     ("after reboot");
     }
-  if (gps_enabled) 
-		{
-		gps_data.active=0;
-    log_debug("gps about to join");
-		pthread_join(gps_tid, NULL);
-		}    
+   
 
   return 0;
 }

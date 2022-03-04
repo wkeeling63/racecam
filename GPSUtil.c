@@ -271,6 +271,10 @@ void *gps_thread(void *argp)
                last_speed = speed;
                }
             }
+         else
+            {
+            last_speed == -1;
+            }
          }
 //     vcos_sleep(1000);
       }
