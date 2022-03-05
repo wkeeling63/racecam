@@ -134,8 +134,8 @@ int parse_gps(char *msg)
             index[c]=i+1;
             }
          }
-      int statusi=index[2], speedi=index[7]; 
-      log_status("valid GPS message %s %s", msg+statusi, msg+speedi);
+//      int statusi=index[2], speedi=index[7]; 
+//      log_status("valid GPS message %s %s", msg+statusi, msg+speedi);
       if (msg[index[2]]=='A')
          {
 //         log_status("valid GPS %s", buf+index[7]); 
@@ -155,7 +155,7 @@ int parse_gps(char *msg)
 int read_gps(int *fd_data)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+//   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 
    static int o=0;
    static char msg[256];
@@ -288,6 +288,7 @@ void *gps_thread(void *argp)
       else
          {
          last_speed == -1;
+         log_status("last_speed to -1");
          }
  //     vcos_sleep(1000);
       }
