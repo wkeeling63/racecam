@@ -6,8 +6,7 @@ int open_gps(int *fd_data, int *fd_cntl)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-   
-   //   *fd_data = open(GPSDATA, O_RDWR | O_NOCTTY ); // add O_NONBLOCK try O_RDONLY, 
+// open readonly GPS data return port   
    *fd_data = open(GPSDATA, O_RDONLY | O_NOCTTY );
    if (*fd_data <0) 
       {
@@ -18,17 +17,12 @@ int open_gps(int *fd_data, int *fd_cntl)
    struct termios options_data, options_cntl;
    
    tcgetattr(*fd_data,&options_data);
-//   memset(&options, 0, sizeof(options));
-//   options_data.c_cflag = BAUDRATE | CRTSCTS | CS8 | CLOCAL | CREAD;
    options_data.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
    options_data.c_cflag |= CS8 | CRTSCTS | CLOCAL | CREAD;
-//   options_data.c_iflag = IGNPAR | ICRNL;
    options_data.c_iflag &= ~(IXON | IXOFF | IXANY | IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
    options_data.c_iflag |= IGNPAR | ICRNL;
-   options_data.c_oflag &= (OPOST | ONLCR);  // new
-//   options_data.c_lflag = ICANON;
+   options_data.c_oflag &= (OPOST | ONLCR);  
    options_data.c_lflag &= ~(ECHO | ECHOE | ECHONL | ISIG | ICANON);
-//   options_data.c_lflag |= ICANON;
    options_data.c_cc[VEOF]     = 4;     // Ctrl-d  
    options_data.c_cc[VMIN]     = 0; 
    options_data.c_cc[VTIME]    = 5;
@@ -38,6 +32,7 @@ int open_gps(int *fd_data, int *fd_cntl)
    tcflush(*fd_data, TCIFLUSH);
    tcsetattr(*fd_data,TCSANOW,&options_data); 
    
+// open read/write GPS control port      
    *fd_cntl = open(GPSCNTL, O_RDWR | O_NOCTTY ); 
    if (*fd_cntl <0) 
       {
@@ -68,20 +63,27 @@ int open_gps(int *fd_data, int *fd_cntl)
    tcflush(*fd_cntl, TCIFLUSH);
    tcsetattr(*fd_cntl,TCSANOW,&options_cntl); 
    
-//   log_status("AT+QGPSCFG=\"gpsnmeatype\",2\r");
    char buf[255];
    int cnt = 0;
    size_t status=0;
    off_t offset=0;
    
    status = write(*fd_cntl, "AT+QGPSCFG=\"gpsnmeatype\",2\r\n", 28);
+   
    log_status("gpsnmea type status %d", status);
+   cnt = read(*fd_cntl,buf,255);
+   buf[cnt-1] = '\0';
+   log_status("result size %d message->%s<", cnt, buf);
    cnt = read(*fd_cntl,buf,255);
    buf[cnt-1] = '\0';
    log_status("result size %d message->%s<", cnt, buf);
    
    status = write(*fd_cntl, "AT+QGPS=1\r\n", 11);
+   
    log_status("QGPS=1 status %d", status);
+   cnt = read(*fd_cntl,buf,255);
+   buf[cnt-1] = '\0';
+   log_status("result size %d message->%s<", cnt, buf);
    cnt = read(*fd_cntl,buf,255);
    buf[cnt-1] = '\0';
    log_status("result size %d message->%s<", cnt, buf);
@@ -89,32 +91,23 @@ int open_gps(int *fd_data, int *fd_cntl)
    return 0;
 }
 
-int close_gps(int *fd_data, int *fd_cntl)
+void close_gps(int *fd_data, int *fd_cntl)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    
-   int status=0;
    write(*fd_cntl, "AT+QGPSEND\r\n", 12);
-     
-   status=close(*fd_cntl);
-   if (status)
-      {
-      log_error("Close of GPS control failed! RC=%d", status);
-      } 
-   status=close(*fd_data);
-   if (status)
-      {
-      log_error("Close of GPS data failed! RC=%d", status);
-      }
    
-   return status;
+   int status =  close(*fd_cntl);
+   if (status) log_error("Close of GPS control failed! RC=%d", status);
+
+   status = close(*fd_data);
+   if (status) log_error("Close of GPS data failed! RC=%d", status);
 }
 
 int parse_gps(char *msg)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    
    int index[20], i, c=0, size=strlen(msg);
    if (strncmp(msg,"$GPRMC",6))
@@ -123,7 +116,6 @@ int parse_gps(char *msg)
       }
    else
       {
-//      log_status("valid GPS message %s", buf);
       index[0]='\0';
       for (i=0;i<size;i++)
          {
@@ -134,19 +126,14 @@ int parse_gps(char *msg)
             index[c]=i+1;
             }
          }
-//      int statusi=index[2], speedi=index[7]; 
-//      log_status("valid GPS message %s %s", msg+statusi, msg+speedi);
       if (msg[index[2]]=='A')
          {
-//         log_status("valid GPS %s", buf+index[7]); 
          float fspd=0;
          sscanf(msg+index[7], "%f", &fspd);
-//         log_status("speed after sscanf %f", fspd);
          return fspd*1.15078;   
          }
       else
          {
-//         log_status("not A -->%s", buf+index[2]);
          return -1;
          }
       }
@@ -155,7 +142,6 @@ int parse_gps(char *msg)
 int read_gps(int *fd_data)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-//   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 
    static int o=0;
    static char msg[256];
@@ -164,7 +150,7 @@ int read_gps(int *fd_data)
    char buf[256];
    
    cnt = read(*fd_data,buf,255);
-//   log_status("read result %d", cnt);
+
    for (i=0; i<cnt; i++)
       {
       if ((buf[i] == '\r') || (buf[i] == '\n'))
@@ -185,8 +171,7 @@ int read_gps(int *fd_data)
 void send_text(int speed, int max_width, GPS_T *gps)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-//   log_status("%d %d %d %d %d %d", speed, max_width, gps->text.width, gps->text.height, gps->text.x, gps->text.y);
+
    MMAL_BUFFER_HEADER_T *buffer_header=NULL;
 
    if ((buffer_header = mmal_queue_get(gps->t_queue)) != NULL)
@@ -226,7 +211,6 @@ void send_text(int speed, int max_width, GPS_T *gps)
       buffer_header->cmd=buffer_header->offset=0;
 
       int status=mmal_port_send_buffer(gps->t_port, buffer_header);
-//      log_status("text send status %s" , mmal_status_to_string(status));
       if (status) log_error("buffer send of text overlay failed %s", mmal_status_to_string(status));
       }
    else
@@ -239,15 +223,13 @@ void send_text(int speed, int max_width, GPS_T *gps)
 void *gps_thread(void *argp)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
-   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
    
    log_status("Starting GPS thread...");
    vcos_sleep(3000);
 
    GPS_T *gps = (GPS_T *)argp;
    int fd_data, fd_cntl;
-   int speed = -1, last_speed = -1;
-//   int *ptr_state=gps->active;
+   int speed = -1, last_speed = -1; 
    
    if (open_gps(&fd_data, &fd_cntl)) return NULL;
   
@@ -264,19 +246,15 @@ void *gps_thread(void *argp)
    int max_below_o=(double)extents.height-((double)extents.y_bearing*-1);  // why 51-40=10???
    cairo_destroy(temp_context);
    cairo_surface_destroy(temp_surface);
-   
-//   log_status("%d %d %d %d %d", max_width, gps->text.width, gps->text.height, gps->text.x, gps->text.y);
 
    if (gps->text.x > (gps->text.width-max_width)) gps->text.x = gps->text.width-max_width; 
    if (gps->text.x < 0) gps->text.x = 0; 
    if (gps->text.y > (gps->text.height-max_below_o)) gps->text.y = gps->text.height-max_below_o; 
    if (gps->text.y < max_above_o) gps->text.y = max_above_o; 
 
-//   log_status("GPS flag %d", gps->active);
    while (gps->active > 0) 
       { 
       speed = read_gps(&fd_data);
-      log_status("speed %d last_speed %d", speed, last_speed);
       if (gps->active == SENDING) 
          {
          if ((speed > -2) && (speed != last_speed))
@@ -289,9 +267,8 @@ void *gps_thread(void *argp)
       else
          {
          last_speed = -1;
-         log_status("last_speed to -1");
          }
- //     vcos_sleep(1000);
+ //     vcos_sleep(100);
       }
       
    close_gps(&fd_data, &fd_cntl);
