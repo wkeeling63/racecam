@@ -164,6 +164,7 @@ int read_gps(int *fd_data)
    char buf[256];
    
    cnt = read(*fd_data,buf,255);
+   log_status("read result %d", cnt);
    for (i=0; i<cnt; i++)
       {
       if (buf[i] == '\r')
