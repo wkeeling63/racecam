@@ -288,7 +288,7 @@ void *gps_thread(void *argp)
          }
       else
          {
-         last_speed == -1;
+         last_speed = -1;
          log_status("last_speed to -1");
          }
  //     vcos_sleep(1000);
