@@ -157,22 +157,18 @@ int read_gps(int *fd_data)
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 
-   int cnt=0, i, speed=-3;
    static int o=0;
    static char msg[256];
-//   int index[20];
+   
+   int cnt=0, i, speed=-3;
    char buf[256];
    
    cnt = read(*fd_data,buf,255);
-   log_status("read result %d", cnt);
+//   log_status("read result %d", cnt);
    for (i=0; i<cnt; i++)
       {
       if ((buf[i] == '\r') || (buf[i] == '\n'))
          {
-         if (buf[i] == '\n')
-            log_status("it was New Line");
-         else
-            log_status("it was Carrage Return");
          msg[o] = '\0';
          speed=parse_gps(buf);
          o=0;
@@ -184,50 +180,6 @@ int read_gps(int *fd_data)
          }
       }
    return speed;
-//   cnt--;
-//   buf[cnt]='\0';
-//   log_status("all GPS messages size %d data %s", cnt, buf);
-/*   if (!(cnt))
-      {
-      log_status("no GPS message waiting!");    
-      vcos_sleep(1000);
-      return -2;
-      } */
-//   buf[cnt-2]='\0';
-//   log_status("GPS read cnt %d data %s", cnt, buf);
-//   cnt--;
-/*   if ((cnt) && (!(strncmp(buf,"$GPRMC",6))))
-      {
-//      log_status("valid GPS message %s", buf);
-      index[0]='\0';
-      for (i=0;i<cnt;i++)
-         {
-          if (buf[i]==',')
-            {
-            buf[i]='\0';
-            c++;
-            index[c]=i+1;
-            }
-         }
-      int statusi=index[2], speedi=index[7]; 
-      log_status("valid GPS message %s %s", buf+statusi, buf+speedi);
-      if (buf[index[2]]=='A')
-         {l
-//         log_status("valid GPS %s", buf+index[7]); 
-         float fspd=0;
-         sscanf(buf+index[7], "%f", &fspd);
-//         log_status("speed after sscanf %f", fspd);
-         return fspd*1.15078;   
-         }
-      else
-         {
-//         log_status("not A -->%s", buf+index[2]);
-         return -1;
-         }
-      } 
-      
-   return -2;   //loop until good meassge?  */
-//   return parse_gps(buf);
 }
 
 void send_text(int speed, int max_width, GPS_T *gps)
@@ -320,19 +272,13 @@ void *gps_thread(void *argp)
    if (gps->text.y > (gps->text.height-max_below_o)) gps->text.y = gps->text.height-max_below_o; 
    if (gps->text.y < max_above_o) gps->text.y = max_above_o; 
 
-//   int64_t start = get_microseconds64()/100000;
- //  while (gps->active) 
-   log_status("GPS flag %d", gps->active);
+//   log_status("GPS flag %d", gps->active);
    while (gps->active > 0) 
       { 
-//      speed = get_microseconds64()/100000 - start;
-//      log_status("about to read");
       speed = read_gps(&fd_data);
-//      log_status("post read speed %d last %d", speed, last_speed);
-      if (speed > -2)  
+      if (gps->active == SENDING) 
          {
-//         log_status("valid GPS message speed %d last %d", speed, last_speed);
-         if (gps->active == SENDING) 
+         if (speed > -2)
             {
             if (speed != last_speed)
                {
