@@ -276,9 +276,9 @@ void *gps_thread(void *argp)
    while (gps->active > 0) 
       { 
       speed = read_gps(&fd_data);
+      log_status("speed %d last_speed %d", speed, last_speed);
       if (gps->active == SENDING) 
          {
-         log_status("speed %d last_speed %d", speed, last_speed);
          if ((speed > -2) && (speed != last_speed))
             {
             send_text(speed, max_width, gps);
