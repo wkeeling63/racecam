@@ -278,23 +278,20 @@ void *gps_thread(void *argp)
       speed = read_gps(&fd_data);
       if (gps->active == SENDING) 
          {
-         if (speed > -2)
+         if ((speed > -2) && (speed != last_speed))
             {
-            if (speed != last_speed)
-               {
-               send_text(speed, max_width, gps);
-               vcos_sleep(50);  //wait needed due to 2 threads MMAL release of buffer and create in this thread
-               last_speed = speed;
-               }
-            }
-         else
-            {
-            last_speed == -1;
+            send_text(speed, max_width, gps);
+            vcos_sleep(50);  //wait needed due to 2 threads MMAL release of buffer and create in this thread
+            last_speed = speed;
             }
          }
-//     vcos_sleep(1000);
+      else
+         {
+         last_speed == -1;
+         }
+ //     vcos_sleep(1000);
       }
- 
+      
    close_gps(&fd_data, &fd_cntl);
    log_status("Ending GPS thread");
 }
