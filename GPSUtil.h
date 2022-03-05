@@ -47,7 +47,7 @@ typedef struct GPS_S
 // int open_gps(GPS_T *);
 // int close_gps(GPS_T *);
 // void read_gps(GPS_T *);
-cairo_surface_t* cairo_text(int, int, int);
+// cairo_surface_t* cairo_text(int, int, int);
 void *gps_thread(void *);
 
 #endif /* GPSUTIL_H_ */
