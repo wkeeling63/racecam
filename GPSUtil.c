@@ -167,8 +167,12 @@ int read_gps(int *fd_data)
    log_status("read result %d", cnt);
    for (i=0; i<cnt; i++)
       {
-      if (buf[i] == '\r')
+      if ((buf[i] == '\r') || (buf[i] == '\n'))
          {
+         if (buf[i] == '\n')
+            log_status("it was New Line");
+         else
+            log_status("it was Carrage Return");
          msg[o] = '\0';
          speed=parse_gps(buf);
          o=0;
@@ -176,6 +180,7 @@ int read_gps(int *fd_data)
       else
          {
          msg[o]=buf[i];
+         o++;
          }
       }
    return speed;
@@ -207,7 +212,7 @@ int read_gps(int *fd_data)
       int statusi=index[2], speedi=index[7]; 
       log_status("valid GPS message %s %s", buf+statusi, buf+speedi);
       if (buf[index[2]]=='A')
-         {
+         {l
 //         log_status("valid GPS %s", buf+index[7]); 
          float fspd=0;
          sscanf(buf+index[7], "%f", &fspd);
