@@ -17,12 +17,16 @@ int open_gps(int *fd_data, int *fd_cntl)
    struct termios options_data, options_cntl;
    
    tcgetattr(*fd_data,&options_data);
-   options_data.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
-   options_data.c_cflag |= CS8 | CRTSCTS | CLOCAL | CREAD;
+   
    options_data.c_iflag &= ~(IXON | IXOFF | IXANY | IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
    options_data.c_iflag |= IGNPAR | ICRNL;
-   options_data.c_oflag &= (OPOST | ONLCR);  
+   
+   options_data.c_oflag &= (OPOST | ONLCR); 
+   
    options_data.c_lflag &= ~(ECHO | ECHOE | ECHONL | ISIG | ICANON);
+   
+   options_data.c_cflag &= ~(PARENB | CSTOPB | CSIZE | CRTSCTS);
+   options_data.c_cflag |= CS8 | CLOCAL | CREAD;
    options_data.c_cc[VEOF]     = 4;     // Ctrl-d  
    options_data.c_cc[VMIN]     = 0; 
    options_data.c_cc[VTIME]    = 5;
@@ -47,8 +51,8 @@ int open_gps(int *fd_data, int *fd_cntl)
    options_cntl.c_lflag = ICANON;
    options_cntl.c_cc[VEOF]     = 4;     // Ctrl-d 
    options_cntl.c_cc[VMIN]     = 1; */
-   options_cntl.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
-   options_cntl.c_cflag |= CS8 | CRTSCTS | CLOCAL | CREAD;
+   options_cntl.c_cflag &= ~(PARENB | CSTOPB | CSIZE | CRTSCTS);
+   options_cntl.c_cflag |= CS8 | CLOCAL | CREAD;
    options_cntl.c_iflag &= ~(IXON | IXOFF | IXANY | IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
    options_cntl.c_iflag |= IGNPAR | ICRNL;
    options_cntl.c_oflag &= (OPOST | ONLCR);  // new
@@ -63,7 +67,7 @@ int open_gps(int *fd_data, int *fd_cntl)
    tcflush(*fd_cntl, TCIFLUSH);
    tcsetattr(*fd_cntl,TCSANOW,&options_cntl); 
    
-   char cmd[] = "AT+QGPS?\r\nAT+QGPSEND\r\nAT+QGPS?\r\nAT+QGPSCFG=\"gpsnmeatype\",2\r\nAT+QGPSCFG=\"outport\",\"usbnmea\"\r\nAT+QGPS=1\r\nAT+QGPS?\r\n\r\n\r\n";
+   char cmd[] = "AT+QGPSCFG=\"gpsnmeatype\",2\rAT+QGPSCFG=\"outport\",\"usbnmea\"\rAT+QGPS=1\rAT+QGPS?\r";
    size_t status = write(*fd_cntl, cmd, sizeof(cmd));
    if (status < 0) log_error("Write GPS init commands error:%s", strerror(errno));
    
