@@ -206,12 +206,13 @@ void send_text(int speed, int max_width, GPS_T *gps)
 
 void *port_messages(void *argp)
 {
+   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    int *cntl_fd = (int *)argp;
    char rbuf[256], msg[256];
    int cnt, i=0, o=0;
    while (*cntl_fd)
       {
-      i = read(*cntl_fd,rbuf,255);
+      cnt = read(*cntl_fd,rbuf,255);
       for (i=0; i<cnt; i++)
          {
          if ((rbuf[i] == '\r') || (rbuf[i] == '\n'))
@@ -227,6 +228,7 @@ void *port_messages(void *argp)
             }
          }
       }
+   log_status("done message thread...");
  }
 
 void *gps_thread(void *argp)
