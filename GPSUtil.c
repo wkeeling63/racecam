@@ -51,8 +51,8 @@ int open_gps(int *fd_data, int *fd_cntl)
 //   options_cntl.c_lflag = ICANON;
 //   options_cntl.c_cc[VEOF]     = 4;     // Ctrl-d 
 //   options_cntl.c_cc[VMIN]     = 1; 
-   options_cntl.c_cflag &= ~(PARENB | CSTOPB | CSIZE | CRTSCTS);
-   options_cntl.c_cflag |= CS8 | CLOCAL | CREAD;
+   options_cntl.c_cflag &= ~(PARENB | CSTOPB | CSIZE );
+   options_cntl.c_cflag |= CS8 | CLOCAL | CREAD | CRTSCTS;
    options_cntl.c_iflag &= ~(IXON | IXOFF | IXANY | IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
    options_cntl.c_iflag |= IGNPAR | ICRNL;
    options_cntl.c_oflag &= (OPOST | ONLCR);  // new
@@ -85,7 +85,8 @@ void close_gps(int *fd_data, int *fd_cntl)
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    
-   write(*fd_cntl, "AT+QGPSEND\r\n", 12);
+   char cmd[] = "AT+QGPSEND\r";
+   write(*fd_cntl, cmd, sizeof(cmd));
    
    int status =  close(*fd_cntl);
    if (status) log_error("Close of GPS control failed! RC=%d", status);
@@ -251,9 +252,13 @@ void *gps_thread(void *argp)
    
    if (open_gps(&fd_data, &fd_cntl)) return NULL;
    
-/*   pthread_t msg_tid;
+   pthread_t msg_tid;
    int msg_fd = fd_cntl;
-   pthread_create(&msg_tid, NULL, port_messages, (void *)&msg_fd); */
+   pthread_create(&msg_tid, NULL, port_messages, (void *)&msg_fd); 
+   
+   char cmd[] = "AT+QGPSCFG=\"gpsnmeatype\",2\rAT+QGPSCFG=\"outport\",\"usbnmea\"\rAT+QGPS=1\rAT+QGPS?\r";
+   size_t status = write(fd_cntl, cmd, sizeof(cmd));
+   if (status < 0) log_error("Write GPS init commands error:%s", strerror(errno)); 
   
    cairo_surface_t *temp_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, VCOS_ALIGN_UP(gps->text.width,32), VCOS_ALIGN_UP(gps->text.height,16));
    cairo_t *temp_context =  cairo_create(temp_surface);
@@ -293,8 +298,8 @@ void *gps_thread(void *argp)
  //     vcos_sleep(100);
       }
    
-/*   msg_fd = 0;
-   pthread_join(msg_tid, NULL); */
+   msg_fd = 0;
+   pthread_join(msg_tid, NULL); 
    
    close_gps(&fd_data, &fd_cntl);
    log_status("Ending GPS thread");
