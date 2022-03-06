@@ -25,8 +25,8 @@ int open_gps(int *fd_data, int *fd_cntl)
    
    options_data.c_lflag &= ~(ECHO | ECHOE | ECHONL | ISIG | ICANON);
    
-   options_data.c_cflag &= ~(PARENB | CSTOPB | CSIZE | CRTSCTS);
-   options_data.c_cflag |= CS8 | CLOCAL | CREAD;
+   options_data.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
+   options_data.c_cflag |= CS8 | CLOCAL | CREAD | CRTSCTS;
    options_data.c_cc[VEOF]     = 4;     // Ctrl-d  
    options_data.c_cc[VMIN]     = 0; 
    options_data.c_cc[VTIME]    = 5;
