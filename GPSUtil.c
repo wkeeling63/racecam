@@ -245,7 +245,7 @@ void *gps_thread(void *argp)
    if (open_gps(&fd_data, &fd_cntl)) return NULL;
    
    pthread_t msg_tid;
-   int msg_fd = fd_data;
+   int msg_fd = fd_cntl;
    pthread_create(&msg_tid, NULL, port_messages, (void *)&msg_fd);
   
    cairo_surface_t *temp_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, VCOS_ALIGN_UP(gps->text.width,32), VCOS_ALIGN_UP(gps->text.height,16));
