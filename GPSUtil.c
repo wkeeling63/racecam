@@ -35,9 +35,9 @@ int open_gps(int *fd_data, int *fd_cntl)
     
    tcflush(*fd_data, TCIFLUSH);
    tcsetattr(*fd_data,TCSANOW,&options_data); 
-   
+ 
 // open read/write GPS control port      
-   *fd_cntl = open(GPSCNTL, O_RDWR | O_NOCTTY ); 
+/*   *fd_cntl = open(GPSCNTL, O_RDWR | O_NOCTTY ); 
    if (*fd_cntl <0) 
       {
       log_error("Open of GPS control failed! RC=%d", *fd_cntl);
@@ -46,11 +46,11 @@ int open_gps(int *fd_data, int *fd_cntl)
       
    tcgetattr(*fd_data,&options_cntl); 
 //   memset(&options, 0, sizeof(options));
-/*   options_cntl.c_cflag = BAUDRATE | CRTSCTS | CS8 | CLOCAL | CREAD;
-   options_cntl.c_iflag = IGNPAR | ICRNL;
-   options_cntl.c_lflag = ICANON;
-   options_cntl.c_cc[VEOF]     = 4;     // Ctrl-d 
-   options_cntl.c_cc[VMIN]     = 1; */
+//   options_cntl.c_cflag = BAUDRATE | CRTSCTS | CS8 | CLOCAL | CREAD;
+//   options_cntl.c_iflag = IGNPAR | ICRNL;
+//   options_cntl.c_lflag = ICANON;
+//   options_cntl.c_cc[VEOF]     = 4;     // Ctrl-d 
+//   options_cntl.c_cc[VMIN]     = 1; 
    options_cntl.c_cflag &= ~(PARENB | CSTOPB | CSIZE | CRTSCTS);
    options_cntl.c_cflag |= CS8 | CLOCAL | CREAD;
    options_cntl.c_iflag &= ~(IXON | IXOFF | IXANY | IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
@@ -69,7 +69,7 @@ int open_gps(int *fd_data, int *fd_cntl)
    
    char cmd[] = "AT+QGPSCFG=\"gpsnmeatype\",2\rAT+QGPSCFG=\"outport\",\"usbnmea\"\rAT+QGPS=1\rAT+QGPS?\r";
    size_t status = write(*fd_cntl, cmd, sizeof(cmd));
-   if (status < 0) log_error("Write GPS init commands error:%s", strerror(errno));
+   if (status < 0) log_error("Write GPS init commands error:%s", strerror(errno)); */
    
 /*   status = write(*fd_cntl, "AT+QGPS=1\r\n", 11);
    if (status < 0) log_error("Write AT+QGPS=1 error:%s", strerror(errno));
@@ -97,6 +97,8 @@ void close_gps(int *fd_data, int *fd_cntl)
 int parse_gps(char *msg)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   
+   log_status("full message %s", msg);
    
    int index[20], i, c=0, size=strlen(msg);
    if (strncmp(msg,"$GPRMC",6))
@@ -249,9 +251,9 @@ void *gps_thread(void *argp)
    
    if (open_gps(&fd_data, &fd_cntl)) return NULL;
    
-   pthread_t msg_tid;
+/*   pthread_t msg_tid;
    int msg_fd = fd_cntl;
-   pthread_create(&msg_tid, NULL, port_messages, (void *)&msg_fd);
+   pthread_create(&msg_tid, NULL, port_messages, (void *)&msg_fd); */
   
    cairo_surface_t *temp_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, VCOS_ALIGN_UP(gps->text.width,32), VCOS_ALIGN_UP(gps->text.height,16));
    cairo_t *temp_context =  cairo_create(temp_surface);
@@ -291,8 +293,8 @@ void *gps_thread(void *argp)
  //     vcos_sleep(100);
       }
    
-   msg_fd = 0;
-   pthread_join(msg_tid, NULL);
+/*   msg_fd = 0;
+   pthread_join(msg_tid, NULL); */
    
    close_gps(&fd_data, &fd_cntl);
    log_status("Ending GPS thread");
