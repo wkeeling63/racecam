@@ -63,14 +63,15 @@ int open_gps(int *fd_data, int *fd_cntl)
    tcflush(*fd_cntl, TCIFLUSH);
    tcsetattr(*fd_cntl,TCSANOW,&options_cntl); 
    
-   size_t status = write(*fd_cntl, "AT+QGPSCFG=\"gpsnmeatype\",2\r\n", 28);
-   if (status < 0) log_error("Write AT+QGPSCFG=\"gpsnmeatype\",2 error:%s", strerror(errno));
+   char cmd[] = "AT+QGPS?\r\nAT+QGPSEND\r\nAT+QGPS?\r\nAT+QGPSCFG=\"gpsnmeatype\",2\r\nAT+QGPSCFG=\"outport\",\"usbnmea\"\r\nAT+QGPS=1\r\nAT+QGPS?\r\n";
+   size_t status = write(*fd_cntl, cmd, sizeof(cmd));
+   if (status < 0) log_error("Write GPS init commands error:%s", strerror(errno));
    
-   status = write(*fd_cntl, "AT+QGPS=1\r\n", 11);
+/*   status = write(*fd_cntl, "AT+QGPS=1\r\n", 11);
    if (status < 0) log_error("Write AT+QGPS=1 error:%s", strerror(errno));
    
    status = write(*fd_cntl, "AT+QGPS?\r\n", 10);
-   if (status < 0) log_error("Write AT+QGPS? error:%s", strerror(errno));
+   if (status < 0) log_error("Write AT+QGPS? error:%s", strerror(errno)); */
    
    return 0;
 }
