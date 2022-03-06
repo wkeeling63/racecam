@@ -9,8 +9,7 @@
 #include <string.h>
 #include <cairo/cairo.h>
 #include "interface/mmal/mmal.h"
-
-// #define BAUDRATE B115200            
+          
 #define GPSDATA "/dev/ttyUSB1"
 #define GPSCNTL "/dev/ttyUSB2"
 
