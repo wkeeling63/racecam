@@ -25,13 +25,13 @@ int main(int argc, char **argv)
 		byte++;
 		}
 	printf("\r\n");
-	printf("iflag %d oflag %d cflag %d lflag %d cline %d\r\n", opt.c_iflag, opt.c_oflag, opt.c_cflag, opt.c_lflag, opt.c_line);
+	printf("iflag %u oflag %u cflag %u lflag %u cline %d\r\n", opt.c_iflag, opt.c_oflag, opt.c_cflag, opt.c_lflag, opt.c_line);
 	printf("c_cc ");
 	for (i=0;i<32;i++)
 		{
 		printf("%d>%c<%hhx ", i ,opt.c_cc[i], opt.c_cc[i]);
 		}
-	printf("\r\n ispeed %d ospeed %d\r\n", opt.c_ispeed, opt.c_ospeed);
+	printf("\r\n ispeed %u ospeed %u\r\n", opt.c_ispeed, opt.c_ospeed);
 	
 	fd = open(GPSCNTL, O_RDONLY | O_NOCTTY );
 	if (fd <0) 
@@ -52,12 +52,12 @@ int main(int argc, char **argv)
 		byte++;
 		}
 	printf("\r\n");
-	printf("iflag %d oflag %d cflag %d lflag %d cline %d\r\n", opt.c_iflag, opt.c_oflag, opt.c_cflag, opt.c_lflag, opt.c_line);
+	printf("iflag %u oflag %u cflag %u lflag %u cline %u\r\n", opt.c_iflag, opt.c_oflag, opt.c_cflag, opt.c_lflag, opt.c_line);
 	printf("c_cc ");
 	for (i=0;i<32;i++)
 		{
 		printf("%d>%c<%hhx ", i ,opt.c_cc[i], opt.c_cc[i]);
 		}
-	printf("\r\n ispeed %d ospeed %d\r\n", opt.c_ispeed, opt.c_ospeed);
+	printf("\r\n ispeed %u ospeed %u\r\n", opt.c_ispeed, opt.c_ospeed);
 
 }
