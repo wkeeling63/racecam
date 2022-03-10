@@ -32,9 +32,13 @@ set (RACECAM_SOURCES
    racecamQueue.c
    racecamLogger.c)
    
+set (DUMPUSB_SOURCES dumpusb.c)
+   
 add_executable(racecam ${RACECAM_SOURCES} racecam.c)
 
 add_executable(racecamcli ${RACECAM_SOURCES} racecamcli.c)
+
+add_executable(dumpusb ${DUMPUSB_SOURCES} dumpusb.c)
 
 set (MMAL_LIBS mmal_core mmal_util mmal_vc_client)
 set (GTK_LIBS gtk-x11-2.0 gdk-x11-2.0 pangocairo-1.0 atk-1.0 cairo gdk_pixbuf-2.0 gio-2.0 pangoft2-1.0 pango-1.0 gobject-2.0 glib-2.0 fontconfig freetype)
@@ -48,3 +52,5 @@ target_link_libraries(racecamcli ${MMAL_LIBS} pthread asound avformat avcodec av
 install(TARGETS racecam RUNTIME DESTINATION bin)
 
 install(TARGETS racecamcli RUNTIME DESTINATION bin)
+
+install(TARGETS dumpusb RUNTIME DESTINATION bin)
