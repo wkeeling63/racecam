@@ -27,7 +27,7 @@ int main(int argc, char **argv)
 	printf("\r\n");
 	printf("iflag %u oflag %u cflag %u lflag %u cline %d\r\n", opt.c_iflag, opt.c_oflag, opt.c_cflag, opt.c_lflag, opt.c_line);
 	printf("c_cc ");
-	for (i=0;i<32;i++)
+	for (i=0;i<16;i++)
 		{
 		printf("%d>%c<%hhx ", i ,opt.c_cc[i], opt.c_cc[i]);
 		}
@@ -54,7 +54,7 @@ int main(int argc, char **argv)
 	printf("\r\n");
 	printf("iflag %u oflag %u cflag %u lflag %u cline %u\r\n", opt.c_iflag, opt.c_oflag, opt.c_cflag, opt.c_lflag, opt.c_line);
 	printf("c_cc ");
-	for (i=0;i<32;i++)
+	for (i=0;i<16;i++)
 		{
 		printf("%d>%c<%hhx ", i ,opt.c_cc[i], opt.c_cc[i]);
 		}
