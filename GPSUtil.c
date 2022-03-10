@@ -32,6 +32,8 @@ int open_gps(int *fd_data, int *fd_cntl)
    options_data.c_cc[VTIME]    = 5;
    
    cfsetspeed(&options_data, B115200);
+   printf("iflag %u oflag %u cflag %u lflag %u cline %d\r\n", options_data.c_iflag, options_data.c_oflag, options_data.c_cflag, options_data.c_lflag, options_data.c_line);
+   printf("ispeed %u ospeed %u\r\n", options_data.c_ispeed, options_data.c_ospeed);
     
    tcflush(*fd_data, TCIFLUSH);
    tcsetattr(*fd_data,TCSANOW,&options_data); 
