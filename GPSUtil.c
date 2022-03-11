@@ -18,7 +18,7 @@ int open_gps(int *fd_data, int *fd_cntl)
    
    tcgetattr(*fd_data,&options_data);
    
-   options_data.c_iflag &= ~(IXON | IXOFF | IXANY | IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+/*   options_data.c_iflag &= ~(IXON | IXOFF | IXANY | IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
    options_data.c_iflag |= IGNPAR | ICRNL;
    
    options_data.c_oflag &= (OPOST | ONLCR); 
@@ -26,8 +26,18 @@ int open_gps(int *fd_data, int *fd_cntl)
    options_data.c_lflag &= ~(ECHO | ECHOE | ECHONL | ISIG | ICANON);
    
    options_data.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
-   options_data.c_cflag |= CS8 | CLOCAL | CREAD | CRTSCTS;
-   options_data.c_cc[VEOF]     = 4;     // Ctrl-d  
+   options_data.c_cflag |= CS8 | CLOCAL | CREAD | CRTSCTS; */
+   
+   options_data.c_iflag &= ~(IXON | IXOFF | IXANY | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+   options_data.c_iflag |= IGNBRK;
+   
+   options_data.c_oflag = 0; 
+   
+   options_data.c_lflag = 0;
+   
+   options_data.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
+   options_data.c_cflag |= CLOCAL | HUPCL | CREAD | CS8 | B115200;
+//   options_data.c_cc[VEOF]     = 4;     // Ctrl-d  
    options_data.c_cc[VMIN]     = 0; 
    options_data.c_cc[VTIME]    = 5;
    
