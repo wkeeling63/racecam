@@ -49,7 +49,7 @@ int open_gps(int *fd_data, int *fd_cntl)
    tcsetattr(*fd_data,TCSANOW,&options_data); 
  
 // open read/write GPS control port      
-/*   *fd_cntl = open(GPSCNTL, O_RDWR | O_NOCTTY ); 
+   *fd_cntl = open(GPSCNTL, O_RDWR | O_NOCTTY ); 
    if (*fd_cntl <0) 
       {
       log_error("Open of GPS control failed! RC=%d", *fd_cntl);
@@ -63,12 +63,15 @@ int open_gps(int *fd_data, int *fd_cntl)
 //   options_cntl.c_lflag = ICANON;
 //   options_cntl.c_cc[VEOF]     = 4;     // Ctrl-d 
 //   options_cntl.c_cc[VMIN]     = 1; 
-   options_cntl.c_cflag &= ~(PARENB | CSTOPB | CSIZE );
-   options_cntl.c_cflag |= CS8 | CLOCAL | CREAD | CRTSCTS;
-   options_cntl.c_iflag &= ~(IXON | IXOFF | IXANY | IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
-   options_cntl.c_iflag |= IGNPAR | ICRNL;
-   options_cntl.c_oflag &= (OPOST | ONLCR);  // new
-   options_cntl.c_lflag &= ~(ECHO | ECHOE | ECHONL | ISIG | ICANON);
+   options_data.c_iflag &= ~(IXON | IXOFF | IXANY | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+   options_data.c_iflag |= IGNBRK;
+   
+   options_data.c_oflag = 0; 
+   
+   options_data.c_lflag = 0;
+   
+   options_data.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
+   options_data.c_cflag |= CLOCAL | HUPCL | CREAD | CS8 | B115200;
 //   options_cntl.c_lflag |= ICANON;
 //   options_cntl.c_cc[VEOF]     = 4;     // Ctrl-d  
    options_cntl.c_cc[VMIN]     = 0; 
@@ -79,9 +82,10 @@ int open_gps(int *fd_data, int *fd_cntl)
    tcflush(*fd_cntl, TCIFLUSH);
    tcsetattr(*fd_cntl,TCSANOW,&options_cntl); 
    
-   char cmd[] = "AT+QGPSCFG=\"gpsnmeatype\",2\rAT+QGPSCFG=\"outport\",\"usbnmea\"\rAT+QGPS=1\rAT+QGPS?\r";
+//   char cmd[] = "AT+QGPSCFG=\"gpsnmeatype\",2\rAT+QGPSCFG=\"outport\",\"usbnmea\"\rAT+QGPS=1\rAT+QGPS?\r";
+   char cmd[] = "AT+QGPS=1\rAT+QGPS?\r";
    size_t status = write(*fd_cntl, cmd, sizeof(cmd));
-   if (status < 0) log_error("Write GPS init commands error:%s", strerror(errno)); */
+   if (status < 0) log_error("Write GPS init commands error:%s", strerror(errno)); 
    
 /*   status = write(*fd_cntl, "AT+QGPS=1\r\n", 11);
    if (status < 0) log_error("Write AT+QGPS=1 error:%s", strerror(errno));
