@@ -154,11 +154,11 @@ int read_gps(int *fd_data)
       {
       if ((buf[i] == '\r') || (buf[i] == '\n'))
          {
-//         if (o>6)
-//            {
+         if (o>6)
+            {
             msg[o] = '\0';
             speed=parse_gps(buf);
-//            }
+            }
          o=0;
          }
       else
@@ -271,7 +271,9 @@ void *gps_thread(void *argp)
    char cmd[] = "AT+QGPS=1\rAT+QGPS?\r";
    size_t status = write(fd_cntl, cmd, sizeof(cmd));
    if (status < 0) log_error("Write GPS init commands error:%s", strerror(errno));
+   tcdrain(fd_cntl);
    log_status("Writing init done"); 
+   
    
 /*   status = write(*fd_cntl, "AT+QGPS=1\r\n", 11);
    if (status < 0) log_error("Write AT+QGPS=1 error:%s", strerror(errno));
