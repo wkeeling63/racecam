@@ -42,15 +42,15 @@ int open_gps(int *fd_data, int *fd_cntl)
    options_data.c_cc[VTIME]    = 10;
    
    cfsetspeed(&options_data, B115200);
-   log_status("iflag %u oflag %u cflag %u lflag %u cline %d\r\n", options_data.c_iflag, options_data.c_oflag, options_data.c_cflag, options_data.c_lflag, options_data.c_line);
-   log_status("ispeed %u ospeed %u\r\n", options_data.c_ispeed, options_data.c_ospeed);
+//   log_status("iflag %u oflag %u cflag %u lflag %u cline %d", options_data.c_iflag, options_data.c_oflag, options_data.c_cflag, options_data.c_lflag, options_data.c_line);
+//   log_status("ispeed %u ospeed %u", options_data.c_ispeed, options_data.c_ospeed);
     
 //   tcflush(*fd_data, TCIFLUSH);
    tcflush(*fd_data, TCIOFLUSH);
    tcsetattr(*fd_data,TCSANOW,&options_data); 
  
 // open read/write GPS control port      
-   *fd_cntl = open(GPSCNTL, O_RDWR | O_NOCTTY ); 
+/*   *fd_cntl = open(GPSCNTL, O_RDWR | O_NOCTTY ); 
    if (*fd_cntl <0) 
       {
       log_error("Open of GPS control failed! RC=%d", *fd_cntl);
@@ -82,7 +82,7 @@ int open_gps(int *fd_data, int *fd_cntl)
 
 //   tcflush(*fd_cntl, TCIFLUSH);
    tcflush(*fd_data, TCIOFLUSH);
-   tcsetattr(*fd_cntl,TCSANOW,&options_cntl); 
+   tcsetattr(*fd_cntl,TCSANOW,&options_cntl); */
    
    return 0;
 }
@@ -254,8 +254,8 @@ void *gps_thread(void *argp)
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
    
    log_status("Starting GPS thread...");
-   vcos_sleep(60000);
-   log_status("Starting GPS thread.wait done");
+//   vcos_sleep(60000);
+//   log_status("Starting GPS thread.wait done");
 
    GPS_T *gps = (GPS_T *)argp;
    int fd_data, fd_cntl;
@@ -263,7 +263,7 @@ void *gps_thread(void *argp)
    
    if (open_gps(&fd_data, &fd_cntl)) return NULL;
       
-   pthread_t msg_tid;
+/*   pthread_t msg_tid;
    int msg_fd = fd_cntl;
    pthread_create(&msg_tid, NULL, port_messages, (void *)&msg_fd); 
    
@@ -273,7 +273,7 @@ void *gps_thread(void *argp)
    size_t status = write(fd_cntl, cmd, sizeof(cmd));
    if (status < 0) log_error("Write GPS init commands error:%s", strerror(errno));
    tcdrain(fd_cntl);
-   log_status("Writing init done"); 
+   log_status("Writing init done");  */
    
    
 /*   status = write(*fd_cntl, "AT+QGPS=1\r\n", 11);
@@ -320,8 +320,8 @@ void *gps_thread(void *argp)
  //     vcos_sleep(100);
       }
    
-   msg_fd = 0;
-   pthread_join(msg_tid, NULL); 
+/*   msg_fd = 0;
+   pthread_join(msg_tid, NULL); */
    
    close_gps(&fd_data, &fd_cntl);
    log_status("Ending GPS thread");
