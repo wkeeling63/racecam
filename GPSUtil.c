@@ -39,7 +39,7 @@ int open_gps(int *fd_data, int *fd_cntl)
    options_data.c_cflag |= CLOCAL | HUPCL | CREAD | CS8 | B115200;
 //   options_data.c_cc[VEOF]     = 4;     // Ctrl-d  
    options_data.c_cc[VMIN]     = 0; 
-   options_data.c_cc[VTIME]    = 5;
+   options_data.c_cc[VTIME]    = 10;
    
    cfsetspeed(&options_data, B115200);
    log_status("iflag %u oflag %u cflag %u lflag %u cline %d\r\n", options_data.c_iflag, options_data.c_oflag, options_data.c_cflag, options_data.c_lflag, options_data.c_line);
@@ -154,8 +154,11 @@ int read_gps(int *fd_data)
       {
       if ((buf[i] == '\r') || (buf[i] == '\n'))
          {
-         msg[o] = '\0';
-         speed=parse_gps(buf);
+//         if (o>6)
+//            {
+            msg[o] = '\0';
+            speed=parse_gps(buf);
+//            }
          o=0;
          }
       else
@@ -264,9 +267,11 @@ void *gps_thread(void *argp)
    pthread_create(&msg_tid, NULL, port_messages, (void *)&msg_fd); 
    
    //   char cmd[] = "AT+QGPSCFG=\"gpsnmeatype\",2\rAT+QGPSCFG=\"outport\",\"usbnmea\"\rAT+QGPS=1\rAT+QGPS?\r";
+   log_status("Writing init"); 
    char cmd[] = "AT+QGPS=1\rAT+QGPS?\r";
    size_t status = write(fd_cntl, cmd, sizeof(cmd));
-   if (status < 0) log_error("Write GPS init commands error:%s", strerror(errno)); 
+   if (status < 0) log_error("Write GPS init commands error:%s", strerror(errno));
+   log_status("Writing init done"); 
    
 /*   status = write(*fd_cntl, "AT+QGPS=1\r\n", 11);
    if (status < 0) log_error("Write AT+QGPS=1 error:%s", strerror(errno));
