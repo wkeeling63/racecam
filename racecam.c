@@ -1556,6 +1556,8 @@ int main(int argc, char **argv)
   g_signal_connect(button, "clicked", G_CALLBACK(reboot_clicked), main_win);
   gtk_box_pack_start (GTK_BOX(vbox), button, TRUE, TRUE, 2);
   
+  gtk_widget_show(button);
+  
   gtk_widget_show_all(main_win);
   
   gtk_main();

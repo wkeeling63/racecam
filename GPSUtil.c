@@ -45,7 +45,8 @@ int open_gps(int *fd_data, int *fd_cntl)
    log_status("iflag %u oflag %u cflag %u lflag %u cline %d\r\n", options_data.c_iflag, options_data.c_oflag, options_data.c_cflag, options_data.c_lflag, options_data.c_line);
    log_status("ispeed %u ospeed %u\r\n", options_data.c_ispeed, options_data.c_ospeed);
     
-   tcflush(*fd_data, TCIFLUSH);
+//   tcflush(*fd_data, TCIFLUSH);
+   tcflush(*fd_data, TCIOFLUSH);
    tcsetattr(*fd_data,TCSANOW,&options_data); 
  
 // open read/write GPS control port      
@@ -79,10 +80,9 @@ int open_gps(int *fd_data, int *fd_cntl)
    
    cfsetspeed(&options_data, B115200);      
 
-   tcflush(*fd_cntl, TCIFLUSH);
+//   tcflush(*fd_cntl, TCIFLUSH);
+   tcflush(*fd_data, TCIOFLUSH);
    tcsetattr(*fd_cntl,TCSANOW,&options_cntl); 
-   
-
    
    return 0;
 }
@@ -254,7 +254,8 @@ void *gps_thread(void *argp)
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__); 
    
    log_status("Starting GPS thread...");
-   vcos_sleep(3000);
+   vcos_sleep(60000);
+   log_status("Starting GPS thread.wait done");
 
    GPS_T *gps = (GPS_T *)argp;
    int fd_data, fd_cntl;
