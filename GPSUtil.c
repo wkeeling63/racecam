@@ -82,16 +82,7 @@ int open_gps(int *fd_data, int *fd_cntl)
    tcflush(*fd_cntl, TCIFLUSH);
    tcsetattr(*fd_cntl,TCSANOW,&options_cntl); 
    
-//   char cmd[] = "AT+QGPSCFG=\"gpsnmeatype\",2\rAT+QGPSCFG=\"outport\",\"usbnmea\"\rAT+QGPS=1\rAT+QGPS?\r";
-   char cmd[] = "AT+QGPS=1\rAT+QGPS?\r";
-   size_t status = write(*fd_cntl, cmd, sizeof(cmd));
-   if (status < 0) log_error("Write GPS init commands error:%s", strerror(errno)); 
-   
-/*   status = write(*fd_cntl, "AT+QGPS=1\r\n", 11);
-   if (status < 0) log_error("Write AT+QGPS=1 error:%s", strerror(errno));
-   
-   status = write(*fd_cntl, "AT+QGPS?\r\n", 10);
-   if (status < 0) log_error("Write AT+QGPS? error:%s", strerror(errno)); */
+
    
    return 0;
 }
@@ -115,7 +106,7 @@ int parse_gps(char *msg)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    
-   log_status("full message %s", msg);
+   log_status("full message %d %s", strlen(msg), msg);
    
    int index[20], i, c=0, size=strlen(msg);
    if (strncmp(msg,"$GPRMC",6))
@@ -267,15 +258,22 @@ void *gps_thread(void *argp)
    int speed = -1, last_speed = -1; 
    
    if (open_gps(&fd_data, &fd_cntl)) return NULL;
-   
+      
    pthread_t msg_tid;
    int msg_fd = fd_cntl;
    pthread_create(&msg_tid, NULL, port_messages, (void *)&msg_fd); 
    
-   char cmd[] = "AT+QGPSCFG=\"gpsnmeatype\",2\rAT+QGPSCFG=\"outport\",\"usbnmea\"\rAT+QGPS=1\rAT+QGPS?\r";
+   //   char cmd[] = "AT+QGPSCFG=\"gpsnmeatype\",2\rAT+QGPSCFG=\"outport\",\"usbnmea\"\rAT+QGPS=1\rAT+QGPS?\r";
+   char cmd[] = "AT+QGPS=1\rAT+QGPS?\r";
    size_t status = write(fd_cntl, cmd, sizeof(cmd));
    if (status < 0) log_error("Write GPS init commands error:%s", strerror(errno)); 
-  
+   
+/*   status = write(*fd_cntl, "AT+QGPS=1\r\n", 11);
+   if (status < 0) log_error("Write AT+QGPS=1 error:%s", strerror(errno));
+   
+   status = write(*fd_cntl, "AT+QGPS?\r\n", 10);
+   if (status < 0) log_error("Write AT+QGPS? error:%s", strerror(errno)); */
+   
    cairo_surface_t *temp_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, VCOS_ALIGN_UP(gps->text.width,32), VCOS_ALIGN_UP(gps->text.height,16));
    cairo_t *temp_context =  cairo_create(temp_surface);
    cairo_rectangle(temp_context, 0, 0, gps->text.width, gps->text.height);
