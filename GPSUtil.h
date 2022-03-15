@@ -3,7 +3,7 @@
 #define GPSUTIL_H_
 
 #include <fcntl.h>
-#include <termios.h>
+// #include <termios.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
