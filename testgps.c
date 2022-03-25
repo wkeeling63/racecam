@@ -54,16 +54,16 @@ int main(int argc, char **argv)
       
    tcgetattr(fd,&options_cntl); 
 
-   options_data.c_iflag &= ~(IXON | IXOFF | IXANY | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
-   options_data.c_iflag |= IGNBRK;
-   options_data.c_oflag = 0; 
-   options_data.c_lflag = 0;
-   options_data.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
-   options_data.c_cflag |= CLOCAL | HUPCL | CREAD | CS8 | B115200;
+   options_cntl.c_iflag &= ~(IXON | IXOFF | IXANY | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+   options_cntl.c_iflag |= IGNBRK;
+   options_cntl.c_oflag = 0; 
+   options_cntl.c_lflag = 0;
+   options_cntl.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
+   options_cntl.c_cflag |= CLOCAL | HUPCL | CREAD | CS8 | B115200;
    options_cntl.c_cc[VMIN]     = 0; 
    options_cntl.c_cc[VTIME]    = 10;
    
-   cfsetspeed(&options_data, B115200);      
+   cfsetspeed(&options_cntl, B115200);      
 
    tcflush(fd, TCIOFLUSH);
    tcsetattr(fd,TCSANOW,&options_cntl); 
@@ -78,7 +78,7 @@ int main(int argc, char **argv)
          if ((rbuf[i] == '\r') || (rbuf[i] == '\n'))
             {
             msg[o] = '\0';
-            if (o) printf("GPS control port message %s\r\n", msg);
+            if (o) printf("GPS data port message %s\r\n", msg);
             o=0;
             }
          else
