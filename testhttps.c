@@ -59,7 +59,8 @@ BIO* connect_encrypted(char* host_and_port, char* store_path, SSL_CTX** ctx, SSL
     int r = 0;
 
     /* Set up the SSL pointers */
-    *ctx = SSL_CTX_new(TLSv1_client_method());
+//    *ctx = SSL_CTX_new(TLSv1_client_method());
+    *ctx = SSL_CTX_new(TLS_client_method());
     *ssl = NULL;
         r = SSL_CTX_load_verify_locations(*ctx, store_path, NULL);
 
@@ -161,9 +162,14 @@ int write_to_stream(BIO* bio, char* buffer, ssize_t length) {
  */
 int main() {
 
-    char* host_and_port = "stackoverflow.com:443"; 
-    char* server_request = "GET / HTTP/1.1\r\nHost: stackoverflow.com\r\n\r\n"; 
-    char* store_path = "mycert.pem"; 
+    char* host_and_port = "oauth2.googleapis.com:443"; 
+    char* server_request = "POST /device/code HTTP/1.1\r\n"
+		"Host: oauth2.googleapis.com\r\n"
+		"Content-Type: application/x-www-form-urlencoded\r\n"
+		"Content-Length: 128\r\n\r\n"
+		"client_id%3D190164581320-s44milsm279lmph523v5d8b4uo33u3lo.apps.googleusercontent.com&"
+		"scope%3Dhttps%3A%2F%2Fwww.googleapis.com%2Fauth%2Fyoutube"; 
+    char* store_path = "/etc/ssl/mycerts/testhttps.pem"; 
     char buffer[4096];
     buffer[0] = 0;
 
@@ -179,7 +185,7 @@ int main() {
 
 
     write_to_stream(bio, server_request, strlen(server_request));
-    read_from_stream(bio, buffer, 4096);
+    read_from_stream(bio, buffer, 8192);
     printf("%s\r\n", buffer);
 
      /* clean up the SSL context resources for the encrypted link */

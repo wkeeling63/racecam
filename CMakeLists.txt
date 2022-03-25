@@ -24,7 +24,7 @@ include_directories(/usr/include/pango-1.0)
 include_directories(/usr/include/atk-1.0) 
 include_directories(/usr/include/gdk-pixbuf-2.0)
 include_directories(/usr/include/glib-2.0)
- 
+  
 set (RACECAM_SOURCES
    raspiCamUtilities.c
    racecamCommon.c
@@ -32,13 +32,15 @@ set (RACECAM_SOURCES
    racecamQueue.c
    racecamLogger.c)
    
-set (DUMPUSB_SOURCES testhttps.c)
-   
+set (TESTHTTPS_SOURCES testhttps.c)
+
 add_executable(racecam ${RACECAM_SOURCES} racecam.c)
 
 add_executable(racecamcli ${RACECAM_SOURCES} racecamcli.c)
 
-add_executable(testhttps ${DUMPUSB_SOURCES} testhttps.c)
+add_executable(testhttps ${TESTHTTPS_SOURCES} testhttps.c)
+
+add_executable(testgps testgps.c)
 
 set (MMAL_LIBS mmal_core mmal_util mmal_vc_client)
 set (GTK_LIBS gtk-x11-2.0 gdk-x11-2.0 pangocairo-1.0 atk-1.0 cairo gdk_pixbuf-2.0 gio-2.0 pangoft2-1.0 pango-1.0 gobject-2.0 glib-2.0 fontconfig freetype)
@@ -51,8 +53,12 @@ target_link_libraries(racecamcli ${MMAL_LIBS} pthread asound avformat avcodec av
 
 target_link_libraries(testhttps ssl crypto)
 
+target_link_libraries(testgps)
+
 install(TARGETS racecam RUNTIME DESTINATION bin)
 
 install(TARGETS racecamcli RUNTIME DESTINATION bin)
 
 install(TARGETS testhttps RUNTIME DESTINATION bin)
+
+install(TARGETS testgps RUNTIME DESTINATION bin)
