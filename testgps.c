@@ -70,9 +70,11 @@ int main(int argc, char **argv)
    //loop thru read and print when cr or lf
    char rbuf[256], msg[256];
    int cnt, i=0, o=0;
+   printf("about to loop\r\n");
    while(1)
       {
       cnt = read(fd,rbuf,255);
+      printf("read cnt %d\r\n", cnt);
       for (i=0; i<cnt; i++)
          {
          if ((rbuf[i] == '\r') || (rbuf[i] == '\n'))
