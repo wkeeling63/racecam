@@ -74,7 +74,6 @@ int main(int argc, char **argv)
    while(1)
       {
       cnt = read(fd,rbuf,255);
-      printf("read cnt %d\r\n", cnt);
       for (i=0; i<cnt; i++)
          {
          if ((rbuf[i] == '\r') || (rbuf[i] == '\n'))
