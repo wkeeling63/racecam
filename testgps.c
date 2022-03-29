@@ -18,23 +18,23 @@ int main(int argc, char **argv)
       return -1;
       }
       
-   struct termios options_data, options_cntl;
+   struct termios options;
    
-   tcgetattr(fd,&options_data);
+   tcgetattr(fd,&options);
    
-   options_data.c_iflag &= ~(IXON | IXOFF | IXANY | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
-   options_data.c_iflag |= IGNBRK;
-   options_data.c_oflag = 0; 
-   options_data.c_lflag = 0;
-   options_data.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
-   options_data.c_cflag |= CLOCAL | HUPCL | CREAD | CS8 | B115200;
-   options_data.c_cc[VMIN]     = 0; 
-   options_data.c_cc[VTIME]    = 10;
+   options.c_iflag &= ~(IXON | IXOFF | IXANY | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+   options.c_iflag |= IGNBRK;
+   options.c_oflag = 0; 
+   options.c_lflag = 0;
+   options.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
+   options.c_cflag |= CLOCAL | HUPCL | CREAD | CS8 | B115200;
+   options.c_cc[VMIN]     = 0; 
+   options.c_cc[VTIME]    = 10;
    
-   cfsetspeed(&options_data, B115200);
+   cfsetspeed(&options, B115200);
 
    tcflush(fd, TCIOFLUSH);
-   tcsetattr(fd,TCSANOW,&options_data); 
+   tcsetattr(fd,TCSANOW,&options); 
    
    char cmd[] = "AT+QGPS=1\r";
    size_t wstat = write(fd, cmd, sizeof(cmd));
@@ -52,21 +52,21 @@ int main(int argc, char **argv)
       return -1;
       }
       
-   tcgetattr(fd,&options_cntl); 
+   tcgetattr(fd,&options); 
 
-   options_cntl.c_iflag &= ~(IXON | IXOFF | IXANY | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
-   options_cntl.c_iflag |= IGNBRK;
-   options_cntl.c_oflag = 0; 
-   options_cntl.c_lflag = 0;
-   options_cntl.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
-   options_cntl.c_cflag |= CLOCAL | HUPCL | CREAD | CS8 | B115200;
-   options_cntl.c_cc[VMIN]     = 0; 
-   options_cntl.c_cc[VTIME]    = 10;
+   options.c_iflag &= ~(IXON | IXOFF | IXANY | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+   options.c_iflag |= IGNBRK;
+   options.c_oflag = 0; 
+   options.c_lflag = 0;
+   options.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
+   options.c_cflag |= CLOCAL | HUPCL | CREAD | CS8 | B115200;
+   options.c_cc[VMIN]     = 0; 
+   options.c_cc[VTIME]    = 10;
    
-   cfsetspeed(&options_cntl, B115200);      
+   cfsetspeed(&options, B115200);      
 
    tcflush(fd, TCIOFLUSH);
-   tcsetattr(fd,TCSANOW,&options_cntl); 
+   tcsetattr(fd,TCSANOW,&options); 
    //loop thru read and print when cr or lf
    char rbuf[256], msg[256];
    int cnt, i=0, o=0;

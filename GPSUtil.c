@@ -2,87 +2,7 @@
 #include "racecamLogger.h"
 #include "racecamCommon.h"
  
-/* int open_gps(int *fd_data, int *fd_cntl)
-{
-   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-// open readonly GPS data return port   
-   *fd_data = open(GPSDATA, O_RDONLY | O_NOCTTY );
-   if (*fd_data <0) 
-      {
-      log_error("Open of GPS data failed! RC=%d", *fd_data);
-      return -1;
-      }
-      
-   struct termios options_data, options_cntl;
-   
-   tcgetattr(*fd_data,&options_data);
-   
-   options_data.c_iflag &= ~(IXON | IXOFF | IXANY | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
-   options_data.c_iflag |= IGNBRK;
-   
-   options_data.c_oflag = 0; 
-   
-   options_data.c_lflag = 0;
-   
-   options_data.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
-   options_data.c_cflag |= CLOCAL | HUPCL | CREAD | CS8 | B115200;
-
-   options_data.c_cc[VMIN]     = 0; 
-   options_data.c_cc[VTIME]    = 10;
-   
-   cfsetspeed(&options_data, B115200);
-
-   tcflush(*fd_data, TCIOFLUSH);
-   tcsetattr(*fd_data,TCSANOW,&options_data); 
- 
-// open read/write GPS control port      
-   *fd_cntl = open(GPSCNTL, O_RDWR | O_NOCTTY ); 
-   if (*fd_cntl <0) 
-      {
-      log_error("Open of GPS control failed! RC=%d", *fd_cntl);
-      return -1;
-      }
-      
-   tcgetattr(*fd_data,&options_cntl); 
-
-   options_data.c_iflag &= ~(IXON | IXOFF | IXANY | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
-   options_data.c_iflag |= IGNBRK;
-   
-   options_data.c_oflag = 0; 
-   
-   options_data.c_lflag = 0;
-   
-   options_data.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
-   options_data.c_cflag |= CLOCAL | HUPCL | CREAD | CS8 | B115200;
-
-   options_cntl.c_cc[VMIN]     = 0; 
-   options_cntl.c_cc[VTIME]    = 10;
-   
-   cfsetspeed(&options_data, B115200);      
-
-   tcflush(*fd_data, TCIOFLUSH);
-   tcsetattr(*fd_cntl,TCSANOW,&options_cntl); 
-   
-   return 0;
-}
-
-void close_gps(int *fd_data, int *fd_cntl)
-{
-   log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-   
-   char cmd[] = "AT+QGPSEND\r";
-   write(*fd_cntl, cmd, sizeof(cmd));
-   
-   int status =  close(*fd_cntl);
-   if (status) log_error("Close of GPS control failed! RC=%d", status);
-
-   status = close(*fd_data);
-   if (status) log_error("Close of GPS data failed! RC=%d", status);
-} */
-
-int get_gps()
+/* int get_gps()
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    int index[20], i, c=0, speed=-2;
@@ -119,8 +39,8 @@ int get_gps()
       fclose(gps_file);
       }
     return speed;
-}
-/* int parse_gps(char *msg)
+} */
+ int parse_gps(char *msg)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    
@@ -154,9 +74,9 @@ int get_gps()
          return -1;
          }
       }
-}
+} 
 
-int read_gps(int *fd_data)
+int read_gps(int fd)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 
@@ -166,7 +86,7 @@ int read_gps(int *fd_data)
    int cnt=0, i, speed=-3;
    char buf[256];
    
-   cnt = read(*fd_data,buf,255);
+   cnt = read(fd,buf,255);
 
    for (i=0; i<cnt; i++)
       {
@@ -186,30 +106,39 @@ int read_gps(int *fd_data)
          }
       }
    return speed;
-} */
+} 
 
 void send_text(int speed, int max_width, GPS_T *gps)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
-
+   
+   char buffer[8];
+   if (speed == -2)
+      sprintf(buffer, "No Data");
+   else
+      if (speed == -1)
+         sprintf(buffer, "No GPS");
+      else
+         sprintf(buffer, "%3d MPH", speed); 
+         
    MMAL_BUFFER_HEADER_T *buffer_header=NULL;
 
    if ((buffer_header = mmal_queue_get(gps->t_queue)) != NULL)
       {
-      if (speed < 0)
+/*      if (speed < 0)
          {
          buffer_header->length=buffer_header->alloc_size=0;
          buffer_header->user_data=NULL;
          } 
-      else
-         {
-         char buffer[8];
-         sprintf(buffer, "%3d MPH", speed); 
+      else */
+//         {
+//         char buffer[8];
+//         sprintf(buffer, "%3d MPH", speed); 
          cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, VCOS_ALIGN_UP(gps->text.width,32), VCOS_ALIGN_UP(gps->text.height,16));
-         cairo_status_t status = cairo_surface_status (surface);
-         if (status) 
+         cairo_status_t cairo_status = cairo_surface_status (surface);
+         if (cairo_status) 
             {
-            log_error("surface status %s %d", cairo_status_to_string (status), status);
+            log_error("surface status %s %d", cairo_status_to_string (cairo_status), cairo_status);
             }
          cairo_t *cr =  cairo_create(surface);
          cairo_rectangle(cr, 0, 0, gps->text.width, gps->text.height);
@@ -227,7 +156,7 @@ void send_text(int speed, int max_width, GPS_T *gps)
          buffer_header->user_data = surface;
          buffer_header->length=buffer_header->alloc_size=
          cairo_image_surface_get_height(surface)*cairo_image_surface_get_stride(surface);
-         } 
+//         } 
       buffer_header->cmd=buffer_header->offset=0;
 
       int status=mmal_port_send_buffer(gps->t_port, buffer_header);
@@ -277,21 +206,63 @@ void *gps_thread(void *argp)
 
    GPS_T *gps = (GPS_T *)argp;
    int speed = -1, last_speed = -1; 
-/*   int fd_data, fd_cntl;
    
-   if (open_gps(&fd_data, &fd_cntl)) return NULL;
+   int fd;
+   fd = open(GPSCNTL, O_RDWR | O_NOCTTY ); 
+   if (fd <0) 
+      {
+      log_error("Open of GPS data failed! RC=%d\r\n", fd);
+      gps->active = ERROR;
+      }
       
-   pthread_t msg_tid;
-   int msg_fd = fd_cntl;
-   pthread_create(&msg_tid, NULL, port_messages, (void *)&msg_fd); 
+   struct termios options;
    
-   //   char cmd[] = "AT+QGPSCFG=\"gpsnmeatype\",2\rAT+QGPSCFG=\"outport\",\"usbnmea\"\rAT+QGPS=1\rAT+QGPS?\r";
-   log_status("Writing init"); 
-   char cmd[] = "AT+QGPS=1\rAT+QGPS?\r";
-   size_t status = write(fd_cntl, cmd, sizeof(cmd));
-   if (status < 0) log_error("Write GPS init commands error:%s", strerror(errno));
-   tcdrain(fd_cntl);
-   log_status("Writing init done");  */
+   tcgetattr(fd,&options);
+   
+   options.c_iflag &= ~(IXON | IXOFF | IXANY | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+   options.c_iflag |= IGNBRK;
+   options.c_oflag = 0; 
+   options.c_lflag = 0;
+   options.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
+   options.c_cflag |= CLOCAL | HUPCL | CREAD | CS8 | B115200;
+   options.c_cc[VMIN]     = 0; 
+   options.c_cc[VTIME]    = 10;
+   
+   cfsetspeed(&options, B115200);
+
+   tcflush(fd, TCIOFLUSH);
+   tcsetattr(fd,TCSANOW,&options); 
+   
+   char cmd[] = "AT+QGPS=1\r";
+   size_t wstat = write(fd, cmd, sizeof(cmd));
+   if (wstat < 0) log_error("Write GPS init commands error:%s\r\n", strerror(wstat));
+   tcdrain(fd);
+   
+   int status =  close(fd);
+   if (status) log_error("Close of GPS control failed! RC=%d\r\n", status);
+   
+   fd = open(GPSDATA, O_RDONLY | O_NOCTTY );
+   if (fd <0) 
+      {
+      log_error("Open of GPS control failed! RC=%d\r\n", fd);
+      gps->active = ERROR;
+      }
+      
+   tcgetattr(fd,&options); 
+
+   options.c_iflag &= ~(IXON | IXOFF | IXANY | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+   options.c_iflag |= IGNBRK;
+   options.c_oflag = 0; 
+   options.c_lflag = 0;
+   options.c_cflag &= ~(PARENB | CSTOPB | CSIZE);
+   options.c_cflag |= CLOCAL | HUPCL | CREAD | CS8 | B115200;
+   options.c_cc[VMIN]     = 0; 
+   options.c_cc[VTIME]    = 10;
+   
+   cfsetspeed(&options, B115200);      
+
+   tcflush(fd, TCIOFLUSH);
+   tcsetattr(fd,TCSANOW,&options);
    
    
    cairo_surface_t *temp_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, VCOS_ALIGN_UP(gps->text.width,32), VCOS_ALIGN_UP(gps->text.height,16));
@@ -315,8 +286,8 @@ void *gps_thread(void *argp)
 
    while (gps->active > 0) 
       { 
-//      speed = read_gps(&fd_data);
-      speed = get_gps();
+      speed = read_gps(fd);
+//      speed = get_gps();
       if (gps->active == SENDING) 
          {
          if ((speed > -2) && (speed != last_speed))
@@ -334,8 +305,10 @@ void *gps_thread(void *argp)
       }
    
 /*   msg_fd = 0;
-   pthread_join(msg_tid, NULL); 
+   pthread_join(msg_tid, NULL);  */
    
-   close_gps(&fd_data, &fd_cntl); */
+   status =  close(fd);
+   if (status) log_error("Close of GPS data failed! RC=%d\r\n", status);
+
    log_status("Ending GPS thread");
 }

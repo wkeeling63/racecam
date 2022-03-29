@@ -3,7 +3,7 @@
 #define GPSUTIL_H_
 
 #include <fcntl.h>
-// #include <termios.h>
+#include <termios.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -14,6 +14,7 @@
 #define GPSCNTL "/dev/ttyUSB2"
 
 enum gps_enum {
+   ERROR = -1,
    DONE,
    WAITING,
    SENDING};
