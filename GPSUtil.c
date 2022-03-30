@@ -83,7 +83,7 @@ int read_gps(int fd)
    static int o=0;
    static char msg[256];
    
-   int cnt=0, i, speed=-3;
+   int cnt=0, i, speed=-2;
    char buf[256];
    
    cnt = read(fd,buf,255);
