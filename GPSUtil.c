@@ -205,7 +205,7 @@ void *gps_thread(void *argp)
 //   log_status("Starting GPS thread.wait done");
 
    GPS_T *gps = (GPS_T *)argp;
-   int speed = -2, last_speed = -2; 
+   int speed = -2, last_speed = -3; 
    
    int fd;
    fd = open(GPSCNTL, O_RDWR | O_NOCTTY ); 
@@ -213,6 +213,7 @@ void *gps_thread(void *argp)
       {
       log_error("Open of GPS data failed! RC=%d\r\n", fd);
       gps->active = ERROR;
+      goto error;
       }
       
    struct termios options;
@@ -246,6 +247,7 @@ void *gps_thread(void *argp)
       {
       log_error("Open of GPS control failed! RC=%d\r\n", fd);
       gps->active = ERROR;
+      goto error;
       }
       
    tcgetattr(fd,&options); 
@@ -284,7 +286,7 @@ void *gps_thread(void *argp)
    if (gps->text.y > (gps->text.height-max_below_o)) gps->text.y = gps->text.height-max_below_o; 
    if (gps->text.y < max_above_o) gps->text.y = max_above_o; 
    
-   send_text(speed, max_width, gps);
+//   send_text(speed, max_width, gps);
 
    while (gps->active > 0) 
       { 
@@ -301,14 +303,15 @@ void *gps_thread(void *argp)
          }
       else
          {
-         last_speed = -1;
+         last_speed = -3;
          }
       vcos_sleep(1000);
       }
    
 /*   msg_fd = 0;
    pthread_join(msg_tid, NULL);  */
-   
+
+error:   
    status =  close(fd);
    if (status) log_error("Close of GPS data failed! RC=%d\r\n", status);
 

@@ -1488,9 +1488,17 @@ int main(int argc, char **argv)
   gtk_init (&argc, &argv);
   gtk_rc_parse(gtk_rc);
 
- 
+  kb_xid = launch_keyboard();
+
+  if (!kb_xid)
+    {
+      perror ("### 'matchbox-keyboard --xid', failed to return valid window ID. ### ");
+      exit(-1);
+    }  
+     
+  if (ping_address("dns.google")) network_progress(); 
   
-//  log_status("gps_flag %d %d", gps_enabled, iparms.gps);
+  //  log_status("gps_flag %d %d", gps_enabled, iparms.gps);
 
 	pthread_t gps_tid;
 
@@ -1504,16 +1512,7 @@ int main(int argc, char **argv)
     gps_data.active = WAITING;
     pthread_create(&gps_tid, NULL, gps_thread, (void *)&gps_data);
 		}   
-  
-  kb_xid = launch_keyboard();
-
-  if (!kb_xid)
-    {
-      perror ("### 'matchbox-keyboard --xid', failed to return valid window ID. ### ");
-      exit(-1);
-    }  
-     
-  if (ping_address("dns.google")) network_progress();  
+   
   
   /*Main Window */
   main_win = gtk_window_new (GTK_WINDOW_TOPLEVEL);

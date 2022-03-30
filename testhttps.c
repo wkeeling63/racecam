@@ -91,10 +91,10 @@ BIO* connect_encrypted(char* host_and_port, char* store_path, SSL_CTX** ctx, SSL
         return NULL;
     }
 
-    if (SSL_get_verify_result(*ssl) != X509_V_OK) {
+/*    if (SSL_get_verify_result(*ssl) != X509_V_OK) {
 		fprintf (stdout, "result %d\n", SSL_get_verify_result(*ssl));
         print_ssl_error("Unable to verify connection result.\n", stdout);
-    }
+    } */
 
     return bio;
 }
@@ -166,11 +166,11 @@ int main() {
     char* host_and_port = "oauth2.googleapis.com:443"; 
     char* server_request = "POST /device/code HTTP/1.1\r\n"
 		"Host: oauth2.googleapis.com\r\n"
+		"Content-Length: 138\r\n"
 		"Content-Type: application/x-www-form-urlencoded\r\n"
-		"Content-Length: 153\r\n"
 		"\r\n"
-		"client_id%3D190164581320-s44milsm279lmph523v5d8b4uo33u3lo.apps.googleusercontent.com&"
-		"scope%3Dhttps%3A%2F%2Fwww.googleapis.com%2Fauth%2Fyoutube.readonly\r\n"; 
+		"client_id=190164581320-s44milsm279lmph523v5d8b4uo33u3lo.apps.googleusercontent.com&"
+		"scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fyoutube\r\n"; 
 //    char* store_path = "/etc/ssl/mycerts/testhttps.pem"; 
 //    char* store_path = "/etc/ssl/certs/VeriSign_Universal_Root_Certification_Authority.pem"; 
     char* store_path = "/etc/ssl/certs"; 
