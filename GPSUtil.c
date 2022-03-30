@@ -205,7 +205,7 @@ void *gps_thread(void *argp)
 //   log_status("Starting GPS thread.wait done");
 
    GPS_T *gps = (GPS_T *)argp;
-   int speed = -1, last_speed = -1; 
+   int speed = -2, last_speed = -2; 
    
    int fd;
    fd = open(GPSCNTL, O_RDWR | O_NOCTTY ); 
@@ -283,6 +283,8 @@ void *gps_thread(void *argp)
    if (gps->text.x < 0) gps->text.x = 0; 
    if (gps->text.y > (gps->text.height-max_below_o)) gps->text.y = gps->text.height-max_below_o; 
    if (gps->text.y < max_above_o) gps->text.y = max_above_o; 
+   
+   send_text(speed, max_width, gps);
 
    while (gps->active > 0) 
       { 
@@ -290,7 +292,7 @@ void *gps_thread(void *argp)
 //      speed = get_gps();
       if (gps->active == SENDING) 
          {
-         if ((speed > -2) && (speed != last_speed))
+         if (speed != last_speed)
             {
             send_text(speed, max_width, gps);
             vcos_sleep(50);  //wait needed due to 2 threads MMAL release of buffer and create in this thread

@@ -62,7 +62,8 @@ BIO* connect_encrypted(char* host_and_port, char* store_path, SSL_CTX** ctx, SSL
 //    *ctx = SSL_CTX_new(TLSv1_client_method());
     *ctx = SSL_CTX_new(TLS_client_method());
     *ssl = NULL;
-        r = SSL_CTX_load_verify_locations(*ctx, store_path, NULL);
+  //      r = SSL_CTX_load_verify_locations(*ctx, store_path, NULL);
+        r = SSL_CTX_load_verify_locations(*ctx, NULL, store_path);
 
     if (r == 0) {
 
@@ -91,7 +92,7 @@ BIO* connect_encrypted(char* host_and_port, char* store_path, SSL_CTX** ctx, SSL
     }
 
     if (SSL_get_verify_result(*ssl) != X509_V_OK) {
-
+		fprintf (stdout, "result %d\n", SSL_get_verify_result(*ssl));
         print_ssl_error("Unable to verify connection result.\n", stdout);
     }
 
@@ -166,10 +167,13 @@ int main() {
     char* server_request = "POST /device/code HTTP/1.1\r\n"
 		"Host: oauth2.googleapis.com\r\n"
 		"Content-Type: application/x-www-form-urlencoded\r\n"
-		"Content-Length: 128\r\n\r\n"
+		"Content-Length: 153\r\n"
+		"\r\n"
 		"client_id%3D190164581320-s44milsm279lmph523v5d8b4uo33u3lo.apps.googleusercontent.com&"
-		"scope%3Dhttps%3A%2F%2Fwww.googleapis.com%2Fauth%2Fyoutube"; 
-    char* store_path = "/etc/ssl/mycerts/testhttps.pem"; 
+		"scope%3Dhttps%3A%2F%2Fwww.googleapis.com%2Fauth%2Fyoutube.readonly\r\n"; 
+//    char* store_path = "/etc/ssl/mycerts/testhttps.pem"; 
+//    char* store_path = "/etc/ssl/certs/VeriSign_Universal_Root_Certification_Authority.pem"; 
+    char* store_path = "/etc/ssl/certs"; 
     char buffer[4096];
     buffer[0] = 0;
 
