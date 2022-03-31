@@ -111,6 +111,7 @@ int read_gps(int fd)
 void send_text(int speed, int max_width, GPS_T *gps)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
+   log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    
    char buffer[8];
    if (speed == -2)
@@ -290,6 +291,7 @@ void *gps_thread(void *argp)
 
    while (gps->active > 0) 
       { 
+      log_status("gps active %d", gps->active);
       if (gps->active == WAITING) last_speed = -3;
       speed = read_gps(fd);
 //      speed = get_gps();
