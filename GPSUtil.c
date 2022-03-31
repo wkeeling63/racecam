@@ -114,6 +114,7 @@ void send_text(int speed, int max_width, GPS_T *gps)
    log_status("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
    
    char buffer[8];
+   
    if (speed == -2)
       sprintf(buffer, "No Data");
    else
@@ -121,6 +122,8 @@ void send_text(int speed, int max_width, GPS_T *gps)
          sprintf(buffer, "No GPS");
       else
          sprintf(buffer, "%3d MPH", speed); 
+   
+   log_status("speed in send_text %d %s", speed, buffer);
          
    MMAL_BUFFER_HEADER_T *buffer_header=NULL;
 
