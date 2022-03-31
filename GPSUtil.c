@@ -290,6 +290,7 @@ void *gps_thread(void *argp)
 
    while (gps->active > 0) 
       { 
+      if (gps->active == WAITING) last_speed = -3;
       speed = read_gps(fd);
 //      speed = get_gps();
       if (gps->active == SENDING) 
@@ -303,7 +304,7 @@ void *gps_thread(void *argp)
          }
       else
          {
-         last_speed = -3;
+         last_speed = -1;
          }
       vcos_sleep(1000);
       }
