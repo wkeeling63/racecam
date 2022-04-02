@@ -99,7 +99,7 @@ int read_gps(int fd)
          if (o>6)
             {
             msg[o] = '\0';
-            speed=parse_gps(buf);
+            speed=parse_gps(msg);
             }
          o=0;
          }
@@ -109,7 +109,7 @@ int read_gps(int fd)
          o++;
          }
       }
-   log_status("after read %d %d %d", cnt, i, o);
+//   log_status("after read %d %d %d", cnt, i, o);
    return speed;
 } 
 
