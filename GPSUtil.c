@@ -80,10 +80,10 @@ int read_gps(int fd)
 {
    log_debug("%s in file: %s(%d)", __func__,  __FILE__, __LINE__);
 
-   static int o=0;
+   static int o=0, speed=-2;
    static char msg[256];
    
-   int cnt=0, i, speed=-2;
+   int cnt=0, i;
    char buf[256];
    
    cnt = read(fd,buf,255);
