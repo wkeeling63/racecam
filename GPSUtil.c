@@ -306,18 +306,17 @@ void *gps_thread(void *argp)
 //      speed = get_gps();
       if (gps->active == SENDING) 
          {
-//         if (speed != last_speed)
-//            {
-//            vcos_sleep(100);
+         if (speed != last_speed)
+            {
             send_text(speed, max_width, gps);
             vcos_sleep(50);  //wait needed due to 2 threads MMAL release of buffer and create in this thread
-//            last_speed = speed;
-//            }
+            last_speed = speed;
+            }
          }
-//      else
-//         {
-//         last_speed = -1;
-//         }
+      else
+         {
+         last_speed = -1;
+         }
 //      vcos_sleep(1000);
       }
    

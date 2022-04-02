@@ -53,6 +53,7 @@ int create_video_stream(RACECAM_STATE *state)
   text->es->video.crop.height = state->common_settings[MAIN_CAMERA].cam.height;
 
   state->hvs[2].format = text; 
+  state->hvs[2].enable = MMAL_TRUE;
 					
   state->hvs_component = create_hvs_component(state);
   mmal_format_free(text);
