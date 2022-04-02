@@ -105,6 +105,7 @@ int read_gps(int fd)
          o++;
          }
       }
+   log_status("after read %d %d %d", cnt, i, o);
    return speed;
 } 
 
@@ -294,7 +295,7 @@ void *gps_thread(void *argp)
 
    while (gps->active > 0) 
       { 
-      log_status("gps active %d", gps->active);
+//      log_status("gps active %d", gps->active);
       vcos_sleep(100);
       if (gps->active == WAITING) last_speed = -3;
       speed = read_gps(fd);
