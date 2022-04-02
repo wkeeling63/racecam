@@ -92,10 +92,10 @@ int read_gps(int fd)
       {
       if ((buf[i] == '\r') || (buf[i] == '\n'))
          {
-         if (buf[i] == '\r')
+ /*        if (buf[i] == '\r')
             log_status("CR");
          else
-            log_status("LF");
+            log_status("LF"); */
          if (o>6)
             {
             msg[o] = '\0';
@@ -300,7 +300,7 @@ void *gps_thread(void *argp)
    while (gps->active > 0) 
       { 
 //      log_status("gps active %d", gps->active);
-      vcos_sleep(100);
+//      vcos_sleep(100);
       if (gps->active == WAITING) last_speed = -3;
       speed = read_gps(fd);
 //      speed = get_gps();
@@ -308,6 +308,7 @@ void *gps_thread(void *argp)
          {
          if (speed != last_speed)
             {
+            vcos_sleep(100);
             send_text(speed, max_width, gps);
             vcos_sleep(50);  //wait needed due to 2 threads MMAL release of buffer and create in this thread
             last_speed = speed;
