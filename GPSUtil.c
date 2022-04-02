@@ -92,6 +92,10 @@ int read_gps(int fd)
       {
       if ((buf[i] == '\r') || (buf[i] == '\n'))
          {
+         if (buf[i] == '\r')
+            log_status("CR");
+         else
+            log_status("LF");
          if (o>6)
             {
             msg[o] = '\0';
