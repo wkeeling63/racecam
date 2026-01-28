@@ -1,0 +1,110 @@
+// redo: ovmerge -c wpc-racecam.dts gpio-led-overlay.dts,label=LED1,gpio=13 gpio-key-overlay.dts,label=SW1,gpio=12,keycode=2
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "brcm,bcm2712";
+	fragment@0 {
+		target = <&i2s_clk_producer>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+	fragment@1 {
+		target-path = "/";
+		__overlay__ {
+			dmic_codec: dmic-codec {
+				#sound-dai-cells = <0>;
+				compatible = "dmic-codec";
+				status = "okay";
+			};
+		};
+	};
+	fragment@2 {
+		target = <&sound>;
+		sound_overlay: __overlay__ {
+			compatible = "simple-audio-card";
+			simple-audio-card,format = "i2s";
+			simple-audio-card,name = "mic";
+			simple-audio-card,bitclock-slave = <&dailink0_slave>;
+			simple-audio-card,frame-slave = <&dailink0_slave>;
+			simple-audio-card,widgets = "Microphone", "Microphone Jack";
+			status = "okay";
+			simple-audio-card,cpu {
+				sound-dai = <&i2s_clk_producer>;
+				dai-tdm-slot-width = <32>;
+				dai-tdm-slot-num = <2>;
+			};
+			dailink0_slave: simple-audio-card,codec {
+				#sound-dai-cells = <0>;
+				sound-dai = <&dmic_codec>;
+			};
+		};
+	};
+	fragment@3 {
+		target-path = "/chosen";
+		__overlay__ {
+			power: power {
+				hat_current_supply = <2500>;
+			};
+		};
+	};
+	fragment@4 {
+		target = <&gpio>;
+		__overlay__ {
+			led_pin: led_pins@d {
+				brcm,pins = <13>;
+				brcm,function = <1>;
+				brcm,pull = <0>;
+			};
+		};
+	};
+	fragment@5 {
+		target-path = "/";
+		__overlay__ {
+			leds@d {
+				compatible = "gpio-leds";
+				pinctrl-names = "default";
+				pinctrl-0 = <&led_pin>;
+				status = "okay";
+				led {
+					label = "LED1";
+					gpios = <&gpio 13 0>;
+					linux,default-trigger = "none";
+				};
+			};
+		};
+	};
+	fragment@6 {
+		target = <&gpio>;
+		__overlay__ {
+			pin_state: button_pins@c {
+				brcm,pins = <12>;
+				brcm,function = <0>;
+				brcm,pull = <2>;
+			};
+		};
+	};
+	fragment@7 {
+		target-path = "/";
+		__overlay__ {
+			button@c {
+				compatible = "gpio-keys";
+				pinctrl-names = "default";
+				pinctrl-0 = <&pin_state>;
+				status = "okay";
+				key {
+					linux,code = <2>;
+					gpios = <&gpio 12 1>;
+					label = "SW1";
+				};
+			};
+		};
+	};
+	__overrides__ {
+		card-name = <&sound_overlay>, "simple-audio-card,name";
+		mode0 = <&power>, "hat_current_supply:0=3000";
+		mode1 = <&power>, "hat_current_supply:0=5000";
+	};
+};
