@@ -1,3 +1,4 @@
+# meson.build
 project(
   'racecam',
   'c',
@@ -24,7 +25,6 @@ endif
 srcheader = custom_target('generate_src_header',
         output : 'racecamsrc.hpp',
         command : ['sh', meson.project_source_root() / 'scripts/sourcelocation.sh', meson.project_source_root(), '@OUTPUT@']
-  #      install_dir: include_directories('.')
     )
 
 if cpu == 'aarch64' or neon == 'arm64'
@@ -38,15 +38,12 @@ boost_dep = dependency('boost', modules: ['json'], required : true)
 curlpp_dep = dependency(['curlpp', 'curl'], required : true)
 src_dep = declare_dependency(sources : [srcheader])
 
-
-
 summary({
             'location' : libcamera_dep.get_variable('libdir'),
             'version' : libcamera_dep.version()
         },
        section : 'libcamera')
 
-# racecam_app_src = []
 racecam_app_dep = [libcamera_dep, boost_dep, curlpp_dep]
 rcamcfg_src = []
 rcam_src = []
@@ -54,16 +51,6 @@ rcam_src = []
 subdir('core')
 
 add_project_arguments(cpp_arguments, language : 'cpp')
-
-# racecam_app = library(
-#    'racecam_app',
-#    racecam_app_src,
-#    soversion : meson.project_version(),
-#    include_directories : include_directories('.'),
-#    install : true,
-#    name_prefix : '',
-#    dependencies : racecam_app_dep,
-# )
 
  rcamcfg_lib = library(
     'librcamcfg',
@@ -84,11 +71,6 @@ rcam_lib = library(
     name_prefix : '',
     dependencies : [racecam_app_dep, boost_dep],
 )
-
-# Install a symlink to the old library name for legacy purposes.
-#install_symlink('lib_racecam.so',
-#                install_dir: get_option('libdir'),
-#                pointing_to: 'racecam_app.so')
 
 subdir('apps')
 subdir('dts')

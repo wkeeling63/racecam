@@ -111,7 +111,11 @@ RCamCfg::RCamCfg(Logger& lptr, std::string const& path, std::string const& cfg) 
 {
 	DEBUG_PRINT("%s", "\n");
     config = jsonRead(cfgloc);
-    if (config.is_null()) throw std::runtime_error("Configuration " + cfgloc + " Not found!");
+ //   if (config.is_null()) throw std::runtime_error("Configuration " + cfgloc + " Not found!");
+    if (config.is_null()) {
+		logger_.Log(LogLevel::INFO, std::string("Configuration " + cfgloc + " is empty or not found!"));
+		config = json::object {};
+	}
     try {
         YAML::Node cntlyaml = YAML::LoadFile("/home/wkeeling/racecam/controls.yaml");
         if (cntlyaml["controls"]) {

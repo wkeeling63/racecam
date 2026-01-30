@@ -52,7 +52,7 @@ void RCam::InitCapture()
 {
 	DEBUG_PRINT("%s", "\n");
 	config = jsonRead(cfgloc); 
-	if (config.is_null()) throw std::runtime_error("Configuration " + cfgloc + " Not found!");
+	if (config.is_null()) throw std::runtime_error("Configuration " + cfgloc + " not found!");
 	initCameraManager(); 
 	
 	json::object cams = getCfgValue("/Cameras").get_object();
