@@ -1,60 +1,15 @@
-/*  racecam shared class header
+/* 
 * rcamshared.hpp
 */
-//#include <iostream>
-//#include <fstream>
-//#include <filesystem>
-//#include <string>
 #include <queue>
-//#include <any>
-//#include <span>
-//#include <condition_variable>
-//#include <ctime> 
-//#include <iomanip>
-//#include <thread>
-//#include <chrono>
-//#include <limits>
-
 
 #include <libcamera/camera.h>
 #include <libcamera/camera_manager.h>
-//#include <libcamera/control_ids.h>
-//#include <libcamera/property_ids.h>
-//#include <libcamera/transform.h>
 #include <libcamera/formats.h>
 #include <libcamera/logging.h>
-//#include <libcamera/yaml_parser.h>
 
-//#include <sys/mman.h>
-
-//#include <boost/json/src.hpp> 
-#include <boost/json.hpp>  //WEK can't figure out how to make meson link to boost_json 1.87 -- try on new build 
-//#include <yaml-cpp/yaml.h>
-
-//#include "core/dma_heaps.hpp"
-//#include "core/message_map.hpp"
-//#include "racecamsrc.hpp"
-//#include "core/youtube.hpp"
+#include <boost/json.hpp>  
 #include "core/logger.hpp"
-
-
-//extern "C"
-//{
-//#include "libavcodec/avcodec.h"
-//#include "libavcodec/codec_desc.h"
-//#include "libavdevice/avdevice.h"
-//#include "libavformat/avformat.h"
-//#include "libavutil/audio_fifo.h"
-//#include "libavutil/hwcontext.h"
-//#include "libavutil/hwcontext_drm.h"
-//#include "libavutil/imgutils.h"
-//#include "libavutil/timestamp.h"
-//#include "libavutil/version.h"
-//#include "libswresample/swresample.h"
-//#include "libavfilter/buffersrc.h"
-//#include "libavfilter/buffersink.h"
-//#include "libavfilter/avfilter.h"
-//}
 
 #pragma once
 
@@ -64,7 +19,7 @@
 	fprintf(stderr, "%s:%d:%s" fmt, __FILE__, __LINE__, __PRETTY_FUNCTION__, ##__VA_ARGS__) 
 #else
     #define DEBUG_PRINT(fmt, ...)
-#endif
+#endif 
 
 constexpr size_t MAX_SIZE = std::numeric_limits<size_t>::max(); 
 #define CLEARSCREEN std::cout << "\033[2J\033[1;1H" << std::flush;
@@ -77,48 +32,10 @@ constexpr size_t MAX_SIZE = std::numeric_limits<size_t>::max();
 using namespace libcamera;
 namespace json = boost::json;
 
-//WEKsplit RCamShared (all 3)
-struct Sensor {
-	libcamera::Size outRes;
-	libcamera::Size senRes;
-	int senBit {};
-	Sensor() : outRes({}),senRes({}), senBit(0) {}
-	Sensor(json::value v) {
-			DEBUG_PRINT("%s", "\n");
-			if (v.is_null()) {
-				outRes = senRes = libcamera::Size{};
-				senBit = 0;
-				return;
-			}
-			if (!v.is_array()) {
-				throw std::runtime_error("Sensor contructor is not array!");
-			}
-			auto a = v.as_array();
-			if ( 2 != a.size() && 5 != a.size()) {
-				throw std::runtime_error("Sensor contructor incorrect array size: " + std::to_string(a.size()));
-			}
-			outRes.width = json::value_to<unsigned int>(a.at(0)); 
-			outRes.height = json::value_to<unsigned int>(a.at(1));
-			if ( 5 == a.size()) {
-				senRes.width = json::value_to<unsigned int>(a.at(2)); 
-				senRes.height = json::value_to<unsigned int>(a.at(3));
-				senBit = json::value_to<int>(a.at(4));
-			}
-	}
-	Sensor(libcamera::Size o) : outRes(o),senRes({}), senBit(0) {}
-	Sensor(libcamera::Size o, libcamera::Size s, int b) : outRes(o),senRes(s), senBit(b) {}
-	//WEK for testing if left improve to handle empty and better format
-	std::string toString() { return outRes.toString() + " " 
-		+ senRes.toString() + " " + std::to_string(senBit); }
-	bool hasSensor() { return !senRes.isNull() && senBit; }
-	bool isNull() { return outRes.isNull() && senRes.isNull() && !senBit; }
-};  
-
-class Sensor2 {
+class Sensor {
 	libcamera::SensorConfiguration sc;
-//	Sensor2() : outRes({}),senRes({}), senBit(0) {} empty not needed
-	// this overload to go from json to SensorConfiguration
-	Sensor2(json::value v) {
+public:
+	Sensor(json::value v) {
 		DEBUG_PRINT("%s", "\n");
 		if (v.is_null() || !v.is_array()) {
 			throw std::runtime_error("JSON Sensor is invalid!");
@@ -131,42 +48,55 @@ class Sensor2 {
 		sc.outputSize.height = json::value_to<unsigned int>(a.at(1));
 		sc.bitDepth = json::value_to<unsigned int>(a.at(2));
 	}
-	// these 2 overloads for going from data to json 
-	Sensor2(libcamera::Size r, unsigned int b) {
+	Sensor(libcamera::Size r, unsigned int b) {
 		sc.outputSize = r; 
 		sc.bitDepth = b;
 	}
-	Sensor2(int w, int h, int b) {
+	Sensor(int w, int h, int b) {
 		sc.outputSize.width = w; 
 		sc.outputSize.height = h;
 		sc.bitDepth = b;
 	}
-	// methods get sensor, get json array
-	std::string toString() { return sc.outputSize.toString() + " "  + std::to_string(sc.bitDepth); }
+	std::string toString() {
+		std::string sizestr =  sc.outputSize.toString();
+		if (7 == sizestr.size()) sizestr = " " + sizestr;
+		std::string bitstr = std::to_string(sc.bitDepth);
+		if (1 == bitstr.size()) bitstr = " " + bitstr;
+		return bitstr + sizestr;
+	}
+	std::string toDisplayString() {
+		return std::string("Sensor size: ") + sc.outputSize.toString() + 
+		" Bit Depth: " + std::to_string(sc.bitDepth);
+	}
 	libcamera::SensorConfiguration getSensorCfg() {return sc;}
 	json::array getArray() {
 		return json::array {sc.outputSize.width, sc.outputSize.height, sc.bitDepth};
 	}
 };  
 
-struct CameraStream {
-	unsigned int stream : 1;
-	unsigned int camera : 7;
-	CameraStream() : stream(0), camera(0) {}
-	CameraStream(int cs) { stream = cs & 1; camera = cs >> 1; }
-	CameraStream(unsigned int cs) { stream = cs & 1; camera = cs >> 1; }
-	CameraStream(int c, int s) : stream(s), camera(c) {}
-	CameraStream(unsigned int c, unsigned int s) : stream(s), camera(c) {}
+class CamStrm {
+	int camera;
+	int stream;
+public:
+	CamStrm() : camera(-1), stream(-1) {}  
+	CamStrm(int cs) { stream = cs & 1; camera = cs >> 1; }
+	CamStrm(unsigned int cs) { stream = cs & 1; camera = cs >> 1;} 
+	CamStrm(int c, int s) : camera(c), stream(s) {}
+	CamStrm(unsigned int c, unsigned int s) : camera(c), stream(s) {}
 	std::string toString() { return std::string("Camera: ") + std::to_string(camera) 
 		+ " Stream: " + std::to_string(stream); }
 	unsigned int getCamera() { return camera; }
 	unsigned int getStream() { return stream; }
-	unsigned int getCameraStream() { return stream | (camera << 1); }
+	unsigned int getCamStrm() { return stream | (camera << 1); }
+	bool operator==(const CamStrm& rhs) const {
+        return (stream == rhs.stream && camera == rhs.camera);
+    //WEK do I need copy or move operator
+    }
 };  
 
 class Streams {
 	std::vector<libcamera::Size> res;
-//	Streams() : res({}) {} // should not need or want to create empty Streams 
+public:
 	Streams(json::value v) {
 		DEBUG_PRINT("%s", "\n");
 		if (v.is_null() || !v.is_array()) {
@@ -183,21 +113,29 @@ class Streams {
 			res.push_back(libcamera::Size(json::value_to<unsigned int>(s.at(0)), json::value_to<unsigned int>(s.at(1))));
 		} 
 		if (res.size() == 2) {
-			if (res[0] <= res[1]) throw std::runtime_error("Main stream not larger then second stream!");
+			if (res[0] < res[1]) throw std::runtime_error("Main stream not larger then second stream!");
 		}
 	}
 	Streams(libcamera::Size o) : res({o}) {}
 	Streams(libcamera::Size o0, libcamera::Size o1) : res({o0, o1}) {
-		if (res[0] <= res[1]) throw std::runtime_error("Main stream not larger then second stream!");
+		if (res[0] < res[1]) throw std::runtime_error("Main stream not larger then second stream!");
 	}
 	Streams(int w, int h) : res({libcamera::Size(w, h)}) {}
 	Streams(int w0, int h0, int w1, int h1) : res({libcamera::Size(w0, h0), libcamera::Size(w1, h1)}) {
-		if (res[0] <= res[1]) throw std::runtime_error("Main stream not larger then second stream!");
+		if (res[0] < res[1]) throw std::runtime_error("Main stream not larger then second stream!");
+	}
+	Streams(std::vector<libcamera::Size> ss) : res(ss) {
+		if (res.size() < 1 || res.size() > 2) throw std::runtime_error("Invalid number of streams! (" + std::to_string(res.size()) + ")" );
+		if (res.size() == 2 && res[0] < res[1]) throw std::runtime_error("Main stream not larger then second stream!");
 	}
 	std::vector<libcamera::Size> getStreams() { return res;}
-	libcamera::Size getStream(int i) {
-		if ((size_t)i >= res.size()) throw std::runtime_error("getStream(" + std::to_string(i) +  ") to out of range!");
+	libcamera::Size getStreamSize(int i) {
+		if ((size_t)i >= res.size()) throw std::runtime_error("getStreamSize(" + std::to_string(i) +  ") to out of range!");
 		return res[i];
+	}
+	libcamera::Size setStreamSize(int i, libcamera::Size s) {
+		if ((size_t)i >= res.size()) throw std::runtime_error("setStreamSize(" + std::to_string(i) +  ") to out of range!");
+		res[i] = s;
 	}
 	json::array getArray() {
 		json::array a;
@@ -213,10 +151,10 @@ public:
 	using CameraManager = libcamera::CameraManager;
 	using Camera = libcamera::Camera;
 	
-	RCamShared(Logger& log, std::string const& path, std::string const& cfg = "racecam_config.json");
-	virtual ~RCamShared(){};  // add write config here or public write???
+//	RCamShared(Logger& log, std::string const& path, std::string const& cfg = "racecam_config.json");
+	RCamShared(Logger& log, std::string const& cfg = "racecam_config.json");
+	virtual ~RCamShared(){};  
 	
-
 protected:
 	void initCameraManager();
 	bool 		fromArray(Rectangle& r, json::value& jv);
@@ -240,7 +178,6 @@ protected:
 		return cv;
 	}	
 
-//	json::value toJSON(ControlValue&);
 	json::array toArray(Rectangle const r) {return json::array{r.x, r.y, r.width, r.height};};
 	json::array toArray(Point const p) {return json::array{p.x, p.y};};
 	json::array toArray(Size const s) {return json::array{s.width, s.height};};
@@ -251,12 +188,13 @@ protected:
 	json::value	getCfgValue(const std::string& key);
 	json::value	getCfgValue(const std::string& key, const json::value& jv);
 	static int 		getBitDepth(const libcamera::PixelFormat& pix);
-	
-//WEK make this x_ names
+
 	Logger& logger_;
-	std::string srcpath {};
-	std::string cfgloc {};
-	json::value config;
+//	std::string srcpath_ {};
+//	std::string cfgloc_ {};
+	std::string cfgpath_ {};
+	std::string cfgfile_ {};
+	json::value config_;
 	std::unique_ptr<CameraManager> cm_;
 private:
 };

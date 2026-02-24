@@ -1,9 +1,29 @@
 #include "jsonio.hpp"
-#include <iostream>
+//#include <iostream>
 
-json::value jsonRead(std::string const& file)
+json::value jsonRead(std::string const& file, std::string const* path)
 {
-   std::ifstream ifile(file);
+    //WEK move home get and file path logic to helper std::string getFileName(path, file)
+    const char* homedir = getenv("HOME");
+    if (homedir == nullptr) {
+        struct passwd *pw = getpwuid(getuid());
+        if (pw != nullptr) {
+            homedir = pw->pw_dir;
+        }
+    }
+    std::string home(homedir);
+    std::string jsonfile;
+    if (path && std::filesystem::exists(*path + file)) {
+        jsonfile = *path + file;
+    } else if (std::filesystem::exists(home + "/racecam/data/" + file)) { 
+		jsonfile = home + "/racecam/data/" + file;
+	} else if (std::filesystem::exists("/usr/local/etc/racecam/data/" + file)) {
+        jsonfile = "/usr/local/etc/racecam/data/" + file;
+    } else {
+        return nullptr;
+    }
+
+   std::ifstream ifile(jsonfile);
    if (!ifile.is_open()) return nullptr;
     json::stream_parser p;
     boost::system::error_code ec;
@@ -23,17 +43,40 @@ json::value jsonRead(std::string const& file)
     p.finish( ec );
     if( ec ) throw std::runtime_error("JSON finish error: " + ec.message() + " " + ec.to_string());
     return p.release();
-}
+} 
 
-void jsonWrite(std::string const& file, json::value const& jv)
+void jsonWrite(std::string const& file, json::value const& jv, std::string const* path)
 {
-    std::ofstream ofile (file, std::ios::out | std::ios::trunc);
+    // WEK use getFileName()
+    const char* homedir = getenv("HOME");
+    if (homedir == nullptr) {
+        struct passwd *pw = getpwuid(getuid());
+        if (pw != nullptr) {
+            homedir = pw->pw_dir;
+        }
+    }
+    std::string home(homedir);
+    std::string jsonfile;
+    if (path && std::filesystem::exists(*path)) {
+        jsonfile = *path + file;
+    } else if (std::filesystem::exists(home + "/racecam/data/")) { 
+		jsonfile = home + "/racecam/data/" + file;
+	} else {
+        std::filesystem::create_directories(home + "/racecam/data/");
+        if (std::filesystem::exists("/usr/local/etc/racecam/data/")) {
+            jsonfile = "/usr/local/etc/racecam/data/" + file;
+        } else {
+            throw std::runtime_error("jsonWrite() Unable to find path for output! file: " + file);
+        }
+    }
+
+    std::ofstream ofile (jsonfile, std::ios::out | std::ios::trunc);
     if (ofile.is_open())
     {
 	jsonWrite(ofile, jv);
 	ofile.close();
     } else
-	throw std::runtime_error("Unable to open configuration file for output! file: " + file);
+	throw std::runtime_error("Unable to open jsonfile for output! file: " + jsonfile);
 }
 
 void jsonWrite(std::ostream& os, json::value const& jv, std::string* indent)

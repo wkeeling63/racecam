@@ -14,7 +14,9 @@
 //#include "core/rcam_app.hpp"
 #include "core/rcam.hpp"
 //#include "core/logger.hpp"
-#include "racecamsrc.hpp"
+// #include "racecamsrc.hpp"
+#include <filesystem>
+#include <pwd.h>     // Required for getpwuid
 
 #include "core/gpio.hpp"
 
@@ -32,7 +34,7 @@
 GPIO gpio;
 //Logger* g_lptr = nullptr;
 // Logger logger(rcamSrcPath + "/logs/RaceCam.log", g_lptr);
-Logger logger(rcamSrcPath + "/logs/RaceCam.log");
+//Logger logger(rcamSrcPath + "/logs/RaceCam.log");
 //Logger logger(rcamSrcPath + "/logs/RaceCam.log", LogLevel::INFO);
 
 std::atomic<bool> RunProgram {true};
@@ -47,6 +49,7 @@ void printUsage(char * arg)
     std::cout << "  -d, --duration      number of seconds to capture" << std::endl;
 }
 
+//WEK if not runing then just exit here?
 void sig_handler(int signum)
 {
     DEBUG_PRINT("%s", "\n");
@@ -72,7 +75,29 @@ inline void wait()
 
 int main(int argc, char *argv[])
 {
+//    logger.SetLevel(LogLevel::INFO);
     DEBUG_PRINT("%s", "\n");
+    const char* homedir = getenv("HOME");
+    if (homedir == nullptr) {
+        struct passwd *pw = getpwuid(getuid());
+        if (pw != nullptr) {
+            homedir = pw->pw_dir;
+        }
+    }
+    std::string home(homedir);
+    std::string logfile;
+    if (std::filesystem::exists(home + "/racecam/logs")) { 
+	logfile = home + "/racecam/logs/" + "RaceCam.log";
+    } else {
+	std::filesystem::create_directories(home + "/racecam/logs");
+	if (std::filesystem::exists("/var/log/racecam")) {
+	    logfile = std::string("/var/log/racecam/") + "RaceCam.log";
+	} else {
+	    throw std::runtime_error("Unable to find path for log file!");
+	}
+    }
+    Logger logger(logfile);
+    
     struct sigaction sa;
     sa.sa_handler = sig_handler; 
     sigemptyset(&sa.sa_mask);      
@@ -87,7 +112,8 @@ int main(int argc, char *argv[])
         exit(1);
     }
      // parms
-    std::string config_file {"racecam_config.json"};
+//    std::string config_file {"racecam_config.json"};
+    std::string config_file {};
     for (int i = 1; i < argc; ++i) {
 	std::string arg = argv[i];
 	if (arg == "-h" || arg == "--help") {
@@ -120,11 +146,13 @@ int main(int argc, char *argv[])
     if (!Duration) Duration = 15;
     try {
 	gpio.set(1, true);
-	RCam app(logger, rcamSrcPath, config_file);
-	logger.Log(LogLevel::INFO, "Starting capture!", true);
+//	RCam app(logger, rcamSrcPath, config_file);
+	if (!config_file.size()) config_file = "racecam_config.json";
+	RCam app(logger, config_file);
+	logger.Log(LogLevel::ALWAYS, "Starting capture!", true);
 	app.InitCapture();
 	wait();
-	logger.Log(LogLevel::INFO, "Stopping capture!", true);
+	logger.Log(LogLevel::ALWAYS, "Stopping capture!", true);
 	app.FreeCapture();
 	gpio.set(1, false);
 	logger.Log(LogLevel::INFO, "exiting all good!", true);

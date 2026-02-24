@@ -3,11 +3,10 @@
  * 
  */
 
-//import std;
-
-//#include "core/rcamshared.hpp"
 #include "core/rcamcfg.hpp"
-#include "racecamsrc.hpp"
+
+#include <filesystem>
+#include <pwd.h>     // Required for getpwuid
 
 //#define DEBUG 1
 #ifdef DEBUG
@@ -31,9 +30,27 @@ int main(int argc, char *argv[])
 //int main()
 {
 	DEBUG_PRINT("%s", "\n");
-//	Logger* g_lptr = nullptr;
-//	Logger logger(rcamSrcPath + "/logs/RaceCamCfg.log", g_lptr, LogLevel::WARN);
-	Logger logger(rcamSrcPath + "/logs/RaceCamCfg.log", LogLevel::WARN);
+	const char* homedir = getenv("HOME");
+    if (homedir == nullptr) {
+        struct passwd *pw = getpwuid(getuid());
+        if (pw != nullptr) {
+            homedir = pw->pw_dir;
+        }
+    }
+    std::string home(homedir);
+    std::string logfile;
+	if (std::filesystem::exists(home + "/racecam/logs")) { 
+		logfile = home + "/racecam/logs/" + "RaceCamCfg.log";
+	} else {
+		std::filesystem::create_directories(home + "/racecam/logs");
+		if (std::filesystem::exists("/var/log/racecam")) {
+			logfile = std::string("/var/log/racecam/") + "RaceCamCfg.log";
+		} else {
+			throw std::runtime_error("Unable to find path for log file!");
+		}
+	}
+	
+	Logger logger(logfile, LogLevel::WARN);
 	
 	std::string config_file {};
 	for (int i = 1; i < argc; ++i) {
@@ -57,30 +74,14 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (!config_file.empty()) {
-		if ((!std::filesystem::exists(rcamSrcPath + "/data/" + config_file)) 
-				&& (!std::filesystem::exists(config_file))) {
-			std::ofstream cfg_stream(config_file, std::ios::app);
-			if (cfg_stream.is_open()) {
-				cfg_stream << "{}";
-				cfg_stream.close();
-			} else {
-				logger.Log(LogLevel::ERROR, "Could not open/create file '" + config_file + "'", true);
-			}
-		} 
-	} 
-
 	try 
 	{
 
-//WEK add config file parm 
-//	RCamCfg app("config.json"); //or take default cfgloc
-//		RCamCfg app;
 		if (config_file.empty()) {
-			RCamCfg app(logger,rcamSrcPath);
+			RCamCfg app(logger);
 			app.CfgRaceCam();
 		} else {
-			RCamCfg app(logger,rcamSrcPath, config_file);
+			RCamCfg app(logger, config_file);
 			app.CfgRaceCam();
 		}
 	}

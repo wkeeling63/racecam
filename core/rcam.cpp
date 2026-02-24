@@ -1,42 +1,19 @@
-// need stat corrected everywhere add configure
-// and figure out where stopping should change to configed
+// and figure out where stopping should change stat to configed
 
 /* racecam capture class code
 *  rcam.cpp
 */
-//#include <string>
 
-//#include <boost/json/src.hpp> 
-//#include <boost/json.hpp>  
 #include "core/jsonio.hpp"
-
-//#include "core/rcamshared.hpp"
 #include "core/rcam.hpp"
 
 #include <linux/dma-buf.h>
 #include <sys/ioctl.h>
 
-//#include <stdio.h>
-
-RCam::RCam(Logger& lptr, std::string const& path, std::string const& cfg) : RCamShared(lptr, path, cfg)
+//WEK bug default cfg not working;
+RCam::RCam(Logger& lptr, std::string const& cfg) : RCamShared(lptr, cfg)
 {
 	DEBUG_PRINT("%s", "\n");
-
-// libcamera::LoggingTargetNone, libcamera::LoggingTargetSyslog, libcamera::LoggingTargetFile, libcamera::LoggingTargetStream 
-//	logSetTarget(LoggingTargetSyslog);   //libcamera logging
-//	logSetTarget(LoggingTargetNone);   //libcamera logging
-	// DEBUG, INFO, WARN, ERROR and FATAL
-	// WEK FYI you can't call logSetTarget twice -- so it can't be here or we need some sort of 
-//	logSetLevel("*", "INFO"); //("Camera", "INFO");
-//	logSetLevel("*", "ERROR");
-/*	AV_LOG_QUIET   -8 	Print no output.
-   	AV_LOG_PANIC   0  	Something went really wrong and we will crash now.
-   	AV_LOG_FATAL   8  	Something went wrong and recovery is not possible.
-   	AV_LOG_ERROR   16  	Something went wrong and cannot losslessly be recovered.
-   	AV_LOG_WARNING   24 Something somehow does not look correct.
-   	AV_LOG_INFO   32  	Standard information.
-   	AV_LOG_VERBOSE   40 Detailed information.
-    AV_LOG_DEBUG   48	Stuff which is only useful for libav* developers. */
 }
 
 unsigned int RCam::getCntlID(const std::string cntlname)
@@ -51,15 +28,17 @@ unsigned int RCam::getCntlID(const std::string cntlname)
 void RCam::InitCapture()
 {
 	DEBUG_PRINT("%s", "\n");
-	config = jsonRead(cfgloc); 
-	if (config.is_null()) throw std::runtime_error("Configuration " + cfgloc + " not found!");
+	if (cfgpath_.size()) {
+		config_ = jsonRead(cfgfile_, &cfgpath_);
+	} else {
+		config_ = jsonRead(cfgfile_);
+	}
+
+	if (config_.is_null()) throw std::runtime_error("Configuration " + cfgpath_ + cfgfile_ + " not found!");
 	initCameraManager(); 
-	
 	json::object cams = getCfgValue("/Cameras").get_object();
 	initCams(cams);
-
 	initOutputs();
-
 	startCams(cams);
 }
 
@@ -88,7 +67,7 @@ void RCam::initCams(const json::object& cams)
 	unsigned int i = 0;
 	// iterates "/Cameras" json and builds rcam_[cam#]	
 	for(auto it = cams.begin(); it != cams.end(); ++it) {
-		DEBUG_PRINT(" camera id %d%s", i, "\n");	
+//		DEBUG_PRINT(" camera id %d%s", i, "\n");	
 		// get/save camid as .cam
 		std::string camid = json::value_to<std::string>(getCfgValue("/CameraID", it->value()));
 		rcams_[i].cam = cm_->get(camid);
@@ -99,69 +78,58 @@ void RCam::initCams(const json::object& cams)
 		// acquire cam and set .stat and cam_cnt_
 		if (rcams_[i].cam->acquire())
 			throw std::runtime_error("failed to acquire camera " + camid);
-		rcams_[i].stat = RCaquired;
-		cam_cnt_ = i + 1;  
-	
-				//	rcams_[i].cfg = rcams_[i].cam->generateConfiguration({StreamRole::VideoRecording, StreamRole::VideoRecording}); 
-				// fix  "concurrent streams need matching numbers of buffers"
-				// done't get error with 2 raw or raw and video
-		//
-		// gen and save  std::unique_ptr<CameraConfiguration> as .cfg
-		 
-		//WEK dual stream 
-		// if cam dual stream set roles, update stream sizes and set scalecrops
-	
-		rcams_[i].cfg = rcams_[i].cam->generateConfiguration({StreamRole::VideoRecording}); 
+		rcams_[i].stat = RCaquired;  
+
+		// gen and save  
+		json::value sv = getCfgValue("/Streams", it->value());
 		
+		std::vector<libcamera::Size> ss {};
+		if (sv.is_array()) {
+			for(json::value sv : sv.as_array()) {
+				Size tmp {};
+				if (!fromArray(tmp, sv)) throw std::runtime_error(camid + " Size fromArray failed!");
+				ss.push_back(tmp);
+			}
+		} else {
+			throw std::runtime_error(camid + " /Streams is not arrary!");
+		}
+		 
+		if (ss.size() == 1) {
+			rcams_[i].cfg = rcams_[i].cam->generateConfiguration({StreamRole::VideoRecording}); 
+		} else {
+			rcams_[i].cfg = rcams_[i].cam->generateConfiguration({StreamRole::VideoRecording, StreamRole::VideoRecording}); 
+		}
+	
 		if (!rcams_[i].cfg)
 			throw std::runtime_error("failed to generate video configuration");
 
 		// Now we override any of the default settings from config file to the StreamConfiguration of the CameraConfiguration
-		StreamConfiguration &cfg = rcams_[i].cfg->at(0);
-		
-//		std::cout << "pixel b4: " << cfg.pixelFormat.toString() << std::endl;
-
-		if (isCSI(rcams_[i].cam)) {
-			cfg.pixelFormat = libcamera::formats::YUV420;
-		} else {
-			cfg.pixelFormat = libcamera::formats::YUYV;
+		int si = 0;
+		for( libcamera::Size s : ss) {
+			StreamConfiguration &cfg = rcams_[i].cfg->at(si++);
+			cfg.size = s;
+			if (isCSI(rcams_[i].cam)) {
+				cfg.pixelFormat = libcamera::formats::YUV420;
+			} else {
+				cfg.pixelFormat = libcamera::formats::YUYV;
+			}
+			// add buffer parm if needed here
+			cfg.bufferCount = 6; 
+			// why not use color space of config gen??
+			if (cfg.size.width >= 1280 || cfg.size.height >= 720)
+				cfg.colorSpace = libcamera::ColorSpace::Rec709;   //HDTV colorspace
+			else
+				cfg.colorSpace = libcamera::ColorSpace::Smpte170m; // NTSC/PAL/SDTV colorspace
+			// set stride 0 before validation and validation will set it as need for format	
+			cfg.stride = 0;
 		}
-		
-//		std::cout << "pixel after: " << cfg.pixelFormat.toString() << std::endl;
-		// add buffer parm if needed here
-		cfg.bufferCount = 6; 
 
-		auto jv = getCfgValue("/Sensor", it->value());
-
-/*		Size sens {}; // WEK set defaults here for fail to be values from config
-		if (fromArray(sens, jv))
-		{
-			cfg.size.width = sens.width;
-			cfg.size.height = sens.height;
-	//					// configure sensor as it is CSI-2
-	// 		rcams_[i].cfg->sensorConfig = libcamera::SensorConfiguration();
-	//		rcams_[i].cfg->sensorConfig->outputSize.width = 1640;
-	//		rcams_[i].cfg->sensorConfig->outputSize.height = 1232;
-	//		rcams_[i].cfg->sensorConfig->bitDepth = 10;  
-		} else
-		{
-			logger_.Log(LogLevel::ERROR, "Unable to set sensor for " + camid);
-		} */
-
-		Sensor sens(jv);
-		cfg.size = sens.outRes;
-		if (sens.hasSensor()) {
-			rcams_[i].cfg->sensorConfig = libcamera::SensorConfiguration();
-			rcams_[i].cfg->sensorConfig->outputSize = sens.senRes;
-			rcams_[i].cfg->sensorConfig->bitDepth = sens.senBit;
+		auto jv = getCfgValue("/Sensor", it->value());		
+		if (!jv.is_null()) {
+			Sensor sens(jv);
+			rcams_[i].cfg->sensorConfig = sens.getSensorCfg();
 		}
-	
-		// why not use color space of config gen??
-		if (cfg.size.width >= 1280 || cfg.size.height >= 720)
-			cfg.colorSpace = libcamera::ColorSpace::Rec709;   //HDTV colorspace
-		else
-			cfg.colorSpace = libcamera::ColorSpace::Smpte170m; // NTSC/PAL/SDTV colorspace	
-//		DEBUG_PRINT("%s", "\n");
+
 //	add parm for rotate
 //		rcams_[i].cfg->orientation = libcamera::Orientation::Rotate0 * (libcamera::Transform) options_->orientation_v[cam];
 /* enum  	Orientation {
@@ -172,37 +140,27 @@ void RCam::initCams(const json::object& cams)
 		if (!jv.is_null())
 			rcams_[i].cfg->orientation = (libcamera::Orientation) json::value_to<int>(jv);
 
-		// set stride 0 before validation and validation will set it as need for format
-		for (auto &config : *rcams_[i].cfg) config.stride = 0; 
+//  validate/adjust camera config
 		CameraConfiguration::Status validation = rcams_[i].cfg->validate();
 		if (validation == CameraConfiguration::Invalid)
 			throw std::runtime_error("failed to validate stream configurations");
 		else if (validation == CameraConfiguration::Adjusted)
 			logger_.Log(LogLevel::INFO, "Stream configuration adjusted for " 
 			+ json::serialize(it->key()));
-			
-//		std::cout << "pixel validate: " << cfg.pixelFormat.toString() << std::endl;
 
-	//	if (!isCSI(rcams_[i].cam)) {
-	//		rcams_[i].cntls.set(libcamera::controls::FrameRate, 30.0);
-	//		int64_t frame_time_us = 1000000 / 30; 
-	//		rcams_[i].cntls.set(libcamera::controls::FrameDurationLimits, 
-     //         libcamera::Span<const int64_t, 2>({frame_time_us, frame_time_us}));
-	//	}
-
+// configure camera streams
 		if (rcams_[i].cam->configure(rcams_[i].cfg.get()) < 0)
 			throw std::runtime_error("failed to configure streams");
 			
 		rcams_[i].stat = RCconfigured;
 		
-		//the display of camera configuration
-		logger_.Log(LogLevel::INFO, "Cfg toString: " + cfg.toString() + "-" +
-		libcamera::ColorSpace::toString(cfg.colorSpace) + " cam#: " + 
-		std::to_string(i) + " " + camid );
-		
-		// setup dma memory 
+		//  display of camera streams configuration and setup dma memory 
+		int s = 0;
 		for (StreamConfiguration &config : *rcams_[i].cfg)
 		{
+			logger_.Log(LogLevel::INFO, "Cfg toString: " + config.toString() + "-" +
+				libcamera::ColorSpace::toString(config.colorSpace) + " cam#: " + 
+				std::to_string(i) + ":" + std::to_string(s++) + " "  + camid );
 			Stream *stream = config.stream();
 			std::vector<std::unique_ptr<FrameBuffer>> fb;
 
@@ -229,13 +187,10 @@ void RCam::initCams(const json::object& cams)
 
 		// set libcamera controls per input json 
 		auto camcntls = rcams_[i].cam->controls();
-//		DEBUG_PRINT("%s", "\n");
-//		jsonWrite(std::cout, it->value());
-//		auto cfgcntls = getCfgValue("/Controls", it->value()).get_object();
+
 		json::value cv = getCfgValue("/Controls", it->value());
 		if (!cv.is_null() && cv.is_object()) {
-			json::object cfgcntls = cv.as_object();
-//		DEBUG_PRINT("%s", "\n"); 
+			json::object cfgcntls = cv.as_object(); 
 			for(auto cfgit = cfgcntls.begin(); cfgit != cfgcntls.end(); ++cfgit)
 			{
 				if (cfgit->value().is_null()) continue;
@@ -321,7 +276,11 @@ void RCam::initOutputs(void)
 			dest.append(timeStr, std::size(timeStr)-1);
 	//WEK make container type a parameter see below make file ext match /ContainerFromat 
 	//TODO gives timebase warning on mov but not mkv
-			dest.append(".mkv");
+			if (raw) {
+				dest.append(".mkv");
+			} else {
+				dest.append(".mp4");
+			}
 	//TODO Setup an appropriate stream/container format.
 		} else {
 			if (dv.is_object()) {
@@ -335,7 +294,7 @@ void RCam::initOutputs(void)
 					format = "flv"; 
 					auto pv = getCfgValue("/YouTubePrivacy", dv);
 					std::string publish = pv.is_null() ? "private" : json::value_to<std::string>(pv);	
-					yt_strm s = YouTube(srcpath).StartStrm(title, publish); 
+					yt_strm s = YouTube().StartStrm(title, publish); 
 					strmID_ = s.b_id;
 					dest = s.strmurl;
 				}
@@ -343,6 +302,7 @@ void RCam::initOutputs(void)
 		}
        
 		AVFormatContext *fmt_ctx;
+
 		avformat_alloc_output_context2(&fmt_ctx, nullptr, format, dest.c_str());
 		if (!fmt_ctx)
 			throw std::runtime_error("libav: cannot allocate output context, try setting with --libav-format");
@@ -408,7 +368,7 @@ void RCam::freeOutputs()
 	fgctx_.clear();
 	
 	if (!strmID_.empty()) {
-		YouTube(srcpath).StopStrm(strmID_); 
+		YouTube().StopStrm(strmID_); 
 		strmID_.clear();
 	}
 }
@@ -426,6 +386,7 @@ AVStream *RCam::addStream(AVFormatContext *fmt_ctx, const AVCodecContext *codec_
 	// This seems to be a limitation/bug in ffmpeg:
 	// https://github.com/FFmpeg/FFmpeg/blob/3141dbb7adf1e2bd5b9ff700312d7732c958b8df/libavformat/avienc.c#L527
 		if (!strncmp(fmt_ctx->oformat->name, "avi", 3)) {
+			std::cout << "AVI format" << std::endl;
 		//TODO where to get framerate time base?
 		//	strm->time_base = { 1000, (int)(options->framerate_a[cam].value_or(DEF_FRAMERATE) * 1000) };
 		}
@@ -590,8 +551,7 @@ void RCam::stopCams(const json::object& cams)
 				reqdone = false;
 		}
 		if (reqdone) rcams_[i].stat = RCconfigured;
-
-		
+	
 		// An application might be holding a CompletedRequest, so queueRequest will get
 		// called to delete it later, but we need to know not to try and re-queue it.
 //		completed_requests_.clear();
@@ -629,9 +589,9 @@ void RCam::makeRequests(int cam)
 	while (true) {
 		for (StreamConfiguration &config : *rcams_[cam].cfg) {
 			Stream *stream = config.stream();
-			//WEK dual stream -- make request for all streams
 			if (stream == rcams_[cam].cfg->at(0).stream()) {
 				if (free_buffers[stream].empty()) {
+					DEBUG_PRINT("%s", "\n");
 					return;
 				}
 				std::unique_ptr<Request> request = rcams_[cam].cam->createRequest(cam);
@@ -687,104 +647,87 @@ void RCam::videoThread()
 	AVFrame *frame = av_frame_alloc();
 	if (!frame)
 		throw std::runtime_error("libav: could not allocate AVFrame");
-		
-//	int fcnt = 0;
-//	int64_t lpts = 0;
 
 	while (!stop_threads_) {
 		Msg msg = msg_queue_.Get();
 		if (msg.type == MsgType::Timeout) {
 			logger_.Log(LogLevel::WARN, "Device timeout detected, attempting a restart!!!");
+			DEBUG_PRINT("%s", "\n");
 			continue;
 		}
 		if (msg.type == MsgType::Quit) {
 			stop_threads_ = true;
+			DEBUG_PRINT("%s", "\n");
 			continue;
 		}
 		else if (msg.type != MsgType::RequestComplete)
 			throw std::runtime_error("unrecognised message!");
 		
 		CompletedRequestPtr &cr = std::get<CompletedRequestPtr>(msg.payload);
-		//WEK dual stream loop thru all streams
-		Stream *stream = rcams_[cr->request->cookie()].cfg->at(0).stream();
-		StreamConfiguration const &cfg = stream->configuration();
-		FrameBuffer *buffer = cr->buffers[stream];
 
-		auto it = mapped_buffers_.find(buffer);
-		if (it == mapped_buffers_.end())
-			throw std::runtime_error("failed to find buffer in mapped_buffers_");
+		int strm = 0;
+		//WEK some of the stuff in loop is same for both streams PTS for example
+		for (StreamConfiguration &cfg : *rcams_[cr->request->cookie()].cfg) {
 
-		auto planes = it->second;
+			Stream *stream = cfg.stream();
+			CamStrm cs(cr->request->cookie(), strm);
 
-		libcamera::Span span = planes[0];
+			FrameBuffer *buffer = cr->buffers[stream];
+
+			auto it = mapped_buffers_.find(buffer);
+			if (it == mapped_buffers_.end())
+				throw std::runtime_error("failed to find buffer in mapped_buffers_");
+
+			auto planes = it->second;
+
+			libcamera::Span span = planes[0];
 	
-		void *mem = span.data();
-		if (!buffer || !mem)
-			throw std::runtime_error("no buffer to encode");
+			void *mem = span.data();
+			if (!buffer || !mem)
+				throw std::runtime_error("no buffer to encode");
 
-		auto ts = cr->metadata.get(controls::SensorTimestamp);
+			auto ts = cr->metadata.get(controls::SensorTimestamp);
 		
-		uint64_t timestamp_ns = ts ? *ts : buffer->metadata().timestamp;
-//		std::cout << std::to_string(timestamp_ns) << std::endl;
-		if (!video_start_ts_)
-			video_start_ts_ = timestamp_ns / 1000;
-		//WEK dual stream should opaque be CameraStream
-		frame->opaque = (void *) &cam_fgctx_[cr->request->cookie()];
+			uint64_t timestamp_ns = ts ? *ts : buffer->metadata().timestamp;
+
+			if (!video_start_ts_) {
+				video_start_ts_ = timestamp_ns / 1000;
+			}
 		
-		// to ffmpeg frame and repixel if needed
-		
-		if (cfg.pixelFormat == libcamera::formats::YUV420) {
-			frame->format = AV_PIX_FMT_YUV420P;
-			frame->linesize[0] = cfg.stride; 
-			frame->linesize[1] = frame->linesize[2] = cfg.stride >> 1;
-		} else if (cfg.pixelFormat == libcamera::formats::YUYV) {
-			frame->format = AV_PIX_FMT_YUYV422;
-			frame->linesize[0] = cfg.stride;
-			frame->linesize[1] = frame->linesize[2] = 0;
-		} else {
-			throw std::runtime_error("unhandled libcamera pixel format!");
-		}
+			if (cfg.pixelFormat == libcamera::formats::YUV420) {
+				frame->format = AV_PIX_FMT_YUV420P;
+				frame->linesize[0] = cfg.stride; 
+				frame->linesize[1] = frame->linesize[2] = cfg.stride >> 1;
+			} else if (cfg.pixelFormat == libcamera::formats::YUYV) {
+				frame->format = AV_PIX_FMT_YUYV422;
+				frame->linesize[0] = cfg.stride;
+				frame->linesize[1] = frame->linesize[2] = 0;
+			} else {
+				throw std::runtime_error("unhandled libcamera pixel format!");
+			}
 			
-//		frame->format = AV_PIX_FMT_YUV420P;  //TODO use lookup func	
-		frame->width = cfg.size.width;
-		frame->height = cfg.size.height;
+			frame->width = cfg.size.width;
+			frame->height = cfg.size.height;
 		
-		
-//		frame->linesize[0] = cfg.stride; //TODO use av_image_fill_linesize()??	
-//		frame->linesize[1] = frame->linesize[2] = cfg.stride >> 1;
-		
-
-
 //WEK fill_linesize does not return alinged size for CSI cameras
 //		av_image_fill_linesizes(frame->linesize, AV_PIX_FMT_YUV420P, cfg.size.width);
 
-		frame->pts = (timestamp_ns / 1000) - video_start_ts_;
+			frame->pts = (timestamp_ns / 1000) - video_start_ts_;
 		
-//		std::cout << 
-//			frame->linesize[0] << " " << frame->linesize[1] << 
-//			" " << frame->linesize[2] << 
-//			" " << frame->pts <<
-//			" " << frame->pts - lpts / 1000 <<
-//			" " << fcnt++ << std::endl;
-//		lpts = frame->pts;
-//		fcnt++;
+			frame->buf[0] = av_buffer_create((uint8_t *)mem, span.size(), &av_buffer_default_free, NULL, 0);
+			assert(frame->buf[0]);
 		
-	//TODO use av_buffer_default_free() if RCam::releaseBuffer not needed 
-		frame->buf[0] = av_buffer_create((uint8_t *)mem, span.size(), &av_buffer_default_free, NULL, 0);
-		assert(frame->buf[0]);
-		av_image_fill_pointers(frame->data, AV_PIX_FMT_YUV420P, frame->height, frame->buf[0]->data, frame->linesize); //TODO use lookup func
-		av_frame_make_writable(frame);
+			av_image_fill_pointers(frame->data, (enum AVPixelFormat)frame->format, frame->height, frame->buf[0]->data, frame->linesize); //TODO use lookup func
+			av_frame_make_writable(frame);
 		
 		// done frame to ffmpeg
-		//WEK dual stream should opaque be CameraStream
-		for (AVFilterContext *fc : cam_fgctx_[cr->request->cookie()]) {
-			filterFrame(fc, frame);
+			for (AVFilterContext *fc : camstrm_fgctx_[cs.getCamStrm()]) {
+				filterFrame(fc, frame);
+			}
+		strm++;
 		}
-
 	}
 
-//	std::cout << "Frame count: " << fcnt << std::endl;
-	
 	frame->buf[0] = NULL;
 	av_frame_unref(frame);
 	av_frame_free(&frame);
@@ -792,6 +735,7 @@ void RCam::videoThread()
 // flush any valid encoder
 	for (const auto& c : codec_to_stream_)
 		if (c.first->codec_type == AVMEDIA_TYPE_VIDEO) encodeFrame(c.first, nullptr);
+
 }
 
 void RCam::audioThread() 
@@ -803,16 +747,15 @@ void RCam::audioThread()
 
 	uint32_t out_channels = audio_out_codec_ctxs_.front()->ch_layout.nb_channels;
 
-	SwrContext *conv;
 	AVAudioFifo *fifo;
 
+	SwrContext *conv = NULL;
 	ret = swr_alloc_set_opts2(&conv, &audio_out_codec_ctxs_.front()->ch_layout, required_fmt,
 		audio_out_codec_ctxs_.front()->sample_rate, &audio_in_codec_ctx_->ch_layout,
 		audio_in_codec_ctx_->sample_fmt, audio_in_codec_ctx_->sample_rate, 0, nullptr);
-
 	if (ret < 0)
 		throw std::runtime_error("libav: cannot create swr context");
-
+		
 	// 2 seconds FIFO buffer
 	fifo = av_audio_fifo_alloc(required_fmt, audio_out_codec_ctxs_.front()->ch_layout.nb_channels,
 		audio_out_codec_ctxs_.front()->sample_rate * 2);
@@ -920,6 +863,7 @@ void RCam::audioThread()
 			av_frame_free(&out_frame);
 		}
 	}
+	//WEK flush lswr by passing swr)conver in=null and in_count=0 -- not sure it is worth the work??
 
 	// Flush the encoder
 	for ( auto cctx : audio_out_codec_ctxs_) {
@@ -937,8 +881,9 @@ void RCam::audioThread()
 
 void RCam::encodeFrame(AVCodecContext *codec_ctx, AVFrame *frame)
 {
-	DEBUG_PRINT("%s", "\n");
+	DEBUG_PRINT("%p %p %s", (void*)codec_ctx, (void*)frame, "\n");
 	assert(codec_ctx);
+	
 	int ret = avcodec_send_frame(codec_ctx, frame);
 
 	if (ret < 0)
@@ -1025,7 +970,8 @@ void RCam::openFormat(AVCodecContext *codec_ctx)
 
 	char err[64];
 	std::string url = cs.fmt_ctx->url;
-	ret = avio_open2(&cs.fmt_ctx->pb, cs.fmt_ctx->url, AVIO_FLAG_WRITE, nullptr, nullptr);
+	
+	ret = avio_open(&cs.fmt_ctx->pb, cs.fmt_ctx->url, AVIO_FLAG_WRITE);
 	if (ret < 0) {
 		av_strerror(ret, err, sizeof(err));
 		throw std::runtime_error("libav: unable to open output mux for " + url + ": " + err);
@@ -1085,6 +1031,7 @@ void RCam::queueRequest(CompletedRequest *completed_request)
 void RCam::initVideoStream(AVFormatContext *fmt_ctx, json::value& parms)
 {
 	DEBUG_PRINT("%s", "\n");
+// filter setup
 	char args[512];
 	int ret = 0;
 	AVFilterContext *fgctxSrc = nullptr; //always Source at that point in time
@@ -1116,45 +1063,40 @@ void RCam::initVideoStream(AVFormatContext *fmt_ctx, json::value& parms)
 	if (stream_def.empty()) 
 		throw std::runtime_error("initStream() parms is empty!");
 
-	
+	CamStrm rcs {};
 	for (auto it = stream_def.begin();it < stream_def.end();it++, layer++) {
-		json::value cam = getCfgValue("/Source", *it);
-		if (cam.is_null()) 
-//			throw std::runtime_error("Source is not found for layer " + std::to_string(layer) + "!");  //here
-			throw std::runtime_error("Source is not found for layer " + lstr + "!");  
+		json::value source = getCfgValue("/Source", *it);
+		if (source.is_null()) 
+			throw std::runtime_error("Source is not found for layer " + lstr + "!");
+		CamStrm cs(json::value_to<int>(source));  
 
-		//WEK dual stream -- use both cam and stream
-		StreamConfiguration const &streamcfg = rcams_[json::value_to<int>(cam)].cfg->at(0); 
-		StreamInfo si = getStreamInfo(streamcfg, json::value_to<int>(cam));
-		if (!layer) rsi = si;
+		StreamConfiguration const &streamcfg = rcams_[cs.getCamera()].cfg->at(cs.getStream()); 
+		StreamInfo si = getStreamInfo(streamcfg);
+		
+		if (!layer) {//save main layer streaminfo
+			rsi = si;
+			rcs = cs;  
+		}
 		snprintf(args, sizeof(args), "video_size=%dx%d:pix_fmt=%d:time_base=1/1000000:pixel_aspect=0/1", 
 			si.w, si.h, si.pix); //TODO make pixel converter
-//		name = "in" + std::to_string(layer);  //here
 		name = "in" + sstr;  
 		ret = avfilter_graph_create_filter(&fgctxSrc, avfilter_get_by_name("buffer"), name.c_str(), args, NULL, fg);
-//		if (ret < 0) throw std::runtime_error("libav: untable to create buffer for layer " + std::to_string(layer) + "!");  //WEK fix message so layer/stream
 		if (ret < 0) throw std::runtime_error("libav: untable to create buffer for" + lstr + "!"); 
-		
-		//WEK dual stream CameraStream
-		cam_fgctx_[json::value_to<int>(cam)].push_back(fgctxSrc);
+
+		camstrm_fgctx_[cs.getCamStrm()].push_back(fgctxSrc);
 		fctxin.push_back(fgctxSrc);
 		
-		//start
+		// pixel format convert filter
 		if (streamcfg.pixelFormat != libcamera::formats::YUV420) {
 			snprintf(args, sizeof(args), "pix_fmts=%s", av_get_pix_fmt_name(AV_PIX_FMT_YUV420P));
-	//		std::string arg {"format=YUV420"};
-//			name =  "format" + std::to_string(layer);  //here
 			name =  "format" + sstr;  
 			ret = avfilter_graph_create_filter(&fgctxDst, avfilter_get_by_name("format"), name.c_str(), args, NULL, fg);
-	//		if (ret < 0) throw std::runtime_error("libav: unable to create format for layer " + std::to_string(layer) + "!");  //here
 			if (ret < 0) throw std::runtime_error("libav: unable to create format for" +lstr + "!");  
 			ret = avfilter_link(fgctxSrc, 0, fgctxDst, 0);
-	//		if (ret < 0) throw std::runtime_error("libav: unable to link in to format for layer " + std::to_string(layer) + "!");  //here
 			if (ret < 0) throw std::runtime_error("libav: unable to link in to format for" + lstr + "!");  
 			fgctxSrc = fgctxDst; 
 			rsi.pix = AV_PIX_FMT_YUV420P;		
 		}
-		//end
 
 		json::value fp = getCfgValue("/Crop", *it);
 		if (!fp.is_null()) {
@@ -1165,13 +1107,10 @@ void RCam::initVideoStream(AVFormatContext *fmt_ctx, json::value& parms)
 					rsi.w = r.width;
 					rsi.h = r.height;
 				}
-	//			name =  "crop" + std::to_string(layer); //here 
 				name =  "crop" + sstr; 
 				ret = avfilter_graph_create_filter(&fgctxDst, avfilter_get_by_name("crop"), name.c_str(), args, NULL, fg);
-	//			if (ret < 0) throw std::runtime_error("libav: unable to create crop for layer " + std::to_string(layer) + "!"); //here
 				if (ret < 0) throw std::runtime_error("libav: unable to create crop for" + lstr + "!"); 
 				ret = avfilter_link(fgctxSrc, 0, fgctxDst, 0);
-	//			if (ret < 0) throw std::runtime_error("libav: unable to link in to crop for layer " + std::to_string(layer) + "!"); //here
 				if (ret < 0) throw std::runtime_error("libav: unable to link in to crop for" + lstr + "!"); 
 				fgctxSrc = fgctxDst; 
 			}
@@ -1185,13 +1124,10 @@ void RCam::initVideoStream(AVFormatContext *fmt_ctx, json::value& parms)
 					rsi.w = s.width;
 					rsi.h = s.height;
 				}
-	//			name = "scale" +  std::to_string(layer); //here
 				name = "scale" +  sstr; 
 				ret = avfilter_graph_create_filter(&fgctxDst, avfilter_get_by_name("scale"), name.c_str(), args, NULL, fg);
-		//		if (ret < 0) throw std::runtime_error("libav: unable to create scaler for layer " + std::to_string(layer) + "!"); //here
 				if (ret < 0) throw std::runtime_error("libav: unable to create scaler for" + lstr + "!"); 
 				ret = avfilter_link(fgctxSrc, 0, fgctxDst, 0);
-	//			if (ret < 0) throw std::runtime_error("libav: unable to link in to scaler for layer " + std::to_string(layer) + "!"); //here
 				if (ret < 0) throw std::runtime_error("libav: unable to link in to scaler for" + lstr + "!"); 
 				fgctxSrc = fgctxDst; 
 			}
@@ -1204,16 +1140,12 @@ void RCam::initVideoStream(AVFormatContext *fmt_ctx, json::value& parms)
 				Point p{};
 				if (fromArray(p, fp)) {
 					snprintf(args, sizeof(args), "x=%d:y=%d:eval=init", p.x, p.y);
-		//			name = "overlay" + std::to_string(layer);   //here
 					name = "overlay" + sstr;
 					ret = avfilter_graph_create_filter(&fgctxDst, avfilter_get_by_name("overlay"), name.c_str(), args, NULL, fg);
-		//			if (ret < 0) throw std::runtime_error("libav: unable to create overlay for layer " + std::to_string(layer) + "!"); //here
 					if (ret < 0) throw std::runtime_error("libav: unable to create overlay for" + lstr + "!"); 
 					ret = avfilter_link(fgctxTmp, 0, fgctxDst, 0);
-		//			if (ret < 0) throw std::runtime_error("libav: unable to link in to main for layer " + std::to_string(layer) + "!"); //here
 					if (ret < 0) throw std::runtime_error("libav: unable to link in to main for" + lstr + "!"); 
 					ret = avfilter_link(fgctxSrc, 0, fgctxDst, 1);
-		//			if (ret < 0) throw std::runtime_error("libav: unable to link in to overlay for layer " + std::to_string(layer) + "!"); //here
 					if (ret < 0) throw std::runtime_error("libav: unable to link in to overlay for" + lstr + "!"); 
 					fgctxSrc = fgctxDst; 
 				}
@@ -1234,10 +1166,12 @@ void RCam::initVideoStream(AVFormatContext *fmt_ctx, json::value& parms)
     if (ret < 0) throw std::runtime_error("libav: configure filter graph failed!");
     fgctx_.push_back(fg);
  
-	json::value vcv = getCfgValue("/VideoCodec", parms);
-	std::string codec_name = (vcv.is_null() ? (raw ? "yuv4" : "libx264") : json::value_to<std::string>(vcv));
+ // video codex setup
+	json::value cp = getCfgValue("/0/0/CodecParms", json::value{stream_def});
 	
-	//TODO make setting type unique (and for h264 normal and low latancy)
+	json::value codecv = getCfgValue("/Format", cp);
+	std::string codec_name = (codecv.is_null() ? (raw ? "yuv4" : "libx264") : json::value_to<std::string>(codecv));
+	//WEK make setting type unique (and for h264 normal and low latancy)
 	const AVCodec *codec = avcodec_find_encoder_by_name(codec_name.c_str());
 	if (!codec)
 		throw std::runtime_error("libav: cannot find video encoder " + codec_name);
@@ -1251,7 +1185,7 @@ void RCam::initVideoStream(AVFormatContext *fmt_ctx, json::value& parms)
 	codec_ctx->height = rsi.h;
 	// usec timebase
 	codec_ctx->time_base = { 1, 1000 * 1000 };
-	codec_ctx->sw_pix_fmt = rsi.pix;  // WEK unused can be removed?
+//	codec_ctx->sw_pix_fmt = rsi.pix;  // WEK unused can be removed?
 	codec_ctx->pix_fmt = rsi.pix;
 
 
@@ -1260,15 +1194,10 @@ void RCam::initVideoStream(AVFormatContext *fmt_ctx, json::value& parms)
 	codec_ctx->colorspace = rsi.cs;
 	codec_ctx->color_range = rsi.cr;
 	
-	auto bv = getCfgValue("/BitStream", parms);
-	if (!bv.is_null()) {
-		int64_t br = json::value_to<int64_t>(bv);
-		codec_ctx->rc_max_rate = br;
-	}
+//	codec->framerate = { (int)(options->framerate_a[cam].value_or(DEF_FRAMERATE) * 1000), 1000 };  // code sample from rpicam
 
-	//std::optional<float> framerate_a[MAX_CAMS]; from opts
-//	codec->framerate = { (int)(options->framerate_a[cam].value_or(DEF_FRAMERATE) * 1000), 1000 };
-	std::string loc = getLocation(rcams_[rsi.cam].cam);
+//this logic need to be fixed as when VFR (usb and csi with frameduration) you get total length wrong by 33 seconds
+/*	std::string loc = getLocation(rcams_[rcs.getCamera()].cam);
 	json::value val = getCfgValue("/Cameras/" + loc + "/Controls/FrameDurationLimits");
 	if (!val.is_null()) {
 		if (val.is_array()) {
@@ -1281,10 +1210,9 @@ void RCam::initVideoStream(AVFormatContext *fmt_ctx, json::value& parms)
 			throw std::runtime_error("FrameDurationLimits not array!");
 	} 
 	else 
-		codec_ctx->framerate = {30, 1000};
+		codec_ctx->framerate = {30, 1000}; */
 	
 	if ("libx264" == codec_name) {
-//		codec_ctx->max_b_frames = 1;
 		codec_ctx->me_range = 16;
 		codec_ctx->me_cmp = 1; // No chroma ME
 		codec_ctx->me_subpel_quality = 0;
@@ -1341,16 +1269,26 @@ void RCam::initVideoStream(AVFormatContext *fmt_ctx, json::value& parms)
 //unsigned int intra; from opts	
 //	codec->gop_size = options->intra ? options->intra : (int)(options->framerate_a[cam].value_or(DEF_FRAMERATE));
 		json::value gop = getCfgValue("GOPSize", parms);
-		if (!gop.is_null())
+		if (!gop.is_null()) {
 			codec_ctx->gop_size = json::value_to<int>(gop);
+		} else {
+			codec_ctx->gop_size = 60;
+		}
 
-//Bitrate bitrate; from opts 
-/*	if (options->bitrate)
-		codec->bit_rate = options->bitrate.bps(); */
-	
-		json::value br = getCfgValue("BitRate", parms);
-		if (!br.is_null())
-			codec_ctx->bit_rate = json::value_to<int64_t>(br);
+		json::value crfv = getCfgValue("/CRF", cp);
+		if (!crfv.is_null()) {
+			int crf = json::value_to<int>(crfv);
+			av_opt_set(codec_ctx->priv_data, "crf", std::to_string(crf).c_str(), 0);
+			av_opt_set(codec_ctx->priv_data, "preset", "medium", 0);
+		} 
+		
+		json::value brv = getCfgValue("/BitRate", cp);
+		if (!brv.is_null()) {
+			int br = json::value_to<int>(brv) * 1000;
+			codec_ctx->bit_rate = br;
+			codec_ctx->rc_max_rate = br * 1.25;
+			codec_ctx->rc_buffer_size = br * 2.5;
+		}
 	
 //TODO have generic encoder options???
 //std::string libav_video_codec_opts;
@@ -1399,29 +1337,17 @@ void RCam::initVideoStream(AVFormatContext *fmt_ctx, json::value& parms)
     }	
 } 
 
-//TODO take only cam number
-StreamInfo RCam::getStreamInfo(const StreamConfiguration& cfg, const int camera)
+StreamInfo RCam::getStreamInfo(const StreamConfiguration& cfg)
 {
 	DEBUG_PRINT("%s", "\n");
-	std::cout << "Stream config: " << cfg.toString() << 
-	" " << cfg.colorSpace->toString() << std::endl;
-	
 	StreamInfo si;
-	si.cam = camera;
+
 	si.w = cfg.size.width;
 	si.h = cfg.size.height;
 
-//	si.pix = AV_PIX_FMT_YUV420P; 
 	static const std::map< PixelFormat , AVPixelFormat> pix_map = {
 		{ libcamera::formats::YUV420 ,AV_PIX_FMT_YUV420P },
 		{ libcamera::formats::YUYV ,AV_PIX_FMT_YUYV422 },  //segfault wo sensor | unable to open raw codec
-	//	{ libcamera::formats::YUYV ,AV_PIX_FMT_UYVY422 }, // unable to open raw codec
-	//	{ libcamera::formats::YUYV ,AV_PIX_FMT_YUV422P },  //segfault wo sensor | runs with raw but color crap | segment fault with format filter
-	//	{ libcamera::formats::YUYV ,AV_PIX_FMT_YUV422P16 },  // unable to open raw codec
-	//	{ libcamera::formats::YUYV ,AV_PIX_FMT_YUV420P },  // runs with raw but color crap but best Y'
-	//	{ libcamera::formats::MJPEG ,AV_PIX_FMT_YUVJ420P },
-	//	{ libcamera::formats::YUYV ,AV_PIX_FMT_YUV420P }
-//		{ libcamera::formats::SRGGB10_CSI2P ,AV_PIX_FMT_SGRBG10P }
 	}; 
 	auto it_pf = pix_map.find(cfg.pixelFormat);
 		if (it_pf == pix_map.end())

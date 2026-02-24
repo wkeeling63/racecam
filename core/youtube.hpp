@@ -3,19 +3,11 @@
  
 #pragma once
 
-//#include <iostream>
-//#include <fstream>
 #include <thread>
-//#include <chrono>
-//#include <filesystem>
 
 #include <curlpp/Options.hpp>
 #include <curlpp/Infos.hpp>
 
-//#include <boost/json/src.hpp> 
-//#include <boost/json.hpp>  //WEK can't figure out how to make meson link to boost_json 1.87 -- try on new build 
-
-//#include <ctime>
 #include <sys/stat.h>
 
 namespace json = boost::json;
@@ -39,7 +31,7 @@ const std::string apikey = "AIzaSyBOjJlttYVt-90r9Zo2eHY7CCnSQrqKDpI";
 class YouTube
 {
 public:
-	YouTube(std::string const) ;
+	YouTube() ;
 	~YouTube();
 
 json::value GetAuth(bool = true);
@@ -69,9 +61,7 @@ private:
 size_t getRespJson(char*, size_t, size_t);
 rsp_type postMsg(std::string const&, std::string const&);
 rsp_type postMsg(std::string const&, std::string const&, std::list<std::string> const&);
-// std::string insBroadcast(std::string const&, std::string const&);
 	
-	std::string path_;
 	json::stream_parser rp_;
 	std::string id_ {};
 	std::string secret_ {};

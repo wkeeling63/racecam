@@ -9,6 +9,7 @@ default_options : ['werror=true', 'warning_level=3', 'cpp_std=c++17', 'c_std=c11
 license : 'BSD-2-Clause'
 )
 
+# cpp_arguments = ['-pedantic', '-Wno-unused-parameter', '-faligned-new', '-g'] # -g for gdb symbols
 cpp_arguments = ['-pedantic', '-Wno-unused-parameter', '-faligned-new']
 
 # Needed for file sizes > 32-bits.
@@ -22,10 +23,10 @@ if cxx.get_id() == 'gcc'
     cpp_arguments += '-Wno-psabi'
 endif
 
-srcheader = custom_target('generate_src_header',
-        output : 'racecamsrc.hpp',
-        command : ['sh', meson.project_source_root() / 'scripts/sourcelocation.sh', meson.project_source_root(), '@OUTPUT@']
-    )
+#srcheader = custom_target('generate_src_header',
+#        output : 'racecamsrc.hpp',
+#        command : ['sh', meson.project_source_root() / 'scripts/sourcelocation.sh', meson.project_source_root(), '@OUTPUT@']
+#    )
 
 if cpu == 'aarch64' or neon == 'arm64'
     cpp_arguments += '-ftree-vectorize'
@@ -36,7 +37,7 @@ endif
 libcamera_dep = dependency('libcamera', required : true)
 boost_dep = dependency('boost', modules: ['json'], required : true)
 curlpp_dep = dependency(['curlpp', 'curl'], required : true)
-src_dep = declare_dependency(sources : [srcheader])
+# src_dep = declare_dependency(sources : [srcheader])
 
 summary({
             'location' : libcamera_dep.get_variable('libdir'),

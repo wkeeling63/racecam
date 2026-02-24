@@ -1,5 +1,4 @@
 /data/*
 !/data/client.json
 !/data/controls.yaml
-/logs/*
 racecamsrc.hpp

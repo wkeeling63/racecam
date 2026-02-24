@@ -1,59 +1,27 @@
 /*  racecam capture class header
 * rcam.hpp
-*/
-//#include <iostream>
-//#include <fstream>
-//#include <filesystem>
-//#include <string>
-//#include <queue>
-//#include <any>
-//#include <span>
+*/ 
+
 #include <condition_variable>
-//#include <ctime> 
-//#include <iomanip>
-//#include <thread>
-//#include <chrono>
-//#include <limits>
-
-
-//#include <libcamera/camera.h>
-//#include <libcamera/camera_manager.h>
-#include <libcamera/control_ids.h>
-//#include <libcamera/property_ids.h>
-//include <libcamera/transform.h>
-//#include <libcamera/formats.h>
-//#include <libcamera/logging.h>
-//#include <libcamera/yaml_parser.h>
-
 #include <sys/mman.h>
 
-//#include <boost/json/src.hpp> 
-#include <boost/json.hpp>  //WEK can't figure out how to make meson link to boost_json 1.87 -- try on new build 
-//#include <yaml-cpp/yaml.h>
+#include <libcamera/control_ids.h>
+
+#include <boost/json.hpp>  
 
 #include "core/dma_heaps.hpp"
-//#include "core/message_map.hpp"
-//#include "racecamsrc.hpp"
 #include "rcamshared.hpp"
 #include "core/youtube.hpp"
-//#include "core/logger.hpp"
-
 
 extern "C"
 {
 #include "libavcodec/avcodec.h"
-//#include "libavcodec/codec_desc.h"
 #include "libavdevice/avdevice.h"
 #include "libavutil/audio_fifo.h"
-//#include "libavutil/hwcontext.h"
-//#include "libavutil/hwcontext_drm.h"
 #include "libavutil/imgutils.h"
-//#include "libavutil/timestamp.h"
-//#include "libavutil/version.h"
 #include "libswresample/swresample.h"
 #include "libavfilter/buffersrc.h"
 #include "libavfilter/buffersink.h"
-//#include "libavfilter/avfilter.h"
 }
 
 #pragma once
@@ -78,7 +46,6 @@ using namespace libcamera;
 namespace json = boost::json;
 
 typedef struct {
-	int cam;	
 	int w;
 	int h;
 	AVPixelFormat pix;
@@ -162,7 +129,8 @@ public:
 	using Camera = libcamera::Camera;
 	using BufferMap = Request::BufferMap;
 	
-	RCam(Logger& lptr, std::string const& path, std::string const& cfg = "racecam_config.json");
+//WEK bug default cfg not working;
+	RCam(Logger& lptr, std::string const& cfg = "racecam_config.json");
 	virtual ~RCam(){};  
 //	virtual ~RCam();   
 
@@ -224,12 +192,11 @@ private:
 	void openFormat(AVCodecContext *); 
 	unsigned int getCntlID(const std::string cntlname);
 	void initVideoStream(AVFormatContext *, json::value&);
-	StreamInfo getStreamInfo(const StreamConfiguration&, const int);
+	StreamInfo getStreamInfo(const StreamConfiguration&);
 	void filterFrame(AVFilterContext *, AVFrame *);
 	bool allFormatsOpen();
 	
 	std::array<RCamStruct, 5> rcams_;
-	unsigned int cam_cnt_;
 	std::map<FrameBuffer *, std::vector<libcamera::Span<uint8_t>>> mapped_buffers_;
 	DmaHeap dma_heap_;
 	MessageQueue<Msg> msg_queue_;
@@ -239,8 +206,7 @@ private:
 	uint64_t sequence_ = 0;
 	std::vector<AVFormatContext *> all_fmt_ctx_;
 	std::map<AVCodecContext *, CodecStream> codec_to_stream_;
-	//WEK dual stream rename to camstrm_fgctx_ to allow mapping by CameraStream 
-	std::map<int, std::vector<AVFilterContext *>> cam_fgctx_;
+	std::map<int, std::vector<AVFilterContext *>> camstrm_fgctx_;
 	AVFormatContext *audio_in_fmt_ctx_ = nullptr;
 	AVCodecContext *audio_in_codec_ctx_ = nullptr;
 	std::vector<AVCodecContext *> audio_out_codec_ctxs_; 
@@ -260,5 +226,3 @@ private:
 	bool audio_ = false;
 	std::string strmID_ {};
 };
-
-

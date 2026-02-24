@@ -5,15 +5,36 @@
  
 #include "youtube.hpp"
 
+std::string getPath(std::string file)
+{
+	const char* homedir = getenv("HOME");
+    if (homedir == nullptr) {
+        struct passwd *pw = getpwuid(getuid());
+        if (pw != nullptr) {
+            homedir = pw->pw_dir;
+        }
+    }
+    std::string home(homedir);
+    std::string fullpath {};
+	if (std::filesystem::exists(home + "/racecam/data/" + file)) { 
+		fullpath = home + "/racecam/data/" + file;
+		return fullpath;
+	} else if (std::filesystem::exists("/usr/local/etc/racecam/data/" + file)) {
+        fullpath = "/usr/local/etc/racecam/data/" + file;
+    } else {
+        std::cout << "youtube getpath(" << file << ") not found!" << std::endl;
+    }
+    return fullpath;
+}
+
+
 std::string tostring(std::time_t p)
 {
 	std::tm* now_tm = std::localtime(&p);
-//	std::cout <<  format("%FT%T", floor<seconds>(p)) << std::endl;
-	char buffer[80]; // Buffer to hold the formatted string
+	char buffer[80]; 
     std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", now_tm);
 
     std::string time_str(buffer);
-//    std::cout << "Formatted time: " << time_str << std::endl;
     return time_str;
 }
 
@@ -30,10 +51,10 @@ json::value valueat(const std::vector<std::string>& path, const json::object& js
 	return it->value();
 }
 //WEK get client info (id, secret, api_key)
-YouTube::YouTube(std::string const path) : path_(path) 
+YouTube::YouTube() 
 {
 //	fprintf(stdout, "%s:%s:%d \n", __FILE__, __PRETTY_FUNCTION__, __LINE__);
-	json::value cv = jsonRead(path + "/data/client.json");
+	json::value cv = jsonRead("client.json");
 	if (cv.is_object())
 	{
 		json::object co = cv.get_object();
@@ -109,7 +130,7 @@ json::value YouTube::GetAuth(bool renew)
 //	fprintf(stdout, "%s:%s:%d \n", __FILE__, __PRETTY_FUNCTION__, __LINE__);
 	try
 	{
-		json::value av = jsonRead(path_ + "/data/racecam_auth.json");;
+		json::value av = jsonRead("racecam_auth.json");;
 		if (!renew || av.is_null())
 		{
 			//device code
@@ -150,12 +171,10 @@ json::value YouTube::GetAuth(bool renew)
 				{
 					std::cout << " Device authorized." << std::endl;
 					av = dr.resp;
-					jsonWrite(path_ + "/data/racecam_auth.json", av);
+					jsonWrite("racecam_auth.json", av);
 					return av;
 				} else 
 				{
-					// WEK handle errors like access denied	
-//					jsonWrite(std::cout, dr.resp);
 					throw std::runtime_error("Auth device responce code: " + std::to_string(dr.respcode));
 				}	
 				
@@ -171,26 +190,11 @@ json::value YouTube::GetAuth(bool renew)
 			if (it == co.end()) throw std::runtime_error("auth expires_in not found!");
 			int expires =  json::value_to<int>(it->value());
 							
-		//WEK revert back to c code for file time  
-		// could not get std::filesystem::last_write_time(p) to work
-				//		no std::chrono::file_clock::now() until c++20 so have to cast to system_clock;
-	/*	auto p = std::filesystem::path(path_ + "/data/racecam_auth.json");
-			auto last = std::filesystem::last_write_time(p);
-			auto last_tp = std::chrono::time_point<std::chrono::system_clock>(last.time_since_epoch());
-			std::time_t c_time = std::chrono::system_clock::to_time_t(last_tp);
-			auto current = std::chrono::system_clock::now();
-			auto diff = current - last_tp;
-			std::chrono::seconds secs = std::chrono::duration_cast<std::chrono::seconds>(diff);
-			std::chrono::minutes buffer(5);
-			std::chrono::seconds exp(expires);
-			secs = secs + buffer;
-			if (secs > exp) */ 
-			
 			struct stat sb;
-			std::string auth = path_ + "/data/racecam_auth.json";
-			stat (auth.c_str(), &sb);
+			if (stat (getPath("racecam_auth.json").c_str(), &sb)) throw std::runtime_error("racecam_auth.json stat failed!");;
 			std::time_t expire_time = sb.st_mtime + expires - 300;
 			std::time_t current_time = std::time(nullptr);
+			
 			if (current_time > expire_time)
 			{
 				it = co.find("access_token");
@@ -214,7 +218,7 @@ json::value YouTube::GetAuth(bool renew)
 				it = rr.resp.find("expires_in");
 				co["expires_in"] =  json::value_to<int>(it->value());
 				av = co;
-				jsonWrite(path_ + "/data/racecam_auth.json",av);
+				jsonWrite("racecam_auth.json",av);
 			}
 		}
 		return av;
@@ -232,15 +236,8 @@ json::value YouTube::GetAuth(bool renew)
 yt_strm YouTube::StartStrm(std::string const& name, std::string const& publish)
 {
 	yt_strm stm;
-//	stm.b_id = insBroadcast(name, publish);
-//	return stm;
-/*}
-
-std::string YouTube::insBroadcast(std::string const& title, std::string const& publish)
-{ */
-//	std::string id;
 	// call GetAuth
-	std::cout << "Start get autho" << std::endl;
+//	std::cout << "Start get OAuth" << std::endl;
 	json::value av = GetAuth();
 	if (!av.is_object()) throw std::runtime_error("GetAuth did not return a object!");
 	json::object ao = av.get_object();
@@ -248,14 +245,14 @@ std::string YouTube::insBroadcast(std::string const& title, std::string const& p
 	if (it == ao.end()) throw std::runtime_error("auth access_token not found!");
 	std::string access_token = json::value_to<std::string>(it->value());
 	//get times display and iso_zulu
-	std::cout << "Start broadcast" << std::endl;
+//	std::cout << "Start broadcast" << std::endl;
 	char c[80];
 	const auto now = std::chrono::system_clock::now();
 	std::time_t now_tt = std::chrono::system_clock::to_time_t(now);
 	std::tm* tm = std::gmtime(&now_tt);
 	std::strftime(c, sizeof(c), "%FT%TZ", tm);
 	std::string gtd = c;
-	std::cout << gtd << std::endl;
+//	std::cout << gtd << std::endl;
 
 	tm = std::localtime(&now_tt);
 	std::strftime(c, sizeof(c), "%B %d, %Y %I:%M:%S %p", tm);
@@ -267,31 +264,30 @@ std::string YouTube::insBroadcast(std::string const& title, std::string const& p
 		"\"contentDetails\":{\"enableDvr\":true," +
 		"\"recordFromStart\":true," +
 		"\"enableAutoStart\":true," +
+//		"\"enableAutoStop\":true," +
 		"\"startWithSlate\":true}," +
 		"\"status\":{\"privacyStatus\":\"" + publish + "\"}}";
-	std::cout << req << std::endl;
+//	std::cout << req << std::endl;
 	std::string url = "https://youtube.googleapis.com/youtube/v3/liveBroadcasts?part=snippet%2CcontentDetails%2Cstatus&key=" + apikey;
 	std::list<std::string> h;
     h.push_back("Content-Type: application/json");
     h.push_back("Accept: application/json");
     h.push_back("Authorization: Bearer " + access_token);
-//	std::cout << access_token << std::endl;
 	//post and check for 200
 	rsp_type rr = postMsg(url, req, h);
 	if (!(rr.respcode == 200)) 
 	{
-		std::cout <<  rr.respcode << std::endl;
+		std::cout << access_token << std::endl;
+		std::cout << rr.respcode << std::endl;
 		jsonWrite(std::cout, rr.resp);
 		throw std::runtime_error("Broadcast insert failed!");
 	}
-	// parse responce
-//	jsonWrite(std::cout, rr.resp);
 	
 	it = rr.resp.find("id");
 	if (it == rr.resp.end()) throw std::runtime_error("broadcast id not found!");
 	stm.b_id = json::value_to<std::string>(it->value());
 
-	std::cout << "Start stream" << std::endl;
+//	std::cout << "Start stream" << std::endl;
 //WEK get and display monitorstream
 /* "contentDetails" : {
         "monitorStream" : {
@@ -320,17 +316,25 @@ std::string YouTube::insBroadcast(std::string const& title, std::string const& p
 	it = rr.resp.find("id");
 	if (it == rr.resp.end()) throw std::runtime_error("stream id not found!");
 	stm.s_id = json::value_to<std::string>(it->value());
-	
+//WEK works as rtmp or rtmps -- make that an option	
 	stm.strmurl = json::value_to<std::string>(valueat(
 		std::vector<std::string> {"cdn", "ingestionInfo", "ingestionAddress"},
+//		std::vector<std::string> {"cdn", "ingestionInfo", "rtmpsIngestionAddress"},
 		rr.resp));
-	
+
+/*	size_t pos = stm.strmurl.rfind("/live2");
+	if (pos == std::string::npos) {
+		throw std::runtime_error("live2 not found!");
+	} else {
+		stm.strmurl.insert(pos,":443");
+	} */
 	stm.strmurl += '/';
+
 	stm.strmurl += json::value_to<std::string>(valueat(
 		std::vector<std::string> {"cdn", "ingestionInfo", "streamName"},
 		rr.resp));
 		
-	std::cout << "Start bind" << std::endl;
+//	std::cout << "Start bind" << std::endl;
 //WEK get ingestion name and url
 /*"cdn" : {
         "ingestionType" : "rtmp",
@@ -357,17 +361,13 @@ std::string YouTube::insBroadcast(std::string const& title, std::string const& p
 		throw std::runtime_error("bind failed!");
 	}
 
-//	jsonWrite(std::cout, rr.resp);
-	
-//	it = rr.resp.find("id");
-//	if (it == rr.resp.end()) throw std::runtime_error("assset id not found!");
-//	stm.a_id = json::value_to<std::string>(it->value());
-	std::cout << "Done start" << std::endl;
+//	std::cout << "Done start" << std::endl;
 	return stm;
 }
 
 void YouTube::StopStrm(std::string const& id)
 {
+	//WEK will fail to transition if no stream recived and stat is still ready
 	json::value av = GetAuth();
 	if (!av.is_object()) throw std::runtime_error("GetAuth did not return a object!");
 	json::object ao = av.get_object();
@@ -383,6 +383,7 @@ void YouTube::StopStrm(std::string const& id)
     rsp_type rr = postMsg(url, "", h);
 	if (!(rr.respcode == 200)) 
 	{
+		std::cout << url << std::endl;
 		std::cout <<  rr.respcode << std::endl;
 		jsonWrite(std::cout, rr.resp);
 		throw std::runtime_error("transition to complete failed!");

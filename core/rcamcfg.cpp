@@ -1,22 +1,8 @@
-// need stat corrected everywhere add configure
-// and figure out where stopping should change to configed
-
-/* racecam application classes code
+/* 
 *  rcamcfg.cpp
 */
-//#include <string>
-
-//#include <boost/json/src.hpp> 
-//#include <boost/json.hpp> 
 #include "core/jsonio.hpp"
-
-//#include "core/rcamshared.hpp"
 #include "core/rcamcfg.hpp"
-
-//#include <linux/dma-buf.h>
-//#include <sys/ioctl.h>
-
-//#include <stdio.h>
 
 json::value RCamCfg::toJSON(ControlValue& cv)
 {
@@ -41,27 +27,25 @@ json::value RCamCfg::toJSON(ControlValue& cv)
 			if (!cv.isArray()) {
 				if (cv.numElements() != 1) return jv;
 				jv.emplace_int64() = cv.get<long>();
-				return jv;
 			} else {
 				json::array ja;
 				for (const auto& l : cv.get<libcamera::Span<const long>>())
 					ja.emplace_back(l);
 				jv = ja;
-				return jv;
 			}	
+			return jv;
 		}
 		case ControlTypeFloat: {
 			if (!cv.isArray()) {
 				if (cv.numElements() != 1) return jv;
 				jv.emplace_double() = cv.get<float>();
-				return jv;
 			} else {
 				json::array ja;
 				for (const auto& f : cv.get<libcamera::Span<const float>>())
 					ja.emplace_back(f);
 				jv = ja;
-				return jv;
 			}
+			return jv;
 		}
 		case ControlTypeRectangle: {	
 			if (!cv.isArray()) {
@@ -69,16 +53,13 @@ json::value RCamCfg::toJSON(ControlValue& cv)
 				Rectangle r = cv.get<Rectangle>();
 				json::array ja = {{r.x, r.y, r.width, r.height}};
 				jv = ja;
-				return jv;
 			} else {
-				json::array ja, ja1;
+				json::array ja, ja1; 
 				for (const auto& r : cv.get<libcamera::Span<const Rectangle>>()) {
-					ja1 = {{r.x, r.y, r.width, r.height}};
+					ja1 = {r.x, r.y, r.width, r.height};
 					ja.emplace_back(ja1);
-					jv = ja;
-					return jv;
 				}
-				
+				jv = ja;
 			}
 			return jv;
 		}
@@ -107,14 +88,18 @@ json::value RCamCfg::toJSON(ControlValue& cv)
 	return jv;
 }
 
-RCamCfg::RCamCfg(Logger& lptr, std::string const& path, std::string const& cfg) : RCamShared(lptr, path, cfg)
+//WEK bug default cfg not working;
+RCamCfg::RCamCfg(Logger& lptr, std::string const& cfg) : RCamShared(lptr, cfg)
 {
 	DEBUG_PRINT("%s", "\n");
-    config = jsonRead(cfgloc);
- //   if (config.is_null()) throw std::runtime_error("Configuration " + cfgloc + " Not found!");
-    if (config.is_null()) {
-		logger_.Log(LogLevel::INFO, std::string("Configuration " + cfgloc + " is empty or not found!"));
-		config = json::object {};
+	if (cfgpath_.size()) {
+		config_ = jsonRead(cfgfile_, &cfgpath_);
+	} else {
+		config_ = jsonRead(cfgfile_);
+	}
+    if (config_.is_null()) {
+		logger_.Log(LogLevel::INFO, std::string("Configuration " + cfgpath_ + cfgfile_ + " is empty or not found!"));
+		config_ = json::object {};
 	}
     try {
         YAML::Node cntlyaml = YAML::LoadFile("/home/wkeeling/racecam/controls.yaml");
@@ -152,7 +137,7 @@ RCamCfg::~RCamCfg()
 bool RCamCfg::dropCfgValue(const std::string& path)
 {
 	DEBUG_PRINT("%s", "\n");
-	return dropCfgValue(path, config);
+	return dropCfgValue(path, config_);
 }
 
 bool RCamCfg::dropCfgValue(const std::string& path, json::value& cfg)
@@ -231,7 +216,7 @@ bool RCamCfg::dropCfgValue(const std::string& path, json::value& cfg)
 bool RCamCfg::setCfgValue(const std::string& path, const json::value& val, const bool create)
 {
 	DEBUG_PRINT("%s", "\n");
-	return setCfgValue(path, val, config, create);
+	return setCfgValue(path, val, config_, create);
 }
 
 bool RCamCfg::setCfgValue(const std::string& path, const json::value& val, json::value& cfg, const bool create)
@@ -372,7 +357,6 @@ bool RCamCfg::setCfgValue(const std::string& path, const json::value& val, json:
 			return false;
 		}	
 	}
-
 	logger_.Log(LogLevel::ERROR, "setCfgValue failed! should never hit this error");
     return false;
 } 
@@ -443,7 +427,7 @@ void RCamCfg::CfgRaceCam(void)
 	do {
 		CLEARSCREEN
 		std::cout << "\n\t\tRaceCam Setup\n\n";
-		std::cout << ("\tconfiguration file: ") << cfgloc << "\n\n";
+		std::cout << ("\tconfiguration file: ") << cfgpath_ << cfgfile_<< "\n\n";
 		
 		i = menuUtil(menu);
 		switch (i) {
@@ -452,9 +436,13 @@ void RCamCfg::CfgRaceCam(void)
 			case 3: cfgRaw(); break;
 			case 4: cfgComposite(); break;
 			case 5: {
-				jsonWrite(std::cout, config);
+				jsonWrite(std::cout, config_);
 				if (getBool("SaveConfig", "No").value_or(false)) {
-					jsonWrite(cfgloc, config);
+					if (cfgpath_.size()) {
+						jsonWrite(cfgfile_, config_, &cfgpath_);
+					} else {
+						jsonWrite(cfgfile_, config_);
+					}
 				}
 				break;
 			};	
@@ -468,7 +456,7 @@ void RCamCfg::cfgRaw(void)
 	unsigned int i {0};
 	do {
 		CLEARSCREEN
-		std::cout << "\n\tConfigure raw output\n\n";
+		std::cout << "\n\tConfigure raw output\n";
 		std::vector<std::string> menu = {"Disable Raw Output",
 			"Configure Raw Output",
 			"Configure Streams for Raw Output"};
@@ -530,85 +518,39 @@ void RCamCfg::cfgRawStreams(void)
 	unsigned int i {0};
 	do {
 		CLEARSCREEN
-		std::cout << "\n\tConfigure Raw Streams\n\n";
+		std::cout << "\n\tConfigure Raw Streams\n";
+		//WEK why extra lines before layer list
 		json::value sv = getCfgValue("/Outputs/Raw/Streams");
-		if (sv.is_array()) {
-			for(auto it = sv.get_array().begin();it != sv.get_array().end(); it++) {
-				displayLayer(*it);
-            }
+		if (!sv.is_null()) {
+			if (sv.is_array()) {
+				for(auto it = sv.get_array().begin();it != sv.get_array().end(); it++) {
+					displayLayer(*it);
+				}
+			}
+		} else {
+			std::cout << "No Stream configured." << std::endl;
 		}
 
-		//WEK show all streams
-		CamsSL vcl = getCamsSL(true);
+		StrmMap sm(config_);
 		std::vector<std::string> menu {};
-		for (int i = 0; i < vcl.used; i++) {
-			menu.push_back("Update/Delete stream " + std::to_string(i));
-
+		for (unsigned int i = 0; i < sm.used(Container::Raw); i++) {
+			json::value sv = getCfgValue("/Outputs/Raw/Streams/" + std::to_string(i) + "/Source");
+			std::string desc {};
+			if (!sv.is_null()) { 
+				CamStrm cs(json::value_to<int>(sv));
+				desc = sm.getstrmlabel(cs);
+			}
+			menu.push_back("Update/Delete stream " + std::to_string(i) +
+			"(" + desc + ")");
 		}
-		if (vcl.free) {
+		if (sm.free(Container::Raw)) {
 			menu.push_back("Add stream");
-
 		}
 		i = menuUtil(menu);
 		if (i) {
-			cfgLayer(i - 1, true);
+			cfgLayer(i - 1, Container::Raw);
 		}
 	} while (i); 
-}
-
-CamsSL  RCamCfg::getCamsSL(bool stream)
-{
-	DEBUG_PRINT("%s", "\n");
-	std::vector<std::shared_ptr<Camera>> cams = getCameras();
-	CamsSL ccl;
-	for (auto const &cam : cams) { 
-		json::value s = getCfgValue("/Cameras/" + getLocation(cam) + "/Sensor");
-		if (!s.is_null()) {
-			Size ss {};
-			if (!fromArray(ss, s)) {
-				throw std::runtime_error("fromArray(Size) failed!"); 
-			}	
-		ccl.camSL.push_back(CamSL {getLocation(cam), -1, ss, ss});	
-		}
-	}
-	ccl.free = ccl.camSL.size();
-	ccl.used = 0;
-	json::value lsv {};
-	if (stream) {
-		lsv = getCfgValue("/Outputs/Raw/Streams");
-	} else {
-		lsv = getCfgValue("/Outputs/Composite/Layers");
-	}
-	if (lsv.is_null()) {
-		return ccl;
-	}
-	int i {0};
-	for (auto& l : lsv.as_array()) {
-		Size ls {};
-		json::value sv = getCfgValue("/Source", l);
-		if (!sv.is_null()) {
-			ccl.free--;
-			ccl.used++;
-			ccl.setsl(i++) = json::value_to<int>(sv);
-			json::value c = getCfgValue("/Crop", l);
-			if (!c.is_null()) {
-				Rectangle r {};
-				if (fromArray(r, c)) {
-					ls.width = r.width;
-					ls.height = r.height;
-					ccl.setslSize(json::value_to<int>(sv)) = ls;
-				}
-			}
-			json::value s = getCfgValue("/Scale", l);
-			if (!s.is_null()) {
-				Size ss {};
-				if (fromArray(ss, s)) {
-					ccl.setslSize(json::value_to<int>(sv)) = ss;
-				}	
-			}
-		}
-	}
-	return ccl;
 }
 
 void RCamCfg::cfgComposite(void)
@@ -618,22 +560,17 @@ void RCamCfg::cfgComposite(void)
 	do {
 		CLEARSCREEN
 		std::cout << "\n\tConfigure composite\n\n";
-		CamsSL vcl = getCamsSL();
-		//WEK if new layer the need to update layer in vcl with cam#
+		StrmMap sm(config_);
 		std::vector<std::string> menu;
 		json::value dest = getCfgValue("/Outputs/Composite/Destination");
 		menu.push_back("Configure composite destination");
 		if (!dest.is_null()) {
-			for (int io = 0; io < (int)vcl.camSL.size(); ++io) {
-				for (size_t ii = 0; ii < vcl.camSL.size(); ++ii) {
-					if (vcl.getsl(ii) == io ) {
-						menu.push_back("Update/Delete " + ( io ? "layer " + std::to_string(io) : "main layer") ); 
-					}
-				}
+			for (unsigned int i = 0; i < sm.used(Container::Comp); i++) {
+				menu.push_back("Update/Delete " + ( i ? "layer " + std::to_string(i) + "   ": "main layer") + " " + sm.getstrmlabel(i, Container::Comp)); 
 			}
-			if (vcl.free) {
+			if (sm.free(Container::Comp)) {
 				menu.push_back("Add Layer");
-			}
+			} 
 		}
 		i = menuUtil(menu);
 		if ( i == 0 ) {
@@ -642,7 +579,7 @@ void RCamCfg::cfgComposite(void)
 		if ( i == 1 ) {
 			cfgCompositeDest();
 		} else {
-			cfgLayer(i - 2);
+			cfgLayer(i - 2, Container::Comp);
 		}
 	} while (i);	
 	return;
@@ -711,7 +648,7 @@ void	RCamCfg::cfgCompositeDest(void)
 				if (!setCfgValue("/Outputs/Composite/Destination/YouTubePrivacy", js))
 					logger_.Log(LogLevel::WARN, "Unable to set /Outputs/Composite/Destination/YouTubePrivacy!", true);
 				}
-				if (YouTube(srcpath).GetAuth().is_null()) {
+				if (YouTube().GetAuth().is_null()) {
 					throw std::runtime_error("YouTube GetAuth() failed!");
 				} 
 				break;
@@ -726,348 +663,400 @@ void	RCamCfg::cfgCompositeDest(void)
 	} while (i);
 }
 
-void	RCamCfg::cfgLayer(int l, bool stream)
+void	RCamCfg::cfgLayer(int lnum, Container type)
 {
 	DEBUG_PRINT("%s", "\n");
-	CamsSL vcl = getCamsSL(stream);
-	int cam {0};
-
-	bool noCrop {true}, noScale {true}, noOverlay {true};  
+	StrmMap sm(config_);
+	CamStrm cs {};
+	bool Crop {false}, Scale {false}, Overlay {false};  
 	std::string key {};
-	json::value cv0 {};
-	if (stream) {
-		key = "/Outputs/Raw/Streams/" + std::to_string(l);
-		l = 0;
+	json::value camv {};
+	if (Container::Raw == type) {
+		key = "/Outputs/Raw/Streams/" + std::to_string(lnum);
 	} else {
-		key = "/Outputs/Composite/Layers/" + std::to_string(l);
-		cv0 = getCfgValue("/Outputs/Composite/Layers/0/Source");
+		key = "/Outputs/Composite/Layers/" + std::to_string(lnum);
 	}
 	
 	json::value lv = getCfgValue(key);
 	if (!lv.is_null()) {
 		displayLayer(lv);
-		if (stream) {
+		if (Container::Raw == type) {
 			if (getBool("DropStream", "N").value()) {
 				if (!dropCfgValue(key)) {
 					throw std::runtime_error("drop stream failed!");
+				} else {
+					return;
 				}
 			}
 		} else {
-			if (getBool("DropLayer", "N").value()) {
-				if (!dropCfgValue(key)) {
-					throw std::runtime_error("drop layer failed!");
+			if (!lnum) { 
+				std::cout << "Dropping the main layer requires all layer to be removed!" << std::endl;
+				if (getBool("DropLayer", "N").value()) {
+					if (!dropCfgValue("/Outputs/Composite/Layers")) {
+						throw std::runtime_error("drop all layers failed!");
+					} else {
+						return;
+					}
+				}
+			} else {
+				if (getBool("DropLayer", "N").value()) {
+					if (!dropCfgValue(key)) {
+						throw std::runtime_error("drop layer failed!");
+					} else {
+						return;
+					}
 				}
 			}
 		}
-		//WEK prompt to drop stream or layer
-		json::value camv = getCfgValue("/Source", lv);
+		
+		camv = getCfgValue("/Source", lv);
 		if (!camv.is_null()) {
-			cam = json::value_to<int>(camv);
+			cs = CamStrm(json::value_to<int>(camv));
 		}
-		noCrop = getCfgValue("/Crop", lv).is_null();
-		noScale = getCfgValue("/Scale", lv).is_null();
-		noOverlay = getCfgValue("/Overlay", lv).is_null();
+		Crop = !getCfgValue("/Crop", lv).is_null();
+		Scale = !getCfgValue("/Scale", lv).is_null();
+		Overlay = !getCfgValue("/Overlay", lv).is_null();
 	}
 	
-	if (vcl.free) {
+	if (!sm.free(type)) {
+		std::cout << "No camera available, remove " << 
+			(type ? "Stream" : "Layer") <<
+			" to reuse camera.\nPlease press <ENTER> to continue: \n";
+		std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+		return;
+	}
+	bool update = (camv.is_null() ? false : true);
+	update = (update ? getBool("UpdateCamera", "N").value() : true);
+	if (update) {
 		std::vector<std::string> menu;
 		std::cout << "Select camera for layer" << std::endl;
-		for (int it = 0; it < (int)vcl.camSL.size(); it++) {
-			if (vcl.getsl(it) < 0) {
-				menu.push_back(vcl.getloc(it));
-			}
-		}
+		menu = sm.freeStrmLabels(type);
 		unsigned int i {0};
 		i = menuUtil(menu, false);
-		for (int it = 0; it < (int)vcl.camSL.size(); it++) {
-			if (menu.at( i - 1 ) == vcl.getloc(it))  {
-				json::value v = it;	
-				cam = it;
-				if (!setCfgValue(key + "/Source", v)) {
-					logger_.Log(LogLevel::WARN, key + "/Source" + std::to_string(it) + " unable to set!");
-				}
-			}
-		} 
+		cs = CamStrm(sm.getStream(menu.at( i - 1 )));
+		json::value v = cs.getCamStrm();
+		if (!setCfgValue(key + "/Source", v)) {
+			logger_.Log(LogLevel::WARN, key + "/Source" + std::to_string(cs.getCamStrm()) + " unable to set!");
+		}
 	}
 
-	bool update = false;
-	if (!noCrop) {
+	update = false;
+	if (Crop) {
 		update = getBool("UpdateCrop", "N").value();
 	} else {
 		update = getBool("AddCrop", "N").value();
 	}
 	if (update) {
-		libcamera::Rectangle r {(int)vcl.getcSize(cam).width, (int)vcl.getcSize(cam).height, vcl.getcSize(cam)};
+		libcamera::Rectangle r {0, 0, sm.camSize(cs)};
 		std::optional<Rectangle> o = getRectangle("CropValue", "", r);
 		if (o) { 
 			if (!setCfgValue(key + "/Crop", json::array {o.value().x, o.value().y, o.value().width, o.value().height} )) {
 				logger_.Log(LogLevel::WARN, key + "/Crop unable to set!", true);
 			} else {
-				vcl.setslSize(cam).width = o.value().width;
-				vcl.setslSize(cam).height = o.value().height;			
+				sm.loadLayers();
 			}
 		} else {
-			if (!noCrop) {
+			if (Crop) {
 				if (!dropCfgValue(key + "/Crop")) {
 					throw std::runtime_error("drop crop failed!");
 				}
-				vcl.setslSize(cam).width = vcl.getcSize(cam).width;
-				vcl.setslSize(cam).height = vcl.getcSize(cam).height;
+				sm.loadLayers();
 			}
 		}
 	}
 	
 	update = false;
-	if (!noScale) {
+	if (Scale) {
 		update = getBool("UpdateScale", "N").value();
 	} else {
 		update = getBool("AddScale", "N").value();
 	}
 		if (update) {
-			libcamera::Size s {std::numeric_limits<unsigned int>::max(), std::numeric_limits<unsigned int>::max()};
+			libcamera::Size s {3840, 2160};
 		std::optional<Size> o = getSize("ScaleValue", "", s);
 		if (o) {
 			if (!setCfgValue(key + "/Scale", json::array {o.value().width, o.value().height} )) {
-				std::cout << key << "/Scale" <<" unable to set!" << std::endl;
 				logger_.Log(LogLevel::WARN, key + "/Scale unable to set!", true );
 			} else {
-				vcl.setslSize(cam).width = o.value().width;
-				vcl.setslSize(cam).height = o.value().height;
+				sm.loadLayers();
 			}
 		} else {
-			if (!noScale) {
+			if (Scale) {
 				if (!dropCfgValue(key + "/Scale")) {
 					throw std::runtime_error("drop scale failed!");
 				}
-				if (noCrop) { 
-					vcl.setslSize(cam).width = vcl.getcSize(cam).width;
-					vcl.setslSize(cam).height = vcl.getcSize(cam).height;
-				} else {
-					json::value cv = getCfgValue(key + "/Crop", lv);
-					if (!fromArray(vcl.setslSize(cam), cv)) {
-						throw std::runtime_error("bad json crop array to size");
-					}
-					
-				}
+				sm.loadLayers();
 			}
 		}
 	}
 	
-	if (l) {
-		int cam0;
+	if (lnum && Container::Comp == type) {
+		CamStrm cs0;
+		json::value cv0 = getCfgValue("/Outputs/Composite/Layers/0/Source");
 		if (!cv0.is_null()) {
-			cam0 = json::value_to<int>(cv0);
+			cs0 = CamStrm(json::value_to<int>(cv0));
 		} else {
 			throw std::runtime_error("no layer 0!");
 		}
 		update = true;
-		if (!noOverlay) {
+		if (Overlay) {
 			update = getBool("UpdateOverlay", "N").value();
 		} 
 		if (update) {
-			libcamera::Rectangle r {(int)vcl.getslSize(cam0).width - (int)vcl.getslSize(cam).width,
-				(int)vcl.getslSize(cam0).height - (int)vcl.getslSize(cam).height,
-				vcl.getslSize(cam)};
-			// WEK should have some def so that overlay is always create if (l) default to above would put in lower right
-			std::optional<Rectangle> o = getRectangle("OverlayValue", r.toString(), r);
-			// WEK don't need if as it has def and can't be optional
-				if (!setCfgValue(key + "/Overlay", json::array {o.value().x, o.value().y, o.value().width, o.value().height} )) {
+			libcamera::Size zl = sm.outSize(cs0);
+			libcamera::Size ol = sm.outSize(cs);
+			libcamera::Point min {0 - (int)ol.width, 0 - (int)ol.height};
+			libcamera::Point max {(int)zl.width + (int)ol.width, (int)zl.height + (int)ol.height};
+			libcamera::Point def {};
+			float f = 1.0f/3.0f; //defaut location factor 
+			int left = (zl.width-ol.width > 0 ? 0 : zl.width-ol.width);
+			int lower = (ol.height <= std::round(f*zl.height) ? zl.height-ol.height : std::round((1.0f-f)*(zl.height-ol.height)));
+			int right = (ol.width <= std::round(f*zl.width) ? zl.width-ol.width : std::round((1.0f-f)*(zl.width)));
+			int upper = (ol.height <= std::round(f*zl.height) ? 0 : (zl.height-ol.height+(std::round(f*zl.height))));
+			if (lnum == 1) {def = {left,lower};
+			} else if (lnum == 2) {def = {right,lower};
+			} else if (lnum == 3) {def = {right,upper};
+			} else {def = {left,upper};
+			} 
+			std::cout << "def: " << def.toString() << std::endl;
+			std::optional<Point> o = getPoint("OverlayValue", def.toString(), max, min);
+				if (!setCfgValue(key + "/Overlay", json::array {o.value().x, o.value().y} )) {
 					logger_.Log(LogLevel::WARN, key + "/Overlay unable to set!");
 				}
 		}
 	} else {
-		if (!noOverlay) {
+		if (Overlay) {
 			if (!dropCfgValue(key + "/Overlay")) {
 				throw std::runtime_error("drop overlay failed!");
 			}
 		}
 	}
-	 
-	jsonWrite(std::cout, config);
+	//WEK here add layer parms if !lnum
+	if (lnum && Container::Comp == type) return;
+	
+	std::string comps {"Y"};
+	if (Container::Raw == type) comps = "N";
+	bool comp = getBool("Compress", comps).value();
+	if (comp) {
+		comps = "libx264";
+	} else {
+		comps = "yuv4";
+	}
+	if (!setCfgValue(key + "/CodecParms/Format", json::string{comps})) {
+		throw std::runtime_error("Unable to set " + key + "/CodecParms/Format");
+	} 
+	
+	if (Container::Raw == type) {
+		json::value ccrfv = getCfgValue(key + "/CodecParms/CRF");
+		if (ccrfv.is_null()) {
+			update = getBool("AddCRF", "N").value();
+		} else {
+			update = getBool("UpdateCRF", "N").value();
+			std::cout << "Constant Rate Factor is: " << json::value_to<int>(ccrfv) 
+			<< std::endl;
+		}
+		std::optional<int> ocrf;
+		// CRF 0 51
+		if (update) {
+			std::optional<int> ocrf = getInt("CRF", "", 51, 0);
+			if (ocrf) {
+				json::value v = ocrf.value();
+				if (!setCfgValue(key + "/CodecParms/CRF", v)) {
+					throw std::runtime_error("Unable to set " + key + "/CodecParms/CRF");
+				} 
+			} else {
+				if (!dropCfgValue(key + "/CodecParms/CRF")) {
+					throw std::runtime_error("Unable to drop " + key + "/CodecParms/CRF");
+				}
+			}
+		}
+	} else {
+				json::value cbrv = getCfgValue(key + "/CodecParms/BitRate");
+		if (cbrv.is_null()) {
+			update = getBool("AddBitRate", "N").value();
+		} else {
+			update = getBool("UpdateBitRate", "N").value();
+			std::cout << "Bitrate is: " << json::value_to<int>(cbrv) 
+			<< " Kbps" << std::endl;
+		}
+		std::optional<int> obr;
+		//youtube 1500kbps - 6000kbps 
+		if (update) {
+			std::optional<int> obr = getInt("BiteRate", "", 30000, 1500);
+			if (obr) {
+				json::value v = obr.value();
+				if (!setCfgValue(key + "/CodecParms/BitRate", v)) {
+					throw std::runtime_error("Unable to set " + key + "/CodecParms/BitRate");
+				} 
+			} else {
+				if (!dropCfgValue(key + "/CodecParms/BitRate")) {
+					throw std::runtime_error("Unable to drop " + key + "/CodecParms/BitRate");
+				}
+			}
+		}
+	}
 }
 
 void RCamCfg::cfgSensor(const std::shared_ptr<Camera> &cam)
 {
 	DEBUG_PRINT("%s", "\n");
-	bool accepted {false};
-	do {
-		unsigned int idx = 1;
-		std::cout << "Modes for: " << cam->id() << std::endl;
+	std::string loc = getLocation(cam);
+	bool csicam = isCSI(cam);
+	json::value sensorjv = getCfgValue("/Cameras/" + loc + "/Sensor");
+	json::value streamsjv = getCfgValue("/Cameras/" + loc + "/Streams");
+	unsigned int idx = 1;
+	std::cout << "Modes for: " << cam->id() << std::endl;
 		
-		std::map<std::string, modes> modeMap;
-		cam->acquire();
+	std::map<std::string, modes> modeMap;
+	cam->acquire();
+ 
+	std::unique_ptr<CameraConfiguration> config;
+		//VideoRecording and Raw are needed -- just need for crop to have correct values
+	if (csicam) {
+		config = cam->generateConfiguration({libcamera::StreamRole::Raw, libcamera::StreamRole::VideoRecording});
+	} else {
+		config = cam->generateConfiguration({libcamera::StreamRole::Raw});
+	}
 
-//how to list all properties some not valid unitl after 		
-/*		for (const auto &c :  cam->properties()) 
-		{
-			auto ctrlid = properties::properties.at(c.first);
-			std::cout << ctrlid->name() << " " << c.second.toString() << std::endl;
-		}  */
+	if (!config) {
+		throw std::runtime_error("failed to generate capture configuration");
+	}
 		
-		std::string loc = getLocation(cam);
-		// needs non Raw to report crop info 
-		std::unique_ptr<CameraConfiguration> config;
-		//WEK is VideoRecording needed here -- just need crop anbd FPS not a real useable config
-		if (isCSI(cam)) {
-			config = cam->generateConfiguration({libcamera::StreamRole::Raw, libcamera::StreamRole::VideoRecording});
-		} else {
-			config = cam->generateConfiguration({libcamera::StreamRole::Raw});
-		}
-
-		if (!config) {
-			throw std::runtime_error("failed to generate capture configuration");
-		}
-		
-		const StreamFormats &formats = config->at(0).formats();
-//		std::cout << "1" << std::endl;
-		if (!formats.pixelformats().size())
-			throw std::runtime_error("pixel format is empty");
+	const StreamFormats &formats = config->at(0).formats();
+	if (!formats.pixelformats().size()) throw std::runtime_error("pixel format is empty");
 			
-		for (const auto &pix : formats.pixelformats()) {
-			if (pix !=libcamera::formats::YUYV && !isCSI(cam)) continue;
-			int bits = getBitDepth(pix);
-//			std::cout << "bits: " << bits <<std::endl;	
-			for (const auto &sz : formats.sizes(pix)) {
-//				std::cout << "2" << std::endl;
-				std::string size =  sz.toString() ;
-				if (7 == size.size()) size = " " + size;
-				std::string bitstr = std::to_string(bits);
-				if (1 == bitstr.size()) bitstr = " " + bitstr;
-				std::string modestr = bitstr + size;
+	for (const auto &pix : formats.pixelformats()) {
+		if (pix !=libcamera::formats::YUYV && !isCSI(cam)) continue; //if usb and pixel not yuv422 then skip
+		int bits = 0;
+		if (csicam) bits = getBitDepth(pix);
+		for (const auto &sz : formats.sizes(pix)) {
+			Sensor s(sz, bits);
+			std::string modestr = s.toString();
+			config->at(0).size = sz;
+			config->at(0).pixelFormat = pix;
+			if (bits) {
+				config->sensorConfig = s.getSensorCfg();
+			}
+			auto status = config->validate();
+			if (CameraConfiguration::Invalid == status) 
+				throw std::runtime_error("invalid sensor configuration");
+			cam->configure(config.get());
 				
-				config->at(0).size = sz;
-				config->at(0).pixelFormat = pix;
-				if (bits) {
-					config->sensorConfig = libcamera::SensorConfiguration();
-					config->sensorConfig->outputSize = sz;
-					config->sensorConfig->bitDepth = bits;
-				}
-				auto status = config->validate();
-				if (CameraConfiguration::Invalid == status) 
-					throw std::runtime_error("invalid sensor configuration");
-				cam->configure(config.get());
+			auto fd_ctrl = cam->controls().find(&controls::FrameDurationLimits);
+			double fps = fd_ctrl == cam->controls().end() ? NAN : (1e6 / fd_ctrl->second.min().get<int64_t>());
 				
-				auto fd_ctrl = cam->controls().find(&controls::FrameDurationLimits);
-				double fps = fd_ctrl == cam->controls().end() ? NAN : (1e6 / fd_ctrl->second.min().get<int64_t>());
+			std::string cropstr;
+			if (cam->controls().count(&controls::ScalerCrop))
+				cropstr = cam->controls().at(&controls::ScalerCrop).max().get<Rectangle>().toString();
+			if (cropstr.length() < 22) 
+				cropstr.append(22 - cropstr.length(), ' ');
 				
-	//			if (std::isnan(fps)) std::cout << "not a number" << std::endl;
-	//			else std::cout << fps << std::endl;
-				
-				std::string cropstr;
-				if (cam->controls().count(&controls::ScalerCrop))
-					cropstr = cam->controls().at(&controls::ScalerCrop).max().get<Rectangle>().toString();
-				if (cropstr.length() < 22) 
-					cropstr.append(22 - cropstr.length(), ' ');
-				
-				if (24 < fps || std::isnan(fps)) {
-					modeMap.try_emplace(modestr , modes{sz, fps, bits, cropstr});
-				}
+			if (24 < fps || std::isnan(fps)) {
+				modeMap.try_emplace(modestr , modes{sz, fps, bits, cropstr});
 			}
 		}
+	}
 		
-//		std::cout << "3" << std::endl;
+	for (const auto &m : modeMap) {
+		std::string size = m.second.size.toString();
+		if (7 == size.size()) size = " " + size;
+		size.resize(10, ' ');
+		std::string bitstr = std::to_string(m.second.bitDepth);
+		if (1 == bitstr.size()) bitstr = " " + bitstr;
+		if (std::isnan(m.second.fps)) 
+			std::cout << idx++ <<": " << size << std::endl;
+		else {
+			std::string message = "";
+			if (m.second.fps < 30 ) message = " FPS less 30 are not recommended!";
+			std::cout << idx++ <<": " << size << bitstr << " bpp " << m.second.crop << "\n       Max FPS: " 
+			<< std::fixed << std::setprecision(2) << m.second.fps << message << std::endl;	
+		}	
+	}
 
-		for (const auto &m : modeMap)
-		{
-			std::string size = m.second.size.toString();
-			if (7 == size.size()) size = " " + size;
-			size.resize(10, ' ');
-			std::string bitstr = std::to_string(m.second.bitDepth);
-			if (1 == bitstr.size()) bitstr = " " + bitstr;
-			if (std::isnan(m.second.fps)) 
-	//			std::cout << idx++ <<": " << size << bitstr << " bpp " << m.second.crop << std::endl;
-				std::cout << idx++ <<": " << size << std::endl;
-			else
-			{
-				std::string message = "";
-				if (m.second.fps < 30 ) message = " FPS less 30 are not recommended!";
-				std::cout << idx++ <<": " << size << bitstr << " bpp " << m.second.crop << "\n       Max FPS: " 
-				<< std::fixed << std::setprecision(2) << m.second.fps << message << std::endl;	
-			}	
+// set defaults 
+	std::string defsensorstr = ""; 
+
+	if (!sensorjv.is_null()) {
+		Sensor s(sensorjv);
+		std::string modestr = s.toString();
+		int i=1;
+		for (auto it = modeMap.begin(); it != modeMap.end(); ++it, ++i) {
+			if (it->first == modestr) defsensorstr = std::to_string(i);
 		}
-
-		json::value defval = getCfgValue("/Cameras/" + loc + "/Sensor");
-		std::string defstr = ""; 
-		Sensor s(defval);
-		if (s.hasSensor()) {
-			std::string sizestr =  s.senRes.toString();
-			if (7 == sizestr.size()) sizestr = " " + sizestr;
-			std::string bitstr = std::to_string(s.senBit);
-			if (1 == bitstr.size()) bitstr = " " + bitstr;
-			std::string modestr = bitstr + sizestr;
-			int i=1;
-			for (auto it = modeMap.begin(); it != modeMap.end(); ++it, ++i) {
-	//			std::cout << it->first << std::endl;
-				if (it->first == sizestr) defstr = std::to_string(i);
-			}
-		} else {
-			int i=1;
-			for (auto it = modeMap.begin(); it != modeMap.end(); ++it, ++i) {
-	//			std::cout << it->first << std::endl;
-				if (it->second.size == s.outRes) defstr = std::to_string(i);
-			}
-		} 			
+	} 	
 	// end display mode 
-//		std::cout << defstr << std::endl;
-		std::string outdefstr {"1280X720"};
-		if (!s.outRes.isNull()) {
-			outdefstr = s.outRes.toString();
+	std::string defstreamstr[2] {"1920X1080", ""};
+	if (!streamsjv.is_null()) {
+		Streams strms(streamsjv);
+		int i=0;
+		for (const libcamera::Size size : strms.getStreams()) {
+			defstreamstr[i++] = size.toString();
 		}
-
-		std::cout << std::endl;
-//		std::cout << s.tostring() << std::endl;
-		libcamera::Size out {};
-		int mode {};
-		if (isCSI(cam)) {
-			out = getSize("OutputSize", outdefstr, libcamera::Size(3840,2160)).value();
-			mode = getInt("ModeSelect", defstr, --idx, 1).value_or(0);
+	}
+// get input 
+	std::cout << std::endl;
+	std::vector<libcamera::Size> out {};
+	int mode {};
+	if (csicam) {
+		out.push_back(getSize("StreamSize", defstreamstr[0], libcamera::Size(3840,2160)).value());
+		std::optional<libcamera::Size> tmp;
+		if (defstreamstr[1].empty()) {
+			tmp = getSize("StreamSize2", defstreamstr[1], out[0]);
 		} else {
-			mode = getInt("ModeSelect", defstr, --idx, 1).value_or(1);
-			auto it = modeMap.begin();
-			std::advance(it, mode-1);
-			out = it->second.size;
-			mode = 0;
+			bool streamtwo = getBool("SecondStream", "Yes").value();
+			if (streamtwo) tmp = getSize("StreamSize2", defstreamstr[1], out[0]);
 		}
-				
-		Sensor ss(out);
-		if (mode) {
-			auto it = modeMap.begin();
-			std::advance(it, mode-1);
-			ss.senRes = it->second.size;
-			ss.senBit = it->second.bitDepth;
-		}  
+		if (tmp) out.push_back(tmp.value());
+		mode = getInt("ModeSelect", "", --idx, 1).value_or(0);
+	} else {
+		mode = getInt("OutputSize", defsensorstr, --idx, 1).value_or(1);
+		auto it = modeMap.begin();
+		std::advance(it, mode-1);
+		out.push_back(it->second.size);
+		mode = 0;
+	}
+					
+// validate and save config
+	config.release();
+	if (out.size() == 2) {
+		config = cam->generateConfiguration({libcamera::StreamRole::VideoRecording, libcamera::StreamRole::VideoRecording});
+		config->at(1).size = out[1];
+	} else {
+		config = cam->generateConfiguration({libcamera::StreamRole::VideoRecording});
+	}
+	config->at(0).size = out[0];
+	if (mode) {
+		auto it = modeMap.begin();
+		std::advance(it, mode-1);
+		Sensor s (it->second.size,  it->second.bitDepth);
+		sensorjv = s.getArray();
+	} else {
+		sensorjv = nullptr;
+	}
+	streamsjv = Streams(out).getArray();
+	auto status = config->validate();
+	if (CameraConfiguration::Invalid == status) throw std::runtime_error("invalid sensor configuration");
+	cam->configure(config.get());
 
-		json::value jv = toArray(ss);
-		if (!setCfgValue("/Cameras/" + loc + "/Sensor", jv))
-		//WEK throw
-			std::cout << "Unable to set /Cameras/" + loc << " Sensor!" << std::endl;
-
-		config->at(0).size = ss.outRes; 
-		if (ss.hasSensor()) {
-			config->sensorConfig = libcamera::SensorConfiguration();
-			config->sensorConfig->outputSize = ss.senRes;
-			config->sensorConfig->bitDepth = ss.senBit;
+	auto fd_ctrl = cam->controls().find(&controls::FrameDurationLimits);
+	double fps = fd_ctrl == cam->controls().end() ? NAN : (1e6 / fd_ctrl->second.min().get<int64_t>());
+	if (fps < 30 && !std::isnan(fps)) {
+		std::cout << "Max frames per second less than 30! \n You should think able reconfiguring \n the sensor! FPS: " << fps << std::endl;
+		getBool("Comtinue", ""); 
+	}
+	if (sensorjv.is_null()) {
+		dropCfgValue("/Cameras/" + loc + "/Sensor");
+	} else {
+		if (!setCfgValue("/Cameras/" + loc + "/Sensor", sensorjv)) {
+			throw std::runtime_error("Unable to set /Cameras/" + loc + " Sensor!");
 		}
+	}
 		
-		auto status = config->validate();
-		if (CameraConfiguration::Invalid == status) throw std::runtime_error("invalid sensor configuration");
-		cam->configure(config.get());
+	if (!setCfgValue("/Cameras/" + loc + "/Streams", streamsjv)) {
+		throw std::runtime_error("Unable to set /Cameras/" + loc + " Streams!");
+	}
 		
-		if (ss.hasSensor()) {
-		auto fd_ctrl = cam->controls().find(&controls::FrameDurationLimits);
-		double fps = fd_ctrl == cam->controls().end() ? NAN : (1e6 / fd_ctrl->second.min().get<int64_t>());
-		if (fps < 30){
-			std::cout << "Max frames per second less than 30! \n You should think able reconfiguring \n the sensor! FPS: " << fps << std::endl;
-			accepted = getBool("AcceptFPS", "No").value_or(false);
-		} else {
-			accepted = true;
-		}
-		} else {
-			accepted = true;
-		}
-
-		cam->release();	
-	} while (!accepted);
+	cam->release();	
 }
 
 
@@ -1075,28 +1064,29 @@ void RCamCfg::cfgControl(const std::shared_ptr<Camera> &cam)
 {
 	DEBUG_PRINT("%s", "\n");
 	std::string loc = getLocation(cam);
-	json::value sval = getCfgValue("/Cameras/" + loc + "/Sensor");
-	if (sval.is_null()) {
-		logger_.Log(LogLevel::WARN, "Sensor not configured!", true);
+	json::value sensorjv = getCfgValue("/Cameras/" + loc + "/Sensor");
+	json::value streamsjv = getCfgValue("/Cameras/" + loc + "/Streams");
+	if (streamsjv.is_null()) {
+		logger_.Log(LogLevel::WARN, "No streams configured!", true);
 		return;
 	}
 	
-/*	Size size {};
-	if (!fromArray(size, sval)) {
-		throw std::runtime_error("Size from array failed!");
-	}	*/
-	
 	cam->acquire();
 	
-	std::unique_ptr<CameraConfiguration> config = cam->generateConfiguration({libcamera::StreamRole::Viewfinder});
-	
-//	config->at(0).size = size;
-	Sensor sens(sval);
-	config->at(0).size = sens.outRes;
-	if (sens.hasSensor()) {
-		config->sensorConfig = libcamera::SensorConfiguration();
-		config->sensorConfig->outputSize = sens.senRes;
-		config->sensorConfig->bitDepth = sens.senBit;
+	std::unique_ptr<CameraConfiguration> config;
+	Streams strms(streamsjv);
+		std::vector<libcamera::Size> out = strms.getStreams();
+	if (out.size() == 2) {
+			config = cam->generateConfiguration({libcamera::StreamRole::VideoRecording, libcamera::StreamRole::VideoRecording});
+			config->at(1).size = out[1];
+		} else {
+			config = cam->generateConfiguration({libcamera::StreamRole::VideoRecording});
+		}
+		config->at(0).size = out[0];
+
+	if (!sensorjv.is_null()) {
+		Sensor sens(sensorjv);
+		config->sensorConfig = sens.getSensorCfg();
 	}
 		
 	auto status = config->validate();
@@ -1146,29 +1136,41 @@ void RCamCfg::cfgControl(const std::shared_ptr<Camera> &cam)
 json::value RCamCfg::getControlValue(const unsigned int idNum, const std::shared_ptr<Camera> &cam)
 {
 	DEBUG_PRINT("%s", "\n");
-	const ControlInfoMap cm = cam->controls();
-	std::string loc = getLocation(cam);
 	const ControlId *id = nullptr;
 	ControlInfo info;
-	std::string cntl;
 	std::string cntlmsg;
+	json::value jv;
+	std::vector<std::string> defv;
 	
-	for (auto const &cim : cm)
-	{
-		if (cim.first->id() == idNum)
-		{
-			std::cout << cim.first->id() << std::endl;
-			cntl = cim.first->name();
-			cntlmsg = getCntlMsg(cntl);
-			id = cim.first;
-			info = cim.second;
-		}
+	const libcamera::ControlList& camera_controls = cam->controls();
+	const libcamera::ControlInfoMap* info_map = camera_controls.infoMap();
+	if (!info_map) {
+		return jv;  //WEK continue return nothing or throw??
 	}
-	
+	auto it = info_map->find(idNum);
+	if (it == info_map->end()) {
+		return jv;  //WEK continue return nothing or throw??
+	}
+
+	id = it->first;
+	info = it->second;
+	cntlmsg = getCntlMsg(id->name());
+		
+//	ID 20003 maps to: ScalerCrops
+//  ID 27 maps to: ScalerCrop
+//fix scalercrops to use crops as defaults and crop as min/max and only take 2 rectangles
+	if ("ScalerCrops" == id->name()) {  
+		auto it = info_map->find(27); //WEK check by Control::ScalerCrop
+		if (it == info_map->end()) {
+			return jv;  //WEK continue return nothing or throw??
+		}
+		defv = { info.min().toString(), info.max().toString() };
+		info = it->second;
+	}
+
 	CLEARSCREEN	
 	std::cout << cntlmsg << std::endl;
 
-	json::value jv;
 	size_t notdone = id->size() ? id->size() : 1;
 	size_t size = notdone;
 			
@@ -1176,7 +1178,7 @@ json::value RCamCfg::getControlValue(const unsigned int idNum, const std::shared
 	{
 		case ControlTypeBool: 
 		{
-			std::optional<bool> o = getBool(cntl, "");
+			std::optional<bool> o = getBool("GetBool", "");
 			if (!o.has_value()) return jv;
 			ControlValue cv {o.value()};
 			if (!info.def().isNone() && cv == info.def())
@@ -1189,7 +1191,7 @@ json::value RCamCfg::getControlValue(const unsigned int idNum, const std::shared
 			std::vector<int> v;
 			do
 			{
-				std::optional<int> o = getInt(cntl, "", info.max().get<int>(), info.min().get<int>()); 
+				std::optional<int> o = getInt("GetInt", "", info.max().get<int>(), info.min().get<int>()); 
 				if (o.has_value()) 
 					v.push_back(o.value());
 				else
@@ -1206,7 +1208,7 @@ json::value RCamCfg::getControlValue(const unsigned int idNum, const std::shared
 			std::vector<long> v;
 			do
 			{
-				std::optional<long> o = getLong(cntl, "", info.max().get<long>(), info.min().get<long>()); 
+				std::optional<long> o = getLong("GetInt", "", info.max().get<long>(), info.min().get<long>()); 
 				if (o.has_value()) 
 					v.push_back(o.value());
 				else
@@ -1223,7 +1225,7 @@ json::value RCamCfg::getControlValue(const unsigned int idNum, const std::shared
 			std::vector<float> v;
 			do
 			{
-				std::optional<float> o = getFloat(cntl,"", info.max().get<float>(), info.min().get<float>()); 
+				std::optional<float> o = getFloat("GetFloat","", info.max().get<float>(), info.min().get<float>()); 
 				if (o.has_value()) 
 					v.push_back(o.value());
 				else
@@ -1238,9 +1240,12 @@ json::value RCamCfg::getControlValue(const unsigned int idNum, const std::shared
 		case ControlTypeRectangle: 
 		{
 			std::vector<Rectangle> v;
+			if (defv.size()) notdone = defv.size();
+			int i {0};
 			do
 			{
-				std::optional<Rectangle> o = getRectangle(cntl, "", info.max().get<Rectangle>(), info.min().get<Rectangle>()); 
+				std::string d = (defv.size() ? defv[i] : ""); 
+				std::optional<Rectangle> o = getRectangle("GetRect", d, info.max().get<Rectangle>(), info.min().get<Rectangle>()); 
 				if (o.has_value()) 
 					v.push_back(o.value());
 				else
@@ -1273,7 +1278,7 @@ msg RCamCfg::getMsg(const std::string msg_id)
 {
 	DEBUG_PRINT("%s", "\n");
 	msg message;
-	message.prompt = "Prompt message not found in msgs_map!";
+	message.prompt = "Prompt message not found in msgs_map for (" + msg_id + ")!" ;
 	message.help = "Help message not found in msgs_map for message ID: " + msg_id;
 	auto it_msg = msgs_map.find(msg_id);
 	if (it_msg != msgs_map.end())
@@ -1284,6 +1289,7 @@ msg RCamCfg::getMsg(const std::string msg_id)
 	return message;
 }
 
+//WEK does () around def make it more readable think about point that has () already
 std::optional<bool> RCamCfg::getBool(const std::string msg_id, const std::string def)
 {
 	DEBUG_PRINT("%s", "\n");
@@ -1558,6 +1564,45 @@ std::optional<libcamera::Size> RCamCfg::getSize(const std::string msg_id, const 
 	} while (1);
 }
 
+std::optional<libcamera::Point> RCamCfg::getPoint(const std::string msg_id, const std::string def, const libcamera::Point max, const libcamera::Point min)
+{
+	DEBUG_PRINT("%s", "\n");
+	msg cur = getMsg(msg_id);
+
+	unsigned int i = 0;
+	libcamera::Point point;
+	char junk;
+	std::string input, save_input;
+	do {
+		if (i++) {
+			if (input == "?" || input == "HELP")
+				std::cout << cur.help << std::endl;
+			else 
+				std::cout << "Invalid entry: " << save_input << std::endl;			
+		}
+
+		std::cout << cur.prompt << " [" << min.toString() << ".." << max.toString() << "] " 
+			<< (def.size() ? "(" + def + ")" : "") << ": " << std::flush;
+		if ('\n' == std::cin.peek()) {	
+			std::cin.ignore();
+			if (0 == def.size()) {
+				return std::nullopt;
+			}
+			else
+				input = def;
+		}
+		else getline(std::cin, input);
+		
+		save_input = input;
+
+		for (auto & c: input) c = (char)toupper(c); 
+		if (sscanf(input.c_str(), "(%i,%i) %c", &point.x, &point.y, &junk) != 2) {continue;}
+		if (point.x < min.x || point.y < min.y || point.x > max.x || point.y > max.y) {continue;}
+		
+		return point;
+	} while (1);
+}
+
 std::optional<libcamera::Rectangle> RCamCfg::getRectangle(const std::string msg_id, const std::string def, const libcamera::Rectangle max, const libcamera::Rectangle min)
 {
 	DEBUG_PRINT("%s", "\n");
@@ -1592,12 +1637,11 @@ std::optional<libcamera::Rectangle> RCamCfg::getRectangle(const std::string msg_
 		if (sscanf(input.c_str(), "(%i,%i)/%uX%u %c", 
 				&rect.x, &rect.y,&rect.width, &rect.height, &junk) != 4) 
 			{continue;}
-		if (rect.x < min.x || rect.x > max.x || rect.y < min.y || 
-				rect.y > max.y || rect.width < min.width || 
-				rect.width > max.width || rect.height < min.height || 
-				rect.height > max.height) 
+		if ((rect.x < min.x || rect.y < min.y || rect.width < min.width || 
+				rect.height < min.height) && (rect.x > max.x ||  
+				rect.y > max.y ||  rect.width > max.width || 
+				rect.height > max.height)) 
 			{continue;}
-		
 		return rect;
 	} while (1);
 }
@@ -1686,7 +1730,6 @@ void RCamCfg::displayCam(std::shared_ptr<Camera> cam)
 {
 	DEBUG_PRINT("%s", "\n");
 	std::string loc = getLocation(cam);
-//	std::string model = *cam->properties().get(properties::Model);
 	std::string model(*cam->properties().get(properties::Model));
 	std::stringstream sensor_props;
 	sensor_props << "  " << loc << " Model: " << model << " [";
@@ -1705,27 +1748,30 @@ void RCamCfg::displayCam(std::shared_ptr<Camera> cam)
 		
 				
 	if (cam->id() == json::value_to<std::string>(id)) {
-		
-		json::value sv = getCfgValue("/Cameras/" + loc + "/Sensor");
-		if (sv.is_null()) {
+		json::value snsrv = getCfgValue("/Cameras/" + loc + "/Sensor");
+		json::value strmsv = getCfgValue("/Cameras/" + loc + "/Streams");
+		if (strmsv.is_null()) {
 			std::cout << "\tCamera not configured." << std::endl << std::endl;
 			return;
 		}
 		std::cout << "    Current settings:" << std::endl;
-		Size size {};
-		if (fromArray(size, sv)) {
-			std::cout << "      Sensor: " << size.toString() << std::endl;
-			json::value co = getCfgValue("/Cameras/" + loc + "/Controls");
-			if (!co.is_null()) {
-				auto const& obj = co.get_object();
-				if(!obj.empty()) {
-					for(auto it = obj.begin();it != obj.end();it++) {
-						std::cout << "        " << it->key() << ":"
-							<< json::serialize(it->value()) << std::endl;
-					}
+		if (!snsrv.is_null()) std::cout << "      " << Sensor(snsrv).toDisplayString() << std::endl;
+		std::vector<libcamera::Size> {Streams(strmsv).getStreams()};
+		int i =0;
+		for (const libcamera::Size size : Streams(strmsv).getStreams()) {
+			std::cout << "          Stream " << i++ << " " << size.toString() << std::endl;
+		}
+		json::value co = getCfgValue("/Cameras/" + loc + "/Controls");
+		if (!co.is_null()) {
+			auto const& obj = co.get_object();
+			if(!obj.empty()) {
+				for(auto it = obj.begin();it != obj.end();it++) {
+					std::cout << "             " << it->key() << ":"
+						<< json::serialize(it->value()) << std::endl;
 				}
 			}
 		}
+	//	}
 	} else {
 		std::cout << "\tCamera not configured." << std::endl;
 	}
@@ -1744,16 +1790,18 @@ void RCamCfg::displayLayer(json::value l)
 	if (s.is_null()) {
 		throw std::runtime_error("Display layer source is not found"); 
 	}
-	std::string loc = getLocation(cams.at(json::value_to<int>(s)));
-	json::value sensor = getCfgValue("/Cameras/" + loc + "/Sensor");
-	if (sensor.is_null()) {
-		throw std::runtime_error("Display layer sensor is not found"); 
+
+//WEK should camera label be from libcamera or StrmMap
+	CamStrm cs(json::value_to<int>(s));
+	std::string loc = getLocation(cams.at(cs.getCamera()));
+	
+	json::value ssv = getCfgValue("/Cameras/" + loc + "/Streams/" + std::to_string(cs.getStream()));
+	if (ssv.is_null()) {
+		throw std::runtime_error("Display layer camera stream is not found"); 
 	}
 
-	Size cs {};
-	fromArray(cs, sensor);
-
-	std::cout << loc << " " << cs.toString();
+	Size ss {};
+	fromArray(ss, ssv);
 	json::value crop = getCfgValue("/Crop", l);
 	if (!crop.is_null()) {
 		Rectangle cr {};
@@ -1809,7 +1857,7 @@ void RCamCfg::cfgCamera(std::shared_ptr<Camera> cam)
 	unsigned int i {0};
 	do {
 		std::vector<std::string> menu = {"Disable Camera",
-			"Configure Sensor", "Configure Controls"};
+			"Configure Camera", "Configure Controls"};
 		json::value camv = getCfgValue("/Cameras/" + loc);
 		if (camv.is_null()) {
 			menu.clear();
@@ -1836,7 +1884,6 @@ void RCamCfg::cfgCamera(std::shared_ptr<Camera> cam)
 					json::value jv;
 					jv.emplace_string() = cam->id();
 					if (!setCfgValue("/Cameras/" + loc + "/CameraID", jv)) {
-	//					std::cout << "Unable to set /Cameras/" + loc << "/CameraID!" << std::endl;
 						logger_.Log(LogLevel::ERROR, "Unable to set /Cameras/" + loc + "/CameraID!", true);
 					}
 					break;

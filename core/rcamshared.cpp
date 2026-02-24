@@ -1,25 +1,10 @@
-// need stat corrected everywhere add configure
-// and figure out where stopping should change to configed
-
-/* racecam shared class code
+/* 
 *  rcamshared.cpp
 */
-//#include <string>
-
-//#include <boost/json/src.hpp> 
-//#include <boost/json.hpp> 
-//#include "core/jsonio.hpp"
-
 #include "core/rcamshared.hpp"
 
-//#include <linux/dma-buf.h>
-//#include <sys/ioctl.h>
-
-//#include <stdio.h>
-
-
-RCamShared::RCamShared(Logger& log, std::string const& path, std::string const& cfg) 
-		: logger_(log), srcpath(path) 
+RCamShared::RCamShared(Logger& log, std::string const& cfg) 
+		: logger_(log)
 {	
 	DEBUG_PRINT("%s", "\n");
 	bool pi5 {false};
@@ -39,19 +24,18 @@ RCamShared::RCamShared(Logger& log, std::string const& path, std::string const& 
 	}
 	if (!pi5) throw std::runtime_error("RaceCam runs only on Pi5!");
 	
-	if (std::filesystem::exists(cfg)) 
-		cfgloc = cfg;
-	else {
-		if (std::filesystem::exists(path + "/data/" + cfg))
-			cfgloc = path + "/data/" + cfg;
-		else
-			cfgloc = path + "/data/racecam_config.json";
+	size_t pos = cfg.rfind("/");
+	if (pos == std::string::npos) {
+		cfgfile_ = cfg;
+	} else {
+		cfgpath_ = cfg.substr(0, ++pos);
+		cfgfile_ = cfg.substr(pos);
 	}
 }
 
 std::string	RCamShared::getLocation(const std::shared_ptr<Camera>& cam)
 {
-	DEBUG_PRINT("%s", "\n");
+//	DEBUG_PRINT("%s", "\n");
 	static const std::map<std::string, std::string> cam_location =
 	{
 		{ "i2c@88000", "Camera0" },
@@ -100,7 +84,7 @@ void RCamShared::initCameraManager()
 
 bool RCamShared::fromArray(Rectangle& r,json::value& jv)
 {
-	DEBUG_PRINT("%s", "\n");
+//	DEBUG_PRINT("%s", "\n");
 	if (!jv.is_array()) {
 		logger_.Log(LogLevel::ERROR, "toRectangle() is not array!");
 		return false;
@@ -119,7 +103,7 @@ bool RCamShared::fromArray(Rectangle& r,json::value& jv)
 
 bool RCamShared::fromArray(Point& p, json::value& jv)
 {
-	DEBUG_PRINT("%s", "\n");
+//	DEBUG_PRINT("%s", "\n");
 	if (!jv.is_array()) {
 		logger_.Log(LogLevel::ERROR, "toPoint() is not array!");
 		return false;
@@ -136,15 +120,13 @@ bool RCamShared::fromArray(Point& p, json::value& jv)
 
 bool RCamShared::fromArray(Size& s, json::value& jv)
 {
-	DEBUG_PRINT("%s", "\n");
-	if (!jv.is_array())
-	{
+//	DEBUG_PRINT("%s", "\n");
+	if (!jv.is_array()) {
 		logger_.Log(LogLevel::ERROR, "toSize() is not array!");
 		return false;
 	}
 	auto a = jv.as_array();
-	if ( 2 != a.size())
-		{
+	if ( 2 != a.size()) {
 		logger_.Log(LogLevel::ERROR, "toSize() incorrect array size: " + a.size());
 		return false;
 	}
@@ -271,125 +253,6 @@ ControlValue RCamShared::toCntlVal(json::value& jv, const ControlId* cip)
 	return cv;
 }
 
-/*template <typename T>
-ControlValue RCamShared::toCntlVal(T& v, std::size_t& size)
-{
-	DEBUG_PRINT("%s", "\n");
-	ControlValue cv;
-	if (v.empty()) return cv;
-	if (size != MAX_SIZE && v.size() != size) 
-		return cv;
-	if (v.size() == 1)
-		cv.set(v[0]);
-	else
-		cv.set(libcamera::Span(v.data(), v.size()));
-		
-	return cv;
-} */
-
-//WEKsplit RCamCfg  move??
-/*json::value RCamShared::toJSON(ControlValue& cv)
-{
-	DEBUG_PRINT("%s", "\n");
-	json::value jv;
-	if (cv.isNone()) return jv;
-	
-	std::string type;
-	
-	switch (cv.type()) {
-		case ControlTypeBool: {
-			if (cv.isArray()) return jv;
-			jv.emplace_bool() = cv.get<bool>() ? true : false;
-			return jv;
-		}
-		case ControlTypeInteger32: {
-			if (cv.isArray()) return jv;
-			jv.emplace_int64() = cv.get<int>();
-			return jv;
-		}
-		case ControlTypeInteger64: {	
-			if (!cv.isArray()) {
-				if (cv.numElements() != 1) return jv;
-				jv.emplace_int64() = cv.get<long>();
-				return jv;
-			} else {
-				json::array ja;
-				for (const auto& l : cv.get<libcamera::Span<const long>>())
-					ja.emplace_back(l);
-				jv = ja;
-				return jv;
-			}	
-		}
-		case ControlTypeFloat: {
-			if (!cv.isArray()) {
-				if (cv.numElements() != 1) return jv;
-				jv.emplace_double() = cv.get<float>();
-				return jv;
-			} else {
-				json::array ja;
-				for (const auto& f : cv.get<libcamera::Span<const float>>())
-					ja.emplace_back(f);
-				jv = ja;
-				return jv;
-			}
-		}
-		case ControlTypeRectangle: {	
-			if (!cv.isArray()) {
-				if (cv.numElements() != 1) return jv;
-				Rectangle r = cv.get<Rectangle>();
-				json::array ja = {{r.x, r.y, r.width, r.height}};
-				jv = ja;
-				return jv;
-			} else {
-				json::array ja, ja1;
-				for (const auto& r : cv.get<libcamera::Span<const Rectangle>>()) {
-					ja1 = {{r.x, r.y, r.width, r.height}};
-					ja.emplace_back(ja1);
-					jv = ja;
-					return jv;
-				}
-				
-			}
-			return jv;
-		}
-		case ControlTypeNone: {
-			throw std::runtime_error("Unhandled control type for: ControlTypeNone");
-		}
-		case ControlTypePoint: {
-			throw std::runtime_error("Unhandled control type for: ControlTypePoint");
-		}
-		case ControlTypeSize: {
-			throw std::runtime_error("Unhandled control type for: ControlTypeSize");
-		}
-		case ControlTypeUnsigned16: {
-			throw std::runtime_error("Unhandled control type for: ControlTypeUnsigned16");
-		}
-		case ControlTypeUnsigned32: {
-			throw std::runtime_error("Unhandled control type for: ControlTypeUnsigned32");
-		}	
-		case ControlTypeByte: {
-			throw std::runtime_error("Unhandled control type for: ControlTypeByte");
-		}
-		case ControlTypeString: {
-			throw std::runtime_error("Unhandled control type for: ControlTypeString");
-		}
-	} 
-	return jv;
-} */
-
-//WEKsplit RCamShared
-json::array RCamShared::toArray(Sensor& s)
-{
-	DEBUG_PRINT("%s", "\n");
-	if (s.isNull()) throw std::runtime_error("toArray(Sensor) has novalues!");
-	if (s.hasSensor()) {
-		return json::array{s.outRes.width, s.outRes.height, s.senRes.width, s.senRes.height, s.senBit};
-	} else {
-		return json::array{s.outRes.width, s.outRes.height};
-	}
-}
-
-//WEKsplit RCamCfg  move??
 int RCamShared::getBitDepth(const libcamera::PixelFormat& pix)
 {
 	DEBUG_PRINT("%s", "\n");
@@ -457,12 +320,12 @@ static const std::map<libcamera::PixelFormat, unsigned int> bayer_formats =
 
 json::value RCamShared::getCfgValue(const std::string& key)
 {
-	DEBUG_PRINT("%s", "\n");
-	return getCfgValue(key, config);
+//	DEBUG_PRINT("%s", "\n");
+	return getCfgValue(key, config_);
 }
 json::value RCamShared::getCfgValue(const std::string& key, const json::value& jv)
 {
-	DEBUG_PRINT("%s", "\n");
+//	DEBUG_PRINT("%s", "\n");
 	try {
 		return jv.at_pointer(key);
 	}

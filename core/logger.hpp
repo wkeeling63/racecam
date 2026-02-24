@@ -1,23 +1,35 @@
 #ifndef RACECAM_LOGGER_H
 #define RACECAM_LOGGER_H
 
-#include <iostream>
 #include <fstream>
-#include <string>
-#include <ctime>
-#include <iomanip> 
 #include <filesystem>
-#include <mutex>
 
 extern "C" {
 #include "libavutil/log.h"
 }
 
+/* libcamera::LoggingTargetNone, libcamera::LoggingTargetSyslog, libcamera::LoggingTargetFile, libcamera::LoggingTargetStream 
+ 	logSetTarget(LoggingTargetNone);   //libcamera logging
+    WEK FYI you can't call logSetTarget twice -- so it can't be here or we need some sort of 
+     DEBUG, INFO, WARN, ERROR and FATAL
+	logSetLevel("*", "INFO"); //("Camera", "INFO");
+
+ ffmpeg levels
+	AV_LOG_QUIET   -8 	Print no output.
+   	AV_LOG_PANIC   0  	Something went really wrong and we will crash now.
+   	AV_LOG_FATAL   8  	Something went wrong and recovery is not possible.
+   	AV_LOG_ERROR   16  	Something went wrong and cannot losslessly be recovered.
+   	AV_LOG_WARNING   24 Something somehow does not look correct.
+   	AV_LOG_INFO   32  	Standard information.
+   	AV_LOG_VERBOSE   40 Detailed information.
+    AV_LOG_DEBUG   48	Stuff which is only useful for libav* developers. */
+
 enum class LogLevel {
     DEBUG,
     INFO,
     WARN,
-    ERROR
+    ERROR,
+    ALWAYS
 };
 
 static class Logger* global_logger_ptr = nullptr;
@@ -49,17 +61,13 @@ private:
     std::mutex &mutex_;
 };
 
-// static class Logger* localptr = nullptr;
-
 namespace fs = std::filesystem;
 
 class Logger {
 public:
 //WEK make filesystem calls use the noexecpt format
-// Logger(const std::string& filename, Logger*& lptr, const LogLevel& level = LogLevel::ERROR) 
 Logger(const std::string& filename, const LogLevel& level = LogLevel::ERROR) 
             : filename_(filename), level_(level) {
-  //         : filename_(filename), lptr_(lptr), level_(level) {
     std::string ofile, nfile;
     if (fs::exists(filename_)) {
         if (fs::file_size(filename_) >= 2097152) {
@@ -84,14 +92,11 @@ Logger(const std::string& filename, const LogLevel& level = LogLevel::ERROR)
     setLevelAPIs(level_);
     outputfile_ << getTimestamp() << " [" << getLevelString(LogLevel::INFO) 
             <<  "] " << "Logging initialized at " << getLevelString(level_) << " level" << std::endl;
- //   if (lptr_ != nullptr) {
     if (global_logger_ptr != nullptr) {
             throw std::runtime_error("Only one instance of MyFFmpegLogger is allowed!");
         }
     av_log_set_callback(&Logger::FfmpegLogCallback);
     global_logger_ptr = this;
-//    localptr = lptr_ = this;
-
 }
 
 ~Logger() {
@@ -100,7 +105,6 @@ Logger(const std::string& filename, const LogLevel& level = LogLevel::ERROR)
         }
         av_log_set_callback(av_log_default_callback);
         global_logger_ptr = nullptr;
- //       localptr = lptr_ = nullptr;
     }
 
 void Log(LogLevel level, const std::string& message, bool tocout = false) {
@@ -131,15 +135,12 @@ private:
     ThreadSafeOStream ts_out_ {outputfile_, log_mutex_}; 
     std::ostream shared_log_stream {&ts_out_};
     std::string filename_;
-//    Logger*& lptr_;
     LogLevel level_;
     
     static void FfmpegLogCallback(void* ptr, int fflevel, const char* fmt, va_list vargs) {
-//       if (!localptr) throw std::runtime_error("nullptr for Logger!");
         if (!global_logger_ptr) throw std::runtime_error("nullptr for Logger!");
         if (ptr) {
             char buffer[4096];
-  //          vsnprintf(buffer, sizeof(buffer), fmt, vargs);
             int print_prefix = true;
             av_log_format_line(ptr, fflevel, fmt, vargs, buffer, sizeof(buffer), &print_prefix);
             static const std::map<int, LogLevel> f2l = {
@@ -153,7 +154,6 @@ private:
       
             for (const auto& l : f2l) {
                 if (fflevel <= l.first) {  // WEK add check to avoid call in messages not to be logged???
-     //               localptr->LogNR(l.second, ffmpeg_message);
                     global_logger_ptr->LogNR(l.second, ffmpeg_message);
                     break;
                 }
@@ -175,6 +175,7 @@ private:
             case LogLevel::INFO:  return "INFO ";
             case LogLevel::WARN:  return "WARN ";
             case LogLevel::ERROR: return "ERROR";
+            case LogLevel::ALWAYS: return "NOTICE";
             default:              return "UNKNOWN";
         }
     }

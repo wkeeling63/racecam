@@ -1,4 +1,4 @@
-// redo: ovmerge -c wpc-racecam.dts gpio-led-overlay.dts,label=LED1,gpio=13 gpio-led-overlay.dts,label=LED2,gpio=15 gpio-key-overlay.dts,label=SW1,gpio=26,keycode=2 gpio-key-overlay.dts,label=SW2,gpio=21,keycode=3
+// redo: ovmerge -c wpc-racecam.dts gpio-led-overlay.dts,label=LED1,gpio=13 gpio-key-overlay.dts,label=SW1,gpio=12,keycode=2
 
 /dts-v1/;
 /plugin/;
@@ -26,7 +26,7 @@
 		sound_overlay: __overlay__ {
 			compatible = "simple-audio-card";
 			simple-audio-card,format = "i2s";
-			simple-audio-card,name = "mic";
+			simple-audio-card,name = "RacecamMic";
 			simple-audio-card,bitclock-slave = <&dailink0_slave>;
 			simple-audio-card,frame-slave = <&dailink0_slave>;
 			simple-audio-card,widgets = "Microphone", "Microphone Jack";
@@ -79,77 +79,25 @@
 	fragment@6 {
 		target = <&gpio>;
 		__overlay__ {
-			led_pin_1: led_pins@f {
-				brcm,pins = <15>;
-				brcm,function = <1>;
-				brcm,pull = <0>;
+			pin_state: button_pins@c {
+				brcm,pins = <12>;
+				brcm,function = <0>;
+				brcm,pull = <2>;
 			};
 		};
 	};
 	fragment@7 {
 		target-path = "/";
 		__overlay__ {
-			leds@f {
-				compatible = "gpio-leds";
-				pinctrl-names = "default";
-				pinctrl-0 = <&led_pin_1>;
-				status = "okay";
-				led {
-					label = "LED2";
-					gpios = <&gpio 15 0>;
-					linux,default-trigger = "none";
-				};
-			};
-		};
-	};
-	fragment@8 {
-		target = <&gpio>;
-		__overlay__ {
-			pin_state: button_pins@1a {
-				brcm,pins = <26>;
-				brcm,function = <0>;
-				brcm,pull = <2>;
-			};
-		};
-	};
-	fragment@9 {
-		target-path = "/";
-		__overlay__ {
-			button@1a {
+			button@c {
 				compatible = "gpio-keys";
 				pinctrl-names = "default";
 				pinctrl-0 = <&pin_state>;
 				status = "okay";
 				key {
 					linux,code = <2>;
-					gpios = <&gpio 26 1>;
+					gpios = <&gpio 12 1>;
 					label = "SW1";
-				};
-			};
-		};
-	};
-	fragment@10 {
-		target = <&gpio>;
-		__overlay__ {
-			pin_state_1: button_pins@15 {
-				brcm,pins = <21>;
-				brcm,function = <0>;
-				brcm,pull = <2>;
-			};
-		};
-	};
-	fragment@11 {
-		target-path = "/";
-		__overlay__ {
-			button@15 {
-				compatible = "gpio-keys";
-				pinctrl-names = "default";
-				pinctrl-0 = <&pin_state_1>;
-				status = "okay";
-				key {
-					linux,code = <3>;
-					gpios = <&gpio 21 1>;
-					label = "SW2";
 				};
 			};
 		};
