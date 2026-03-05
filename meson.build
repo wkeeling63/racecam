@@ -38,6 +38,7 @@ libcamera_dep = dependency('libcamera', required : true)
 boost_dep = dependency('boost', modules: ['json'], required : true)
 curlpp_dep = dependency(['curlpp', 'curl'], required : true)
 # src_dep = declare_dependency(sources : [srcheader])
+# gcp_dep = dependency('google_cloud_cpp_secretmanager', method : 'pkgconfig')
 
 summary({
             'location' : libcamera_dep.get_variable('libdir'),

@@ -42,8 +42,7 @@ json::value valueat(const std::vector<std::string>& path, const json::object& js
 {
 	auto it = js.begin();
 	auto obj = js;
-	for (std::string s : path)
-	{
+	for (std::string s : path) {
 		it = obj.find(s);
 		if (it == obj.end()) throw std::runtime_error("valueat() " + s + " not found!");
 		if (it->value().is_object()) obj = it->value().get_object();
@@ -55,8 +54,7 @@ YouTube::YouTube()
 {
 //	fprintf(stdout, "%s:%s:%d \n", __FILE__, __PRETTY_FUNCTION__, __LINE__);
 	json::value cv = jsonRead("client.json");
-	if (cv.is_object())
-	{
+	if (cv.is_object()) {
 		json::object co = cv.get_object();
 		auto it = co.find("client_id");
 		if (it == co.end()) throw std::runtime_error("Client ID not found!2");
@@ -64,8 +62,7 @@ YouTube::YouTube()
 		it = co.find("client_secret");
 		if (it == co.end()) throw std::runtime_error("Client Secret not found!");
 		secret_ = json::value_to<std::string>(it->value());
-	} else
-	{
+	} else {
 		throw std::runtime_error("Client ID and Secret not a object!");
 	} 
 }
@@ -128,11 +125,9 @@ rsp_type YouTube::postMsg(std::string const& url_str, std::string const& message
 json::value YouTube::GetAuth(bool renew)
 {
 //	fprintf(stdout, "%s:%s:%d \n", __FILE__, __PRETTY_FUNCTION__, __LINE__);
-	try
-	{
+	try {
 		json::value av = jsonRead("racecam_auth.json");;
-		if (!renew || av.is_null())
-		{
+		if (!renew || av.is_null()) {
 			//device code
 			std::string get_dc_url = "https://oauth2.googleapis.com/device/code";
 			std::string get_dc_str  = "client_id=" + id_ + 
@@ -157,31 +152,26 @@ json::value YouTube::GetAuth(bool renew)
 			std::string dc_url = "https://oauth2.googleapis.com/token";
 
 			int tries = expires / intv;
-			do 
-			{
+			do {
 				std::this_thread::sleep_for(std::chrono::seconds(intv));
 
 				rsp_type dr = postMsg(dc_url, dc_str);
-				if (dr.respcode == 428)
-				{
+				if (dr.respcode == 428) {
 					if (!(tries % 5)) std::cout << "." << std::flush;
 					continue;		
 				}
-				if (dr.respcode == 200) 
-				{
+				if (dr.respcode == 200) {
 					std::cout << " Device authorized." << std::endl;
 					av = dr.resp;
 					jsonWrite("racecam_auth.json", av);
 					return av;
-				} else 
-				{
+				} else {
 					throw std::runtime_error("Auth device responce code: " + std::to_string(dr.respcode));
 				}	
 				
 			} while (tries--);
 			throw std::runtime_error("Timed out waiting for device responce!");
-		} else
-		{
+		} else {
 		//reauth 
 			if (!av.is_object()) throw std::runtime_error("racecam_auth.json is not a object!");
 			json::object co = av.get_object();
@@ -195,8 +185,7 @@ json::value YouTube::GetAuth(bool renew)
 			std::time_t expire_time = sb.st_mtime + expires - 300;
 			std::time_t current_time = std::time(nullptr);
 			
-			if (current_time > expire_time)
-			{
+			if (current_time > expire_time) {
 				it = co.find("access_token");
 				if (it == co.end()) throw std::runtime_error("auth access_token not found!");
 				std::string access_token = json::value_to<std::string>(it->value());
@@ -223,12 +212,10 @@ json::value YouTube::GetAuth(bool renew)
 		}
 		return av;
 	}
-	catch ( curlpp::LogicError & e )
-	{
+	catch ( curlpp::LogicError & e ) {
 		std::cout << e.what() << std::endl;
 	}
-	catch ( curlpp::RuntimeError & e )
-	{
+	catch ( curlpp::RuntimeError & e ) {
 		std::cout << e.what() << std::endl;
 	}
 	return nullptr;
@@ -268,15 +255,15 @@ yt_strm YouTube::StartStrm(std::string const& name, std::string const& publish)
 		"\"startWithSlate\":true}," +
 		"\"status\":{\"privacyStatus\":\"" + publish + "\"}}";
 //	std::cout << req << std::endl;
-	std::string url = "https://youtube.googleapis.com/youtube/v3/liveBroadcasts?part=snippet%2CcontentDetails%2Cstatus&key=" + apikey;
+//	std::string url = "https://youtube.googleapis.com/youtube/v3/liveBroadcasts?part=snippet%2CcontentDetails%2Cstatus&key=" + apikey;
+	std::string url = "https://youtube.googleapis.com/youtube/v3/liveBroadcasts?part=snippet%2CcontentDetails%2Cstatus";
 	std::list<std::string> h;
     h.push_back("Content-Type: application/json");
     h.push_back("Accept: application/json");
     h.push_back("Authorization: Bearer " + access_token);
 	//post and check for 200
 	rsp_type rr = postMsg(url, req, h);
-	if (!(rr.respcode == 200)) 
-	{
+	if (!(rr.respcode == 200)) {
 		std::cout << access_token << std::endl;
 		std::cout << rr.respcode << std::endl;
 		jsonWrite(std::cout, rr.resp);
@@ -302,10 +289,10 @@ yt_strm YouTube::StartStrm(std::string const& name, std::string const& publish)
 	"\"ingestionType\":\"rtmp\"," +
 	"\"resolution\":\"variable\"}," +
 	"\"contentDetails\":{\"isReusable\":false}}";
-	url = "https://youtube.googleapis.com/youtube/v3/liveStreams?part=snippet%2Ccdn%2CcontentDetails&key=" + apikey;
+//	url = "https://youtube.googleapis.com/youtube/v3/liveStreams?part=snippet%2Ccdn%2CcontentDetails&key=" + apikey;
+	url = "https://youtube.googleapis.com/youtube/v3/liveStreams?part=snippet%2Ccdn%2CcontentDetails";
 	rr = postMsg(url, req, h);
-	if (!(rr.respcode == 200)) 
-	{
+	if (!(rr.respcode == 200)) {
 		std::cout <<  rr.respcode << std::endl;
 		jsonWrite(std::cout, rr.resp);
 		throw std::runtime_error("Stream insert failed!");
@@ -348,14 +335,14 @@ yt_strm YouTube::StartStrm(std::string const& name, std::string const& publish)
 	
 	req.clear();
 	url = "https://youtube.googleapis.com/youtube/v3/liveBroadcasts/bind?id=" + 
-		stm.b_id + "&part=snippet&streamId=" + stm.s_id +"&key=" + apikey;
+//		stm.b_id + "&part=snippet&streamId=" + stm.s_id +"&key=" + apikey;
+		stm.b_id + "&part=snippet&streamId=" + stm.s_id; 
 	h.clear();
 	h.push_back("Accept: application/json");
     h.push_back("Authorization: Bearer " + access_token);
     
     rr = postMsg(url, req, h);
-	if (!(rr.respcode == 200)) 
-	{
+	if (!(rr.respcode == 200)) {
 		std::cout <<  rr.respcode << std::endl;
 		jsonWrite(std::cout, rr.resp);
 		throw std::runtime_error("bind failed!");
@@ -375,20 +362,18 @@ void YouTube::StopStrm(std::string const& id)
 	if (it == ao.end()) throw std::runtime_error("auth access_token not found!");
 	std::string access_token = json::value_to<std::string>(it->value());
 	std::string url =  "https://youtube.googleapis.com/youtube/v3/liveBroadcasts/transition?broadcastStatus=complete&id=" 
-		+ id + "&part=snippet%2Cstatus&key=" + apikey;
+//		+ id + "&part=snippet%2Cstatus&key=" + apikey;
+		+ id + "&part=snippet%2Cstatus";
 	std::list<std::string> h;
 	h.push_back("Accept: application/json");
     h.push_back("Authorization: Bearer " + access_token);
     
     rsp_type rr = postMsg(url, "", h);
-	if (!(rr.respcode == 200)) 
-	{
+	if (!(rr.respcode == 200)) {
 		std::cout << url << std::endl;
 		std::cout <<  rr.respcode << std::endl;
 		jsonWrite(std::cout, rr.resp);
 		throw std::runtime_error("transition to complete failed!");
 	}
-
 //	jsonWrite(std::cout, rr.resp);
-	
 }

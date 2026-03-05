@@ -631,6 +631,7 @@ void	RCamCfg::cfgCompositeDest(void)
 						logger_.Log(LogLevel::WARN, "Drop failed for /Outputs/Composite/Destination", true);
 					}
 				}
+				if (getCfgValue("/Audio").is_null()) std::cout << "Audio is not configured and is required by YouTube. /nPlease configure before running live stream." << std::endl;
 				auto os = getString("YouTubeTitle", t);
 				json::string js {os.value()};
 				if (!setCfgValue("/Outputs/Composite/Destination/YouTubeTitle", js))

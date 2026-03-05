@@ -15,7 +15,7 @@ class GPIO {
 public:
     
 GPIO() {
-    flags_ = fcntl(STDIN_FILENO, F_GETFL, 0);
+ /*   flags_ = fcntl(STDIN_FILENO, F_GETFL, 0);
     if (flags_ == -1) {
         // Handle error
 	throw std::runtime_error("STDIN fcntl getfl failed");
@@ -28,14 +28,14 @@ GPIO() {
     tcgetattr(STDIN_FILENO, &old_tio_); // Save old settings
     new_tio = old_tio_;
     new_tio.c_lflag &= ~(ICANON | ECHO); // Disable canonical mode and echo
-    tcsetattr(STDIN_FILENO, TCSANOW, &new_tio); // Apply new settings
+    tcsetattr(STDIN_FILENO, TCSANOW, &new_tio); */// Apply new settings
 }
 
 ~GPIO() {
-    tcsetattr(STDIN_FILENO, TCSANOW, &old_tio_);
+ //   tcsetattr(STDIN_FILENO, TCSANOW, &old_tio_);
 }
 
-char get() {
+/*char get() {
 //	fprintf(stdout, "%s:%s:%d \n", __FILE__, __PRETTY_FUNCTION__, __LINE__);
     char c;
     ssize_t bytes_read = read(STDIN_FILENO, &c, 1);
@@ -56,7 +56,7 @@ char get() {
 	if (c == 1 || c == 2) return c;
 	return 0;
     }
-}
+} */
 void set(int led, bool val) {
     std::string fpath = "/sys/class/leds/LED" + std::to_string(led) + "/brightness";
 //    std::ofstream f(fpath);

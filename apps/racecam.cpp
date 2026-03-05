@@ -3,24 +3,15 @@
  * 
  */
 
-//import std;
-
-//#include <iostream>
-//#include <limits>
 #include <csignal>
-//#include <chrono>
-//#include <atomic>
 
-//#include "core/rcam_app.hpp"
 #include "core/rcam.hpp"
-//#include "core/logger.hpp"
-// #include "racecamsrc.hpp"
+
 #include <filesystem>
 #include <pwd.h>     // Required for getpwuid
 
 #include "core/gpio.hpp"
 
-//#include <stdio.h>
 //#define DEBUG 1
 #ifdef DEBUG
     #define DEBUG_PRINT(fmt, ...) \
@@ -32,10 +23,6 @@
 //#define HEX( x )   std::setw(2) << std::setfill('0') << std::hex << (int)( x )
 
 GPIO gpio;
-//Logger* g_lptr = nullptr;
-// Logger logger(rcamSrcPath + "/logs/RaceCam.log", g_lptr);
-//Logger logger(rcamSrcPath + "/logs/RaceCam.log");
-//Logger logger(rcamSrcPath + "/logs/RaceCam.log", LogLevel::INFO);
 
 std::atomic<bool> RunProgram {true};
 int Duration {0};
@@ -112,7 +99,6 @@ int main(int argc, char *argv[])
         exit(1);
     }
      // parms
-//    std::string config_file {"racecam_config.json"};
     std::string config_file {};
     for (int i = 1; i < argc; ++i) {
 	std::string arg = argv[i];
@@ -146,7 +132,6 @@ int main(int argc, char *argv[])
     if (!Duration) Duration = 15;
     try {
 	gpio.set(1, true);
-//	RCam app(logger, rcamSrcPath, config_file);
 	if (!config_file.size()) config_file = "racecam_config.json";
 	RCam app(logger, config_file);
 	logger.Log(LogLevel::ALWAYS, "Starting capture!", true);

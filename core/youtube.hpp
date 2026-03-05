@@ -24,7 +24,7 @@ typedef struct {
 } yt_strm;
 
 //WEK does this need to be in client.json?
-const std::string apikey = "AIzaSyBOjJlttYVt-90r9Zo2eHY7CCnSQrqKDpI";
+//const std::string apikey = "AIzaSyBOjJlttYVt-90r9Zo2eHY7CCnSQrqKDpI";
 
 // enum publish {pub, unl, priv };
 
@@ -35,7 +35,7 @@ public:
 	~YouTube();
 
 json::value GetAuth(bool = true);
-//WEK pass FPS and Resolution as numbers and convert here or pass ass string and convert in caller?
+//WEK pass FPS and Resolution as numbers and convert here or pass as string and convert in caller?
 /*
 240p = 320x240
 360p = 640x360
