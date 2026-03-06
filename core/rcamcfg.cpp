@@ -1,8 +1,54 @@
 /* 
-*  rcamcfg.cpp
-*/
+ * rcamcfg.cpp
+ * 
+ * RaceCam Is an app for multiple camera video capture both locally and streaming.
+ * Copyright (C) <2026> <William Keeling>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
 #include "core/jsonio.hpp"
 #include "core/rcamcfg.hpp"
+
+bool destGood(std::string& dest)
+{
+	CLEARPREVLINES
+	std::string path;
+	std::string file;
+	size_t pos = dest.rfind("/");
+	
+	if (pos == std::string::npos) { 
+		const char* homedir = getenv("HOME");
+    	if (homedir == nullptr) {
+        	struct passwd *pw = getpwuid(getuid());
+        	if (pw != nullptr) {
+           		homedir = pw->pw_dir;
+        	}
+    	}
+    	path = std::string(homedir) + "/Videos";
+		file = dest;
+	} else {
+		path = dest.substr(0, pos);
+		file = dest.substr(pos + 1);
+	}
+	dest = path + "/" + file;	
+	if (access(path.c_str(), W_OK) == 0) {
+		return true;
+	} else {
+		std::cerr << "Cannot write to directory: " << path << " Error: " << strerror(errno) << std::endl;
+		return false;
+	} 
+}
 
 json::value RCamCfg::toJSON(ControlValue& cv)
 {
@@ -462,7 +508,6 @@ void RCamCfg::cfgRaw(void)
 			"Configure Streams for Raw Output"};
 		json::value rv = getCfgValue("/Outputs/Raw/Destination");
 		std::string rs {};
-		// WEK default to srcpath + /data/raw if no value 
 		if (!rv.is_null()) {
 			if (rv.is_string()) {
 				rs = json::value_to<std::string>(rv);
@@ -481,8 +526,15 @@ void RCamCfg::cfgRaw(void)
 		if (menu.size() == 1) {
 			switch (i) {
 				case 1: {
-					auto os = getString("RawString", rs);
-					json::string js {os.value()};
+//					auto os = getString("RawString", rs);
+//					json::string js {os.value()};
+					std::cout << std::endl;
+					std::string fdest;
+					do {
+						auto os = getString("RawString", rs);
+						fdest = (os.value());
+					} while (!destGood(fdest));
+					json::string js {fdest};
 					if (!setCfgValue("/Outputs/Raw/Destination", js))
 						logger_.Log(LogLevel::ERROR, "Unable to set /Outputs/Raw/Destination!", true);
 					}
@@ -498,8 +550,15 @@ void RCamCfg::cfgRaw(void)
 					break;   
 				}
 				case 2: {
-					auto os = getString("RawString", rs);
-					json::string js {os.value()};
+		//			auto os = getString("RawString", rs);
+		//			json::string js {os.value()};
+					std::cout << std::endl;
+					std::string fdest;
+					do {
+						auto os = getString("RawString", rs);
+						fdest = (os.value());
+					} while (!destGood(fdest));
+					json::string js {fdest};
 					if (!setCfgValue("/Outputs/Raw/Destination", js))
 						logger_.Log(LogLevel::ERROR, "Unable to set /Outputs/Raw/Destination!", true);
 					break;
@@ -618,9 +677,15 @@ void	RCamCfg::cfgCompositeDest(void)
 		i = menuUtil(menu);
 		switch (i) {
 			case 1: {
-				auto os = getString("CompositeString", s);
-				json::string js {os.value()};
-				// WEK default to srcpath + /data/composite if no value 
+//				auto os = getString("CompositeString", s);
+//				json::string js {os.value()};
+				std::cout << std::endl;
+				std::string fdest;
+				do {
+					auto os = getString("CompositeString", s);
+					fdest = (os.value());
+				} while (!destGood(fdest));
+				json::string js {fdest};
 				if (!setCfgValue("/Outputs/Composite/Destination", js))
 					logger_.Log(LogLevel::WARN, "Unable to set /Outputs/Composite/Destination!", true);
 				}

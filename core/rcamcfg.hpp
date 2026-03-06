@@ -1,6 +1,22 @@
 /* 
-* rcamcfg.hpp
-*/
+ * rcamcfg.hpp
+ * 
+ * RaceCam Is an app for multiple camera video capture both locally and streaming.
+ * Copyright (C) <2026> <William Keeling>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
 #include <libcamera/control_ids.h>
 #include <libcamera/property_ids.h>
 
@@ -315,6 +331,7 @@ public:
 	json::value getControlValue(const unsigned int id, const std::shared_ptr<Camera> &cam);
 	std::string getCntlMsg(std::string cntl);
 	json::value toJSON(ControlValue&);
+//	bool destGood(std::string& dest);
 	
 	int menuUtil(const std::vector<std::string>&, const bool allownone = true);
 	void displayCam(std::shared_ptr<Camera>);
