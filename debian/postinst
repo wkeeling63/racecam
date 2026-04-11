@@ -1,0 +1,23 @@
+#!/bin/bash
+# set -e
+echo "Running racecam post install script" 
+# ldconfig 
+
+CURRENT_USER=${SUDO_USER:-${USER}}
+USER_HOME=$(getent passwd "$CURRENT_USER" | cut -d: -f6)
+sed -i "s/<USER>/$CURRENT_USER/g" /etc/systemd/system/racecam.service
+sed -i "s:<USERHOME>:$USER_HOME:g" /etc/systemd/system/racecam.service
+systemctl enable racecam.service
+systemctl start racecam.service
+
+sudo groupadd -f racecam
+sudo usermod -aG racecam $CURRENT_USER
+udevadm control --reload-rules && udevadm trigger
+
+mkdir -p /var/log/racecam/
+mkdir -p /etc/racecam/data/
+chgrp -R racecam /var/log/racecam/
+chgrp -R racecam /etc/racecam/data/
+chmod -R 775 /var/log/racecam/
+chmod -R 775 /etc/racecam/data/
+exit 0

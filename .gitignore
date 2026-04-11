@@ -1,4 +1,9 @@
 /data/*
 !/data/client.json
-!/data/controls.yaml
-racecamsrc.hpp
+!/data/racecam.service
+!/data/99-wpc-racecam-leds.rules
+/debian/racecam/*
+/debian/.debhelper/*
+debian/debhelper-build-stamp
+debian/racecam.debhelper.log
+debian/racecam.substvars

@@ -90,7 +90,7 @@ Logger(const std::string& filename, const LogLevel& level = LogLevel::ERROR)
             : filename_(filename), level_(level) {
     std::string ofile, nfile;
     if (fs::exists(filename_)) {
-        if (fs::file_size(filename_) >= 2097152) {
+        if (fs::file_size(filename_) >= 524288) {
             for (int i = 8; i > -1; i--) {
                 nfile = filename_ + "." + std::to_string(i + 1);
                 ofile = (i ? filename_ + "." + std::to_string(i) : filename_); 

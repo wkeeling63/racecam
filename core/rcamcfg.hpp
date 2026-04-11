@@ -21,7 +21,7 @@
 #include <libcamera/property_ids.h>
 
 #include <boost/json.hpp>  
-#include <yaml-cpp/yaml.h>
+// #include <yaml-cpp/yaml.h>
 
 #include "core/message_map.hpp"
 #include "core/rcamshared.hpp"
@@ -329,9 +329,10 @@ public:
 	std::optional<libcamera::Point> getPoint(const std::string, const std::string, const libcamera::Point, const libcamera::Point min = libcamera::Point());
 	std::optional<libcamera::Rectangle> getRectangle(const std::string, const std::string, const libcamera::Rectangle, const libcamera::Rectangle min = libcamera::Rectangle());
 	json::value getControlValue(const unsigned int id, const std::shared_ptr<Camera> &cam);
-	std::string getCntlMsg(std::string cntl);
+//	std::string getCntlMsg(std::string cntl);
+	void getCntlMsg(std::string &);
 	json::value toJSON(ControlValue&);
-//	bool destGood(std::string& dest);
+//	bool destGood(std::string& dest); 
 	
 	int menuUtil(const std::vector<std::string>&, const bool allownone = true);
 	void displayCam(std::shared_ptr<Camera>);
@@ -345,8 +346,8 @@ public:
 	bool	setCfgValue(const std::string& key, const json::value& value, const bool = false);
 	bool	setCfgValue(const std::string& key, const json::value& value, json::value& cfg, const bool create = false);
 	
-private:
-	YAML::Node cntlDesc_; 
+//private:
+//	YAML::Node cntlDesc_; 
 };
 
 

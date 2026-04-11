@@ -1,0 +1,8 @@
+#!/bin/bash
+echo "Running racecam post remove script" 
+rm /boot/firmware/overlays/wpc-racecam.dtbo 2> /dev/null
+rm /boot/firmware/overlays/wpc-racecam-v1.dtbo 2> /dev/null
+rm /boot/firmware/overlays/wpc-racecam-v2.dtbo 2> /dev/null
+rm /etc/systemd/system/service/racecam.service 2> /dev/null
+rm /etc/systemd/system/service/racecam.service 2> /dev/null
+exit 0

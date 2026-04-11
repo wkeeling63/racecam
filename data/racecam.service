@@ -1,0 +1,16 @@
+[Unit]
+Description=RaceCam daemon
+After=network.target
+
+[Service]
+Type=simple
+User=<USER>
+WorkingDirectory=<USERHOME>
+ExecStart=/usr/local/bin/racecamd
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

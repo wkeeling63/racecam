@@ -1,0 +1,5 @@
+#!/bin/bash
+echo "Running racecam pre remove script" 
+systemctl stop racecam.service 2> /dev/null
+systemctl disable racecam.service 2> /dev/null
+exit 0

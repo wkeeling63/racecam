@@ -1,0 +1,13 @@
+#!/bin/bash
+# set -e
+echo "Running racecam pre install script" 
+
+if ! grep -q "Raspberry Pi 5" /proc/device-tree/model; then
+    echo "Error: This package can only be installed on a Raspberry Pi 5."
+    exit 1
+fi
+rm /boot/firmware/overlays/wpc-racecam.dtbo 2> /dev/null
+rm /boot/firmware/overlays/wpc-racecam-v1.dtbo 2> /dev/null
+rm /boot/firmware/overlays/wpc-racecam-v2.dtbo 2> /dev/null
+exit 0
+

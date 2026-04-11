@@ -240,17 +240,22 @@ void RCam::startCams(const json::object& cams)
 		makeRequests(i);
 
 		if (rcams_[i].cam->start(&rcams_[i].cntls))
-			throw std::runtime_error("failed to start camera");
+			throw std::runtime_error("failed to start camera");		
+		rcams_[i].cntls.clear();
 
-//		rcams_[i].cntls.clear();  //why clear? don't clear and reuse control list for cam restart if stopped WEK check this and see it better to rebuild 
 		rcams_[i].stat = RCrunning;
 	
 		rcams_[i].cam->requestCompleted.connect(this, &RCam::requestComplete);
 		
 		for (std::unique_ptr<Request> &request : rcams_[i].req)
 		{
-			if (rcams_[i].cam->queueRequest(request.get()) < 0)
-				throw std::runtime_error("Failed to queue request");
+//			std::cout << "start cams" << std::endl;
+//			if (rcams_[i].cam->queueRequest(request.get()) < 0)
+//				throw std::runtime_error("Failed to queue request");
+			int ret = rcams_[i].cam->queueRequest(request.get());
+			if (ret < 0) {		
+				throw std::runtime_error(std::string("startCams() failed to queue request ") + strerror(ret));
+			}
 		}
 	}
 	cameras_running_ = true;
@@ -574,6 +579,8 @@ void RCam::stopCams(const json::object& cams)
 		msg_queue_.Clear();
 		
 		rcams_[i].req.clear();
+		
+		rcams_[i].cntls.clear();
 	}
 };
 
@@ -614,6 +621,7 @@ void RCam::makeRequests(int cam)
 				if (!request)
 					throw std::runtime_error("failed to make request");
 				rcams_[cam].req.push_back(std::move(request));
+				
 			}
 			else if (free_buffers[stream].empty())
 				throw std::runtime_error("concurrent streams need matching numbers of buffers");
@@ -1015,7 +1023,9 @@ void RCam::queueRequest(CompletedRequest *completed_request)
 	std::lock_guard<std::mutex> stop_lock(camera_stop_mutex_);
 
 	Request *request = completed_request->request;
+//	std::cout << "b4 delete cr" << std::endl;
 	delete completed_request;
+//	std::cout << "after delete cr" << std::endl;
 	assert(request);
 
 	if (rcams_[request->cookie()].stat != RCrunning) return;
@@ -1037,11 +1047,14 @@ void RCam::queueRequest(CompletedRequest *completed_request)
 	}
 	{
 		std::lock_guard<std::mutex> lock(control_mutex_);
-		request->controls() = std::move(rcams_[request->cookie()].cntls);
+//		request->controls() = std::move(rcams_[request->cookie()].cntls); //fixed for move to v0.7
+		request->controls().merge(rcams_[request->cookie()].cntls, ControlList::MergePolicy::OverwriteExisting);
+		rcams_[request->cookie()].cntls.clear();
 	}
 
-	if (rcams_[request->cookie()].cam->queueRequest(request) < 0)
-		throw std::runtime_error("failed to queue request");
+	if (rcams_[request->cookie()].cam->queueRequest(request) < 0) {
+		throw std::runtime_error("queueRequest() failed to queue request ");
+	}
 }
 
 void RCam::initVideoStream(AVFormatContext *fmt_ctx, json::value& parms)

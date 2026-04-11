@@ -147,7 +147,7 @@ RCamCfg::RCamCfg(Logger& lptr, std::string const& cfg) : RCamShared(lptr, cfg)
 		logger_.Log(LogLevel::INFO, std::string("Configuration " + cfgpath_ + cfgfile_ + " is empty or not found!"));
 		config_ = json::object {};
 	}
-    try {
+ /*   try {
         YAML::Node cntlyaml = YAML::LoadFile("/home/wkeeling/racecam/controls.yaml");
         if (cntlyaml["controls"]) {
 			cntlDesc_ = cntlyaml["controls"];
@@ -158,7 +158,7 @@ RCamCfg::RCamCfg(Logger& lptr, std::string const& cfg) : RCamShared(lptr, cfg)
 		} 
 	catch (const YAML::Exception& e) {
         logger_.Log(LogLevel::ERROR, std::string("YAML error: ") + e.what());
-		}
+		} */
 
     initCameraManager();
 }
@@ -1220,7 +1220,9 @@ json::value RCamCfg::getControlValue(const unsigned int idNum, const std::shared
 
 	id = it->first;
 	info = it->second;
-	cntlmsg = getCntlMsg(id->name());
+//	cntlmsg = getCntlMsg(id->name());
+	cntlmsg = id->name();
+	getCntlMsg(cntlmsg);
 		
 //	ID 20003 maps to: ScalerCrops
 //  ID 27 maps to: ScalerCrop
@@ -1711,7 +1713,19 @@ std::optional<libcamera::Rectangle> RCamCfg::getRectangle(const std::string msg_
 		return rect;
 	} while (1);
 }
-std::string RCamCfg::getCntlMsg(std::string cntl)
+void RCamCfg::getCntlMsg(std::string &msg)
+{
+#include "core/cntl_msg_map.hpp"
+	std::string cntl=msg;
+	auto it = cntl_msg_map.find(cntl);
+	if (it != cntl_msg_map.end()) {
+		msg = it->second;
+	} else {
+		msg = std::string{"Description of "} + cntl + " not found!";
+	}
+}
+
+/* std::string RCamCfg::getCntlMsg(std::string cntl)
 {
 	DEBUG_PRINT("%s", "\n");
 	std::string message {"Description of " + cntl + " not found!"};
@@ -1739,7 +1753,7 @@ std::string RCamCfg::getCntlMsg(std::string cntl)
         logger_.Log(LogLevel::ERROR, std::string("YAML error: ") + e.what(), true);
 		}
 	return message;
-} 
+} */
 
 int RCamCfg::menuUtil(const std::vector<std::string>& m, const bool allownone)
 {

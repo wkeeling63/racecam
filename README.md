@@ -35,8 +35,7 @@ meson setup --reconfigure build
 
 **Build instructions:**
 meson setup build  
-sudo meson install -C build  
-sudo ldconfig //if lib not found  
+sudo meson install -C build   
 
 **Setup udev rule:**
 sudo groupadd racecam 

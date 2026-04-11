@@ -4,7 +4,8 @@ project(
   'c',
   'cpp',
 meson_version : '>= 0.64.0',
-version : '1.0.0',
+version : '1.0.1',
+# default_options : ['werror=true', 'warning_level=3', 'cpp_std=c++17', 'c_std=c11', 'buildtype=release', 'default_library=static'],
 default_options : ['werror=true', 'warning_level=3', 'cpp_std=c++17', 'c_std=c11', 'buildtype=release'],
 license : 'BSD-2-Clause'
 )
@@ -23,11 +24,6 @@ if cxx.get_id() == 'gcc'
     cpp_arguments += '-Wno-psabi'
 endif
 
-#srcheader = custom_target('generate_src_header',
-#        output : 'racecamsrc.hpp',
-#        command : ['sh', meson.project_source_root() / 'scripts/sourcelocation.sh', meson.project_source_root(), '@OUTPUT@']
-#    )
-
 if cpu == 'aarch64' or neon == 'arm64'
     cpp_arguments += '-ftree-vectorize'
 elif neon == 'armv8-neon'
@@ -37,8 +33,6 @@ endif
 libcamera_dep = dependency('libcamera', required : true)
 boost_dep = dependency('boost', modules: ['json'], required : true)
 curlpp_dep = dependency(['curlpp', 'curl'], required : true)
-# src_dep = declare_dependency(sources : [srcheader])
-# gcp_dep = dependency('google_cloud_cpp_secretmanager', method : 'pkgconfig')
 
 summary({
             'location' : libcamera_dep.get_variable('libdir'),
@@ -54,30 +48,30 @@ subdir('core')
 
 add_project_arguments(cpp_arguments, language : 'cpp')
 
- rcamcfg_lib = library(
-    'librcamcfg',
-    rcamcfg_src,
-    soversion : meson.project_version(),
-    include_directories : include_directories('.'),
-    install : true,
-    name_prefix : '',
-    dependencies : racecam_app_dep,
-)
+ # rcamcfg_lib = library(
+ #   'librcamcfg',
+ #   rcamcfg_src,
+ #   soversion : meson.project_version(),
+ #   include_directories : include_directories('.'),
+ #   install : true,
+ #   name_prefix : '',
+ #   dependencies : racecam_app_dep,
+ #)
 
-rcam_lib = library(
-    'librcam',
-    rcam_src,
-    soversion : meson.project_version(),
-    include_directories : include_directories('.'),
-    install : true,
-    name_prefix : '',
-    dependencies : [racecam_app_dep, boost_dep],
-)
+# rcam_lib = library(
+#    'librcam',
+#    rcam_src,
+#    soversion : meson.project_version(),
+#    include_directories : include_directories('.'),
+#    install : true,
+#    name_prefix : '',
+#    dependencies : [racecam_app_dep, boost_dep],
+#)
 
 subdir('apps')
 subdir('dts')
+subdir('data')
 
 summary({
-#            'libav encoder' : enable_libav,
         },
         bool_yn : true, section : 'Build configuration')
