@@ -1,0 +1,1 @@
+ACTION=="add", KERNEL=="LED1", SUBSYSTEM=="leds", RUN+="/bin/chown -R root:racecam /sys%p", RUN+="/bin/chmod -R g+rw /sys%p"

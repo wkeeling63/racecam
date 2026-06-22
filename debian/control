@@ -1,0 +1,22 @@
+Source: racecam
+Section: video
+Priority: optional
+Maintainer: William Keeling  <williamkeeling@hotmail.com>
+Build-Depends: debhelper-compat (= 13),
+ meson,
+ libboost-json-dev,
+ libcurl4t64,
+ libcurl4-openssl-dev,
+ libcurlpp-dev,
+ libcamera-dev,
+ libavcodec-dev,
+ libavdevice-dev,
+ libavformat-dev,
+ libswresample-dev
+Standards-Version: 4.1.3
+Homepage: https://github.com/wkeeling63/racecam/
+
+Package: racecam
+Architecture: arm64
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Package includes binaries, DTB, udev, and systemd.

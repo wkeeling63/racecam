@@ -1,0 +1,1525 @@
+// and figure out where stopping should change stat to configed
+
+/* racecam capture class code
+ *  rcam.cpp
+ * 
+ * RaceCam Is an app for multiple camera video capture both locally and streaming.
+ * Copyright (C) <2026> <William Keeling>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+#include "core/jsonio.hpp"
+#include "core/rcam.hpp"
+
+#include <linux/dma-buf.h>
+#include <sys/ioctl.h>
+
+std::string libav_error_msg(const int errnum)
+{
+    char errbuf[AV_ERROR_MAX_STRING_SIZE];
+    if (av_strerror(errnum, errbuf, sizeof(errbuf)) == 0) {
+        return "libav RC(" + std::to_string(errnum) + ") " + std::string(errbuf);
+    }
+    return "libav RC(" + std::to_string(errnum) + ") Unknown error";
+}
+
+//WEK bug default cfg not working;
+RCam::RCam(Logger& lptr, std::string const& cfg) : RCamShared(lptr, cfg)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+}
+
+unsigned int RCam::getCntlID(const std::string cntlname)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	for (auto const &cm : controls::controls) {
+		if (cntlname == cm.second->name()) return cm.first;
+	}
+	return false;
+}
+
+void RCam::InitCapture()
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	if (cfgpath_.size()) {
+		config_ = jsonRead(cfgfile_, &cfgpath_);
+	} else {
+		config_ = jsonRead(cfgfile_);
+	}
+
+	if (config_.is_null()) throw std::runtime_error("Configuration " + cfgpath_ + cfgfile_ + " not found!");
+	initCameraManager(); 
+	json::object cams = getCfgValue("/Cameras").get_object();
+	initCams(cams);
+	initOutputs();
+	startCams(cams);
+}
+
+void RCam::FreeCapture()
+{
+//WEK why not drive off the camera status struct
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	json::object cams = getCfgValue("/Cameras").get_object();
+
+	stopCams(cams);
+	stop_threads_.store(true);
+	
+	freeOutputs();
+
+	freeCams(cams);
+	
+	cm_->stop();
+	cm_.reset();
+	for (auto it = rcams_.begin(); it != rcams_.end(); it++)
+		it->stat = RCunknown;
+}
+
+void RCam::initCams(const json::object& cams)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	unsigned int i = 0;
+	// iterates "/Cameras" json and builds rcam_[cam#]	
+	for(auto it = cams.begin(); it != cams.end(); ++it) {
+//		DEBUG_PRINT(" camera id %d%s", i, "\n");	
+		// get/save camid as .cam
+		std::string camid = json::value_to<std::string>(getCfgValue("/CameraID", it->value()));
+		rcams_[i].cam = cm_->get(camid);
+		if (!rcams_[i].cam)
+			throw std::runtime_error("failed to find camera " + camid);
+		// get/save location as .loc	
+		rcams_[i].loc = getLocation(rcams_[i].cam);
+		// acquire cam and set .stat and cam_cnt_
+		if (rcams_[i].cam->acquire())
+			throw std::runtime_error("failed to acquire camera " + camid);
+		rcams_[i].stat = RCaquired;  
+
+		// gen and save  
+		json::value sv = getCfgValue("/Streams", it->value());
+		
+		std::vector<libcamera::Size> ss {};
+		if (sv.is_array()) {
+			for(json::value sv : sv.as_array()) {
+				Size tmp {};
+				if (!fromArray(tmp, sv)) throw std::runtime_error(camid + " Size fromArray failed!");
+				ss.push_back(tmp);
+			}
+		} else {
+			throw std::runtime_error(camid + " /Streams is not arrary!");
+		}
+		 
+		if (ss.size() == 1) {
+			rcams_[i].cfg = rcams_[i].cam->generateConfiguration({StreamRole::VideoRecording}); 
+		} else {
+			rcams_[i].cfg = rcams_[i].cam->generateConfiguration({StreamRole::VideoRecording, StreamRole::VideoRecording}); 
+		}
+	
+		if (!rcams_[i].cfg)
+			throw std::runtime_error("failed to generate video configuration");
+
+		// Now we override any of the default settings from config file to the StreamConfiguration of the CameraConfiguration
+		int si = 0;
+		for( libcamera::Size s : ss) {
+			StreamConfiguration &cfg = rcams_[i].cfg->at(si++);
+			cfg.size = s;
+			if (isCSI(rcams_[i].cam)) {
+				cfg.pixelFormat = libcamera::formats::YUV420;
+			} else {
+				cfg.pixelFormat = libcamera::formats::YUYV;
+			}
+			// add buffer parm if needed here
+			cfg.bufferCount = 6; 
+			// why not use color space of config gen??
+			if (cfg.size.width >= 1280 || cfg.size.height >= 720)
+				cfg.colorSpace = libcamera::ColorSpace::Rec709;   //HDTV colorspace
+			else
+				cfg.colorSpace = libcamera::ColorSpace::Smpte170m; // NTSC/PAL/SDTV colorspace
+			// set stride 0 before validation and validation will set it as need for format	
+			cfg.stride = 0;
+		}
+
+		auto jv = getCfgValue("/Sensor", it->value());		
+		if (!jv.is_null()) {
+			Sensor sens(jv);
+			rcams_[i].cfg->sensorConfig = sens.getSensorCfg();
+		}
+
+//	add parm for rotate
+//		rcams_[i].cfg->orientation = libcamera::Orientation::Rotate0 * (libcamera::Transform) options_->orientation_v[cam];
+/* enum  	Orientation {
+  Orientation::Rotate0 = 1, Orientation::Rotate0Mirror, Orientation::Rotate180, Orientation::Rotate180Mirror,
+  Orientation::Rotate90Mirror, Orientation::Rotate270, Orientation::Rotate270Mirror, Orientation::Rotate90
+} */
+		jv = getCfgValue("/Orientation", it->value());
+		if (!jv.is_null())
+			rcams_[i].cfg->orientation = (libcamera::Orientation) json::value_to<int>(jv);
+
+//  validate/adjust camera config
+		CameraConfiguration::Status validation = rcams_[i].cfg->validate();
+		if (validation == CameraConfiguration::Invalid)
+			throw std::runtime_error("failed to validate stream configurations");
+		else if (validation == CameraConfiguration::Adjusted)
+			logger_.Log(LogLevel::INFO, "Stream configuration adjusted for " 
+			+ json::serialize(it->key()));
+
+// configure camera streams
+		if (rcams_[i].cam->configure(rcams_[i].cfg.get()) < 0)
+			throw std::runtime_error("failed to configure streams");
+			
+		rcams_[i].stat = RCconfigured;
+		
+		//  display of camera streams configuration and setup dma memory 
+		int s = 0;
+		for (StreamConfiguration &config : *rcams_[i].cfg)
+		{
+			logger_.Log(LogLevel::INFO, "Cfg toString: " + config.toString() + "-" +
+				libcamera::ColorSpace::toString(config.colorSpace) + " cam#: " + 
+				std::to_string(i) + ":" + std::to_string(s++) + " "  + camid );
+			Stream *stream = config.stream();
+			std::vector<std::unique_ptr<FrameBuffer>> fb;
+
+			for (unsigned int ib = 0; ib < config.bufferCount; ib++)
+			{
+				std::string name("RaceCam_" + std::string(it->key()) + "_" + std::to_string(ib));
+				libcamera::UniqueFD fd = dma_heap_.alloc(name.c_str(), config.frameSize);
+
+				if (!fd.isValid())
+					throw std::runtime_error("failed to allocate capture buffers for stream");
+
+				std::vector<FrameBuffer::Plane> plane(1);
+				plane[0].fd = libcamera::SharedFD(std::move(fd));
+				plane[0].offset = 0;
+				plane[0].length = config.frameSize;
+
+				fb.push_back(std::make_unique<FrameBuffer>(plane));
+				void *memory = mmap(NULL, config.frameSize, PROT_READ | PROT_WRITE, MAP_SHARED, plane[0].fd.get(), 0);
+				mapped_buffers_[fb.back().get()].push_back(
+						libcamera::Span<uint8_t>(static_cast<uint8_t *>(memory), config.frameSize));
+			}
+			rcams_[i].fbuf[stream] = std::move(fb);
+		}
+
+		// set libcamera controls per input json 
+		auto camcntls = rcams_[i].cam->controls();
+
+		json::value cv = getCfgValue("/Controls", it->value());
+		if (!cv.is_null() && cv.is_object()) {
+			json::object cfgcntls = cv.as_object(); 
+			for(auto cfgit = cfgcntls.begin(); cfgit != cfgcntls.end(); ++cfgit)
+			{
+				if (cfgit->value().is_null()) continue;
+			
+				unsigned int cntlnum = getCntlID(cfgit->key());  
+				auto cim = camcntls.find(cntlnum);
+				ControlValue cv = toCntlVal(cfgit->value(), cim->first);
+				if (!cv.isNone()) {
+					if (cim != camcntls.end())
+				{
+						rcams_[i].cntls.set(cntlnum, cv); 
+					} else {
+						logger_.Log(LogLevel::ERROR, "cntlID not found in cam controls!");
+					}
+				
+				} else {
+					logger_.Log(LogLevel::ERROR, std::string("Control ") + std::string(cfgit->key().data(), cfgit->key().size()) + " skipped toCntlVal() failed!");
+				}
+			} 
+		}
+	
+		i++;
+	}
+};
+
+void RCam::startCams(const json::object& cams)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	for(auto it = cams.begin(); it != cams.end(); ++it) {
+		unsigned int i = std::distance(cams.begin(), it);
+		makeRequests(i);
+
+		if (rcams_[i].cam->start(&rcams_[i].cntls))
+			throw std::runtime_error("failed to start camera");		
+		rcams_[i].cntls.clear();
+
+		rcams_[i].stat = RCrunning;
+	
+		rcams_[i].cam->requestCompleted.connect(this, &RCam::requestComplete);
+		
+		for (std::unique_ptr<Request> &request : rcams_[i].req)
+		{
+//			std::cout << "start cams" << std::endl;
+//			if (rcams_[i].cam->queueRequest(request.get()) < 0)
+//				throw std::runtime_error("Failed to queue request");
+			int ret = rcams_[i].cam->queueRequest(request.get());
+			if (ret < 0) {		
+				throw std::runtime_error(std::string("startCams() failed to queue request ") + strerror(ret));
+			}
+		}
+	}
+	cameras_running_ = true;
+};
+
+void RCam::initOutputs(void)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	avdevice_register_all();
+	
+	bool youtube = false;
+
+	json::value av = getCfgValue("/Audio");
+	if (!av.is_null()) {
+		json::object aparms = av.get_object();
+		audio_ = true;
+		initAudioInCodec(aparms);
+	}
+	
+	json::object jo = getCfgValue("/Outputs").get_object();
+    for (auto it = jo.begin(); it != jo.end(); ++it) {
+		bool raw = (it->key() == "Raw" ? true : false);
+		json::object jo = it->value().get_object();
+		const char *format = nullptr;
+		auto fv = getCfgValue("/ContainerFromat", jo);
+		if (!fv.is_null())
+			format = json::value_to<std::string>(fv).c_str();
+			
+		time_t ts = time({});
+		char timeStr[std::size("_yyyy_mm_dd_hh_mm_ss")];
+		std::strftime(std::data(timeStr), std::size(timeStr),
+                  "_%Y_%m_%d_%H_%M_%S", localtime(&ts));
+	
+		auto dv = getCfgValue("/Destination", jo);
+		std::string dest;
+		if (dv.is_null()) {
+			throw std::runtime_error("no /Destination found for " + std::string(raw ? "raw" : "composite"));
+		}
+		if (dv.is_string()) {
+			dest = json::value_to<std::string>(dv);	
+			dest.append(timeStr, std::size(timeStr)-1);
+	//WEK make container type a parameter see below make file ext match /ContainerFromat 
+	//TODO gives timebase warning on mov but not mkv
+			if (raw) {
+				dest.append(".mkv");
+			} else {
+				dest.append(".mp4");
+			}
+	//TODO Setup an appropriate stream/container format.
+		} else {
+			if (dv.is_object()) {
+				auto tv = getCfgValue("/YouTubeTitle", dv);
+				std::string title;
+				if (!tv.is_null()) title = json::value_to<std::string>(tv);
+				if (title.empty()) {
+					throw std::runtime_error("/YouTubeTitle is empty");
+				} else {
+	//				title.append(timeStr, std::size(timeStr)-1);
+					format = "flv"; 
+					auto pv = getCfgValue("/YouTubePrivacy", dv);
+					std::string publish = pv.is_null() ? "private" : json::value_to<std::string>(pv);	
+					yt_strm s = YouTube().StartStrm(title, publish); 
+					strmID_ = s.b_id;
+					dest = s.strmurl;
+					youtube = true;
+				}
+			}
+		}
+       
+		AVFormatContext *fmt_ctx;
+
+		avformat_alloc_output_context2(&fmt_ctx, nullptr, format, dest.c_str());
+		if (!fmt_ctx)
+			throw std::runtime_error("libav: cannot allocate output context, try setting with --libav-format");
+		all_fmt_ctx_.push_back(fmt_ctx);
+		format_opened_.insert({fmt_ctx, false});
+		
+		NetworkWriterPtr qptr = nullptr;
+		if (youtube) {
+			qptr = std::make_shared<NetworkWriter>(logger_, fmt_ctx);
+		}
+//	out_fmt_ctx_->debug = FF_FDEBUG_TS;
+
+		if (raw) {
+			json::array sv = getCfgValue("/Streams", jo).get_array();
+			for (auto& value : sv) { 
+				initVideoStream(fmt_ctx, qptr, value);
+			}
+		} else {
+			json::value lv = getCfgValue("/Layers", jo);
+			initVideoStream(fmt_ctx, qptr, lv);
+			if (qptr) qptr->start();
+		}
+	
+		if (audio_) {
+			json::value aparms = getCfgValue("/Audio", jo);
+			audio_out_codec_ctxs_.push_back(initAudioOutCodec(fmt_ctx, qptr, aparms));
+		}		
+	}
+	
+	video_thread_ = std::thread(&RCam::videoThread, this);
+	if (audio_) audio_thread_ = std::thread(&RCam::audioThread, this);
+
+}
+
+void RCam::freeOutputs()
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	if (audio_) {
+		audio_ = false;
+		audio_thread_.join();
+	}
+
+	msg_queue_.Post(Msg(MsgType::Quit)); // need to seed a messsge to stop the get waiting
+	video_thread_.join();
+
+	for (auto i : all_fmt_ctx_) { 
+		if (i->oformat != nullptr) {
+			if (outputReady(i)) av_write_trailer(i);
+			avio_closep(&i->pb); 
+		}
+		if (i->iformat != nullptr) {
+			avformat_close_input(&i);
+		}
+		output_ready_.store(false);
+		avformat_free_context(i);
+	}
+	format_opened_.clear();
+	all_fmt_ctx_.clear();
+    
+    for (auto it = codec_to_output_.begin(); it != codec_to_output_.end();) {
+		AVCodecContext *ptr = it->first; 
+		avcodec_free_context(&ptr);
+		if (it->second.queue) it->second.queue->stop();
+		it = codec_to_output_.erase(it); 
+	}
+	
+	for (AVFilterGraph *fg : fgctx_) {
+		avfilter_graph_free(&fg);
+	}
+	fgctx_.clear();
+	
+	if (!strmID_.empty()) {
+		YouTube().StopStrm(strmID_); 
+		strmID_.clear();
+	}
+}
+
+AVStream *RCam::addStream(AVFormatContext *fmt_ctx, const AVCodecContext *codec_ctx)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	AVStream *strm = avformat_new_stream(fmt_ctx, codec_ctx->codec);
+	if (!strm)
+		throw std::runtime_error("libav: cannot allocate stream for vidout output context");
+	if (codec_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
+	// The avi stream context seems to need the video stream time_base set to
+	// 1/framerate to report the correct framerate in the container file.
+	//
+	// This seems to be a limitation/bug in ffmpeg:
+	// https://github.com/FFmpeg/FFmpeg/blob/3141dbb7adf1e2bd5b9ff700312d7732c958b8df/libavformat/avienc.c#L527
+		if (!strncmp(fmt_ctx->oformat->name, "avi", 3)) {
+			std::cout << "AVI format" << std::endl;
+		//TODO where to get framerate time base?
+		//	strm->time_base = { 1000, (int)(options->framerate_a[cam].value_or(DEF_FRAMERATE) * 1000) };
+		}
+		else
+			strm->time_base = codec_ctx->time_base;
+		strm->avg_frame_rate = strm->r_frame_rate = codec_ctx->framerate;
+	} else if (codec_ctx->codec_type == AVMEDIA_TYPE_AUDIO) {
+			strm->time_base = codec_ctx->time_base;
+		} else throw std::runtime_error("libav: Media type is not Video or Audio");
+	avcodec_parameters_from_context(strm->codecpar, codec_ctx);
+	return strm;
+}
+
+void RCam::initAudioInCodec(const json::object& aparms)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	json::value val;
+	val = getCfgValue("/Source", aparms);
+	//WEK bug why alsa does not work
+//	std::string audio_source = val.is_null() ? "alsa" : json::value_to<std::string>(val);	//to short
+	std::string audio_source = val.is_null() ? "pulse" : json::value_to<std::string>(val); //works
+	
+	AVInputFormat *input_fmt = (AVInputFormat *)av_find_input_format(audio_source.c_str());
+
+	assert(audio_in_fmt_ctx_ == nullptr);
+
+	int ret {0};
+	AVDictionary *format_opts = nullptr;
+	
+	val = getCfgValue("/Channels", aparms);
+	int audio_channels = val.is_null() ? 0 : json::value_to<int>(val);
+	
+	if (audio_channels != 0)
+		ret = av_dict_set_int(&format_opts, "channels", audio_channels, 0);
+
+	val = getCfgValue("/Device", aparms);
+	std::string audio_device = val.is_null() ? "plughw:RacecamMic" : json::value_to<std::string>(val);
+	
+	ret = avformat_open_input(&audio_in_fmt_ctx_, audio_device.c_str(), input_fmt, &format_opts);
+	av_dict_free(&format_opts);
+	
+	if (ret < 0) {
+		
+		throw std::runtime_error("libav: cannot open " + audio_source + " input device " + audio_device);
+	}
+	all_fmt_ctx_.push_back(audio_in_fmt_ctx_);
+
+	avformat_find_stream_info(audio_in_fmt_ctx_, nullptr);
+
+	AVStream *strmAudioIn = nullptr;
+	for (unsigned int i = 0; i < audio_in_fmt_ctx_->nb_streams; i++) {
+		if (audio_in_fmt_ctx_->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+			strmAudioIn = audio_in_fmt_ctx_->streams[i];
+			break;
+		}
+	}
+
+	if (!strmAudioIn)
+		throw std::runtime_error("libav: couldn't find a audio stream.");
+
+	const AVCodec *codec_in = avcodec_find_decoder(strmAudioIn->codecpar->codec_id);
+	audio_in_codec_ctx_ = avcodec_alloc_context3(codec_in);
+
+	avcodec_parameters_to_context(audio_in_codec_ctx_, strmAudioIn->codecpar);
+	// usec timebase
+	audio_in_codec_ctx_->time_base = { 1, 1000 * 1000 };
+
+	ret = avcodec_open2(audio_in_codec_ctx_, codec_in, nullptr);
+	if (ret < 0)
+		throw std::runtime_error("libav: unable to open audio in codec: " + std::to_string(ret));
+}
+
+AVCodecContext *RCam::initAudioOutCodec(AVFormatContext *fmt_ctx, const NetworkWriterPtr& qptr, const json::value& aparms)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	json::value val;
+	val = getCfgValue("/CodecOut", aparms);
+	std::string audio_codec= val.is_null() ? "aac" : json::value_to<std::string>(val);
+	
+	const AVCodec *codec_out = avcodec_find_encoder_by_name(audio_codec.c_str());
+	if (!codec_out)
+		throw std::runtime_error("libav: cannot find audio encoder " + audio_codec);
+
+	auto out_codec_ctx = avcodec_alloc_context3(codec_out);
+	if (!out_codec_ctx)
+		throw std::runtime_error("libav: cannot allocate audio in context");
+		
+	AVStream *strmAudioIn = nullptr;
+	for (unsigned int i = 0; i < audio_in_fmt_ctx_->nb_streams; i++) {
+		if (audio_in_fmt_ctx_->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+			strmAudioIn = audio_in_fmt_ctx_->streams[i];
+			break;
+		}
+	}
+
+	if (!strmAudioIn)
+		throw std::runtime_error("libav: couldn't find a audio stream.");
+
+	av_channel_layout_default(&out_codec_ctx->ch_layout, strmAudioIn->codecpar->ch_layout.nb_channels);
+
+	val = getCfgValue("/SampleRate", aparms);
+	unsigned int audio_samplerate = val.is_null() ? 0 : json::value_to<unsigned int>(val);
+	
+	out_codec_ctx->sample_rate = audio_samplerate ? audio_samplerate : strmAudioIn->codecpar->sample_rate;
+	
+//	out_codec_ctx->sample_fmt = codec_out->sample_fmts[0];
+#if LIBAVCODEC_VERSION_MAJOR < 61
+	out_codec_ctx->sample_fmt = codec_out->sample_fmts[0];
+#else
+	const enum AVSampleFormat *sample_fmts = nullptr;
+	avcodec_get_supported_config(out_codec_ctx, codec_out, AV_CODEC_CONFIG_SAMPLE_FORMAT, 0,
+								 (const void **)&sample_fmts, nullptr);
+	if (!sample_fmts)
+		throw std::runtime_error("libav: no supported sample formats for audio codec");
+	else
+		out_codec_ctx->sample_fmt = sample_fmts[0];
+#endif
+	
+	val = getCfgValue("/BitsPerSecond", aparms);
+	int audio_bitrate = val.is_null() ? 32000 : json::value_to<int>(val);
+	
+	out_codec_ctx->bit_rate = audio_bitrate;
+	// usec timebase
+	out_codec_ctx->time_base = { 1, 1000 * 1000 };
+	
+	if (fmt_ctx->oformat->flags & AVFMT_GLOBALHEADER) out_codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+	
+	int ret = avcodec_open2(out_codec_ctx, codec_out, nullptr);
+	if (ret < 0)
+		throw std::runtime_error("libav: unable to open audio codec: " + std::to_string(ret));
+	
+	AVStream *strm = addStream(fmt_ctx, out_codec_ctx);
+	codec_to_output_.insert({out_codec_ctx, {fmt_ctx, strm, qptr}});
+	 
+	return out_codec_ctx;
+}
+
+void RCam::stopCams(const json::object& cams)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	for(auto it = cams.begin(); it != cams.end(); ++it) {
+		unsigned int i = std::distance(cams.begin(), it);
+		{
+			// don't want QueueRequest to run asynchronously while we stop the camera.
+			std::lock_guard<std::mutex> lock(camera_stop_mutex_);
+			if (rcams_[i].stat == RCrunning) {
+				rcams_[i].stat = RCstopping;
+				if (rcams_[i].cam->stop())
+					throw std::runtime_error("failed to stop camera");
+			}
+		}
+		
+		cameras_running_ = false;
+
+		if (rcams_[i].cam)
+			rcams_[i].cam->requestCompleted.disconnect(this, &RCam::requestComplete);
+		
+		bool reqdone = true;
+		for (auto it = rcams_[i].req.begin(); it != rcams_[i].req.end(); ++it) {
+			if (it->get()->status() != Request::Status::RequestCancelled)
+				reqdone = false;
+		}
+		if (reqdone) rcams_[i].stat = RCconfigured;
+	
+		// An application might be holding a CompletedRequest, so queueRequest will get
+		// called to delete it later, but we need to know not to try and re-queue it.
+//		completed_requests_.clear();
+		msg_queue_.Clear();
+		rcams_[i].req.clear();
+		rcams_[i].cntls.clear();
+	}
+};
+
+void RCam::freeCams(const json::object& cams)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	for(auto it = cams.begin(); it != cams.end(); ++it) {
+		unsigned int i = std::distance(cams.begin(), it);
+		if (rcams_[i].stat != RCavailable)
+			rcams_[i].cam->release();
+		rcams_[i].stat = RCavailable;
+
+		rcams_[i].cntls.clear();
+		rcams_[i].cam.reset();
+	}
+};
+
+void RCam::makeRequests(int cam)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	std::map<Stream *, std::queue<FrameBuffer *>> free_buffers;
+	
+  	for (auto &kv : rcams_[cam].fbuf) {
+		free_buffers[kv.first] = {};
+		for (auto &b : kv.second)
+			free_buffers[kv.first].push(b.get());
+	}
+
+	while (true) {
+		for (StreamConfiguration &config : *rcams_[cam].cfg) {
+			Stream *stream = config.stream();
+			if (stream == rcams_[cam].cfg->at(0).stream()) {
+				if (free_buffers[stream].empty()) {
+					return;
+				}
+				std::unique_ptr<Request> request = rcams_[cam].cam->createRequest(cam);
+				if (!request)
+					throw std::runtime_error("failed to make request");
+				rcams_[cam].req.push_back(std::move(request));
+				
+			}
+			else if (free_buffers[stream].empty())
+				throw std::runtime_error("concurrent streams need matching numbers of buffers");
+
+			FrameBuffer *buffer = free_buffers[stream].front();
+			free_buffers[stream].pop();
+			if (rcams_[cam].req.back()->addBuffer(stream, buffer) < 0)
+				throw std::runtime_error("failed to add buffer to request");
+		}
+	}
+};
+
+void RCam::requestComplete(Request *request)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	if (request->status() == Request::RequestCancelled) {
+		// If the request is cancelled while the camera is still running, it indicates
+		// a hardware timeout. Let the application handle this error.
+		if (rcams_[request->cookie()].stat == RCrunning) {
+			msg_queue_.Post(Msg(MsgType::Timeout));
+		}
+		return;
+	}
+
+	struct dma_buf_sync dma_sync {};
+	dma_sync.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ;
+	for (auto const &buffer_map : request->buffers()) {
+		auto it = mapped_buffers_.find(buffer_map.second);
+		if (it == mapped_buffers_.end())
+			throw std::runtime_error("failed to identify request complete buffer");
+
+		int ret = ::ioctl(buffer_map.second->planes()[0].fd.get(), DMA_BUF_IOCTL_SYNC, &dma_sync);
+		if (ret)
+			throw std::runtime_error("failed to sync dma buf on request complete");
+	}
+
+	CompletedRequest *r = new CompletedRequest(request);
+	CompletedRequestPtr payload(r, [this](CompletedRequest *cr) { this->queueRequest(cr); });
+
+	msg_queue_.Post(Msg(MsgType::RequestComplete, std::move(payload)));
+}
+
+void RCam::videoThread()
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	AVFrame *frame = av_frame_alloc();
+	if (!frame)
+		throw std::runtime_error("libav: could not allocate AVFrame");
+
+	while (!stop_threads_.load()) {
+		Msg msg = msg_queue_.Get();
+		if (msg.type == MsgType::Timeout) {
+			logger_.Log(LogLevel::WARN, "Device timeout detected, attempting a restart!!!");
+			continue;
+		}
+		if (msg.type == MsgType::Quit) {
+			stop_threads_.store(true);
+			continue;
+		}
+		else if (msg.type != MsgType::RequestComplete)
+			throw std::runtime_error("unrecognised message!");
+		
+		CompletedRequestPtr &cr = std::get<CompletedRequestPtr>(msg.payload);
+
+		int strm = 0;
+		//WEK some of the stuff in loop is same for both streams PTS for example
+		for (StreamConfiguration &cfg : *rcams_[cr->request->cookie()].cfg) {
+
+			Stream *stream = cfg.stream();
+			CamStrm cs(cr->request->cookie(), strm);
+
+			FrameBuffer *buffer = cr->buffers[stream];
+
+			auto it = mapped_buffers_.find(buffer);
+			if (it == mapped_buffers_.end())
+				throw std::runtime_error("failed to find buffer in mapped_buffers_");
+
+			auto planes = it->second;
+
+			libcamera::Span span = planes[0];
+	
+			void *mem = span.data();
+			if (!buffer || !mem)
+				throw std::runtime_error("no buffer to encode");
+
+			auto ts = cr->metadata.get(controls::SensorTimestamp);
+		
+			uint64_t timestamp_ns = ts ? *ts : buffer->metadata().timestamp;
+
+			if (!video_start_ts_) {
+				video_start_ts_ = timestamp_ns / 1000;
+			}
+		
+			if (cfg.pixelFormat == libcamera::formats::YUV420) {
+				frame->format = AV_PIX_FMT_YUV420P;
+				frame->linesize[0] = cfg.stride; 
+				frame->linesize[1] = frame->linesize[2] = cfg.stride >> 1;
+			} else if (cfg.pixelFormat == libcamera::formats::YUYV) {
+				frame->format = AV_PIX_FMT_YUYV422;
+				frame->linesize[0] = cfg.stride;
+				frame->linesize[1] = frame->linesize[2] = 0;
+			} else {
+				throw std::runtime_error("unhandled libcamera pixel format!");
+			}
+			
+			frame->width = cfg.size.width;
+			frame->height = cfg.size.height;
+		
+//WEK fill_linesize does not return alinged size for CSI cameras
+//		av_image_fill_linesizes(frame->linesize, AV_PIX_FMT_YUV420P, cfg.size.width);
+
+			frame->pts = (timestamp_ns / 1000) - video_start_ts_;
+		
+			frame->buf[0] = av_buffer_create((uint8_t *)mem, span.size(), &av_buffer_default_free, NULL, 0);
+			assert(frame->buf[0]);
+		
+			av_image_fill_pointers(frame->data, (enum AVPixelFormat)frame->format, frame->height, frame->buf[0]->data, frame->linesize); //TODO use lookup func
+	//		if (!av_frame_is_writable(frame)) std::cout << "frame was copied :)" << std::endl;
+			av_frame_make_writable(frame);
+		
+		// done frame to ffmpeg
+			for (AVFilterContext *fc : camstrm_fgctx_[cs.getCamStrm()]) {
+				filterFrame(fc, frame);
+			}
+		strm++;
+		}
+	}
+
+	frame->buf[0] = NULL;
+	av_frame_unref(frame);
+	av_frame_free(&frame);
+
+	// flush any valid encoder
+	for (const auto& [cp, co] : codec_to_output_) {
+		if (cp->codec_type == AVMEDIA_TYPE_VIDEO) encodeFrame(cp, nullptr);
+     } 
+}
+
+void RCam::audioThread() 
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	// WEK fail if logger_.Log used here but works anywhere after swr_alloc_set_opts2??????
+	const AVSampleFormat required_fmt = audio_out_codec_ctxs_.front()->sample_fmt;
+	int ret;
+
+	uint32_t out_channels = audio_out_codec_ctxs_.front()->ch_layout.nb_channels;
+
+	AVAudioFifo *fifo;
+
+	SwrContext *conv = NULL;
+	ret = swr_alloc_set_opts2(&conv, &audio_out_codec_ctxs_.front()->ch_layout, required_fmt,
+		audio_out_codec_ctxs_.front()->sample_rate, &audio_in_codec_ctx_->ch_layout,
+		audio_in_codec_ctx_->sample_fmt, audio_in_codec_ctx_->sample_rate, 0, nullptr);
+	if (ret < 0)
+		throw std::runtime_error("libav: cannot create swr context");
+		
+	// 2 seconds FIFO buffer
+	fifo = av_audio_fifo_alloc(required_fmt, audio_out_codec_ctxs_.front()->ch_layout.nb_channels,
+		audio_out_codec_ctxs_.front()->sample_rate * 2);
+
+	swr_init(conv);
+
+	AVPacket *in_pkt = av_packet_alloc();
+	AVPacket *out_pkt = av_packet_alloc();
+	AVFrame *in_frame = av_frame_alloc();
+	uint8_t **samples = nullptr;
+	int sample_linesize = 0;
+	
+	int max_output_samples = av_rescale_rnd(audio_out_codec_ctxs_.front()->frame_size,
+		audio_out_codec_ctxs_.front()->sample_rate, audio_in_codec_ctx_->sample_rate, AV_ROUND_UP);
+	ret = av_samples_alloc_array_and_samples(&samples, &sample_linesize, out_channels, 
+		max_output_samples, required_fmt, 0);
+
+	if (ret < 0)
+		throw std::runtime_error("libav: failed to alloc sample array");
+	
+	std::chrono::steady_clock::time_point syncstart;
+
+	while (!stop_threads_.load()) {
+		// Audio In
+		ret = av_read_frame(audio_in_fmt_ctx_, in_pkt);
+		if (ret < 0)
+			throw std::runtime_error("libav: cannot read audio in frame");
+
+		ret = avcodec_send_packet(audio_in_codec_ctx_, in_pkt);
+		if (ret < 0)
+			throw std::runtime_error("libav: cannot send pkt for decoding audio in");
+
+		ret = avcodec_receive_frame(audio_in_codec_ctx_, in_frame);
+		if (ret && ret != AVERROR(EAGAIN) && ret != AVERROR_EOF)
+			throw std::runtime_error("libav: error getting decoded audio in frame");
+
+		// Audio Resample/Conversion
+		int num_output_samples = av_rescale_rnd(swr_get_delay(conv, 
+			audio_in_codec_ctx_->sample_rate) + in_frame->nb_samples, 
+			audio_out_codec_ctxs_.front()->sample_rate, 
+			audio_in_codec_ctx_->sample_rate, AV_ROUND_UP);
+		
+		if (num_output_samples > max_output_samples) {
+			av_freep(&samples[0]);
+			max_output_samples = num_output_samples;
+			ret = av_samples_alloc_array_and_samples(&samples, &sample_linesize, out_channels, max_output_samples,
+													 required_fmt, 0);
+			if (ret < 0)
+				throw std::runtime_error("libav: failed to alloc sample array");
+		}
+
+		ret = swr_convert(conv, samples, num_output_samples, (const uint8_t **)in_frame->extended_data,
+						  in_frame->nb_samples);
+		if (ret < 0)
+			throw std::runtime_error("libav: swr_convert failed");
+
+//		if (!cameras_running_ && !abort_audio_) av_audio_fifo_reset(fifo);
+//TODO might need only one ref of stop_thread_ per function / is stop_thread_ even needed??
+// how to handle mutli cam running flag
+// replace cameras_running with a func that returns bool // true if any running and false of all stopped
+//		if (!cameras_running_ && !stop_threads_) 
+//			av_audio_fifo_reset(fifo); 
+		if (!cameras_running_ && !stop_threads_.load()) 
+			syncstart = std::chrono::steady_clock::now();
+		constexpr std::chrono::milliseconds delay{250}; 
+		if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - syncstart) < delay)
+			av_audio_fifo_reset(fifo);
+
+		if (av_audio_fifo_space(fifo) < num_output_samples)
+			av_audio_fifo_drain(fifo, num_output_samples);
+
+		av_audio_fifo_write(fifo, (void **)samples, num_output_samples);
+
+		av_frame_unref(in_frame);
+		av_packet_unref(in_pkt);
+
+		// Not yet ready to generate encoded audio!
+		if (!output_ready_.load()) {
+			continue;
+		}
+
+		// Audio Out
+		while (av_audio_fifo_size(fifo) >= audio_out_codec_ctxs_.front()->frame_size) {
+			AVFrame *out_frame = av_frame_alloc();
+			out_frame->nb_samples = audio_out_codec_ctxs_.front()->frame_size;
+
+			av_channel_layout_copy(&out_frame->ch_layout, &audio_out_codec_ctxs_.front()->ch_layout);
+
+			out_frame->format = required_fmt;
+			out_frame->sample_rate = audio_out_codec_ctxs_.front()->sample_rate;
+
+			av_frame_get_buffer(out_frame, 0);
+			av_audio_fifo_read(fifo, (void **)out_frame->data, audio_out_codec_ctxs_.front()->frame_size);
+
+			AVRational num = { 1, out_frame->sample_rate };
+			int64_t ts = av_rescale_q(audio_samples_, num, audio_out_codec_ctxs_.front()->time_base);
+
+			out_frame->pts = ts;
+
+			audio_samples_ += audio_out_codec_ctxs_.front()->frame_size;
+		
+			for ( auto cctx : audio_out_codec_ctxs_) {
+				encodeFrame(cctx, out_frame);
+			}
+			av_frame_free(&out_frame);
+		}
+	}
+	//WEK flush lswr by passing swr)conver in=null and in_count=0 -- not sure it is worth the work??
+
+	// Flush the encoder
+	for ( auto cctx : audio_out_codec_ctxs_) {
+		encodeFrame(cctx, nullptr);
+	}
+
+	swr_free(&conv);
+	av_freep(&samples[0]);
+	av_audio_fifo_free(fifo);
+
+	av_packet_free(&in_pkt);
+	av_packet_free(&out_pkt);
+	av_frame_free(&in_frame);
+}
+
+void RCam::encodeFrame(AVCodecContext *codec_ctx, AVFrame *frame)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	assert(codec_ctx);
+	
+	auto it = codec_to_output_.find(codec_ctx);
+	if (it == codec_to_output_.end())
+		throw std::runtime_error("encodeFrame(AVCodecContext *, AVFrame *) codec_to_output_ not found!");
+	CodecOutput *co = &(it->second);
+	
+	if (co->queue && codec_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
+		unsigned int nr = co->queue->newRate(codec_ctx->bit_rate);
+		if (nr) {
+			codec_ctx->bit_rate = nr;
+//			codec_ctx->rc_max_rate = nr;
+			codec_ctx->rc_buffer_size = nr / 30;
+		}
+	}
+
+	int ret = avcodec_send_frame(codec_ctx, frame);
+
+	if (ret < 0)
+		throw std::runtime_error("libav: error encoding frame: " + std::to_string(ret));
+		
+	AVPacket *pkt = av_packet_alloc();
+	
+	ret = 0;
+	while (ret >= 0) {
+		ret = avcodec_receive_packet(codec_ctx, pkt);
+		if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+			av_packet_unref(pkt);
+			break;
+		}
+		else if (ret < 0)
+			throw std::runtime_error("libav: error receiving packet: " + std::to_string(ret));
+
+		// Initialise the ouput mux on the first received video packet, as we may need
+		// to copy global header data from the encoder.
+		if (!output_ready_.load()) {
+			if (codec_ctx->codec_type == AVMEDIA_TYPE_VIDEO && !outputReady(codec_ctx)) {	
+				openFormat(codec_ctx);
+				output_ready_.store(allFormatsOpen());
+			}
+		}
+		
+		pkt->pos = -1;
+		pkt->duration = 0;
+		pkt->stream_index = co->strm->index;
+		av_packet_rescale_ts(pkt, codec_ctx->time_base,  
+			co->strm->time_base); 
+		
+		// cp_pkt is now blank (av_interleaved_write_frame() takes ownership of
+		// its contents and resets pkt), so that no unreferencing is necessary.
+		// This would be different if one used av_write_frame().
+		if (co->queue) {
+			{std::scoped_lock<std::mutex> lock(output_mutex_);
+		//	ret = co->queue->enqueuePacket(pkt);}
+			co->queue->enqueuePacket(pkt);}
+		//	if (!ret) logger_.Log(LogLevel::WARN, "enqueuePacket failed");
+		} else {
+			{std::scoped_lock<std::mutex> lock(output_mutex_);
+			ret = av_interleaved_write_frame(co->fmt_ctx, pkt);}
+			if (ret < 0) {
+				char err[AV_ERROR_MAX_STRING_SIZE];
+				av_strerror(ret, err, sizeof(err));
+				throw std::runtime_error("libav: error writing output: " + std::string(err));
+			}  
+		}
+	} 
+	av_packet_free(&pkt); 
+}
+
+bool RCam::outputReady(AVFormatContext *fctx)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	auto f = format_opened_.find(fctx);
+	if (f == format_opened_.end()) 
+		throw std::runtime_error("outputReady(AVFormatContext *) format_opened_ not found!");
+	return f->second;
+} 
+
+bool RCam::outputReady(AVCodecContext *cctx)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	auto c = codec_to_output_.find(cctx);
+	if (c == codec_to_output_.end()) 
+		throw std::runtime_error("outputReady(AVCodecContext *) codec_to_output_ not found!");
+		
+	return outputReady(c->second.fmt_ctx);
+} 
+
+void RCam::openFormat(AVCodecContext *codec_ctx) 
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	int ret;
+
+	auto st = codec_to_output_.find(codec_ctx);
+	if (st == codec_to_output_.end())
+		throw std::runtime_error("openFormat(AVCodecContext **) codec_to_output_ not found!");
+	CodecOutput co = st->second;
+
+	avcodec_parameters_from_context(co.strm->codecpar, codec_ctx);
+
+	char err[64];
+	std::string url = co.fmt_ctx->url;
+	
+	std::string prefix {"rtmp"};
+	AVDictionary *opnopts = NULL;
+	AVDictionary *hdropts = NULL;
+	if (url.length() >= prefix.length()) {
+		if (std::equal(prefix.begin(), prefix.end(), url.begin(), 
+				[](unsigned char char1, unsigned char char2) {
+					return std::tolower(char1) == std::tolower(char2);})) {
+	//		av_dict_set_int(&opnopts, "buffer_size", 262144, 0);
+			av_dict_set_int(&opnopts, "buffer_size", 0, 0);
+	//		av_dict_set_int(&opnopts, "buffer_size", 524288, 0);
+//WEK set send buffer size based on bitrate if set 
+	//		av_dict_set_int(&opnopts, "send_buffer_size", 2097152, 0);
+	//		av_dict_set_int(&opnopts, "send_buffer_size", 4194304, 0);
+			// Set timeout to 1 second (1,000,000 microseconds)
+//			av_dict_set(&opnopts, "timeout", "5000000", 0);
+			av_dict_set(&opnopts, "rtmp_transport", "tcp", 0);
+			// Force the underlying socket to use IPv4 family (AF_INET)
+//			av_dict_set_int(&opnopts, "ipv4", 1, 0); 
+			// Fix cellular socket binding constraints
+			av_dict_set(&opnopts, "localport", "0", 0);        // Do not force a local port
+//			av_dict_set(&opnopts, "localaddr", "0.0.0.0", 0);  // Allow the kernel to dynamically assign the cellular IP
+			av_dict_set(&opnopts, "localaddr", "", 0);  // Allow the kernel to dynamically assign the cellular IP
+//			av_dict_set(&opnopts, "bind_interface", "", 0);    // Clear any potential default interface overrides
+
+			// Force automatic network reconnection
+	//		av_dict_set(&hdropts, "reconnect", "1", 0);
+			// Reconnect if the connection drops at End of File / stream interruption
+	//		av_dict_set(&hdropts, "reconnect_at_eof", "1", 0);
+	//		av_dict_set(&hdropts, "reconnect_streamed", "1", 0);
+			// Set maximum backoff/retry delay to 1 seconds
+	//		av_dict_set(&hdropts, "reconnect_delay_max", "1", 0);
+		}
+	}
+
+	ret = avio_open2(&co.fmt_ctx->pb, co.fmt_ctx->url, AVIO_FLAG_WRITE, NULL, &opnopts);
+	if (ret < 0) {
+		av_strerror(ret, err, sizeof(err));
+		throw std::runtime_error("libav: unable to open output mux for " + url + ": " + err);
+	}
+	av_dict_free(&opnopts);
+
+	ret = avformat_write_header(co.fmt_ctx, &hdropts);
+	if (ret < 0) {
+		av_strerror(ret, err, sizeof(err));
+		throw std::runtime_error("libav: unable write output mux header for " + url + ": " + err);
+	}
+	av_dict_free(&hdropts);
+
+	auto fo = format_opened_.find(co.fmt_ctx);
+	if (fo == format_opened_.end())
+		throw std::runtime_error("openFormat(AVCodecContext **) format_opened_ not found!");
+	fo->second = true;	
+}
+
+void RCam::queueRequest(CompletedRequest *completed_request)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	BufferMap buffers(std::move(completed_request->buffers));
+
+	// This function may run asynchronously so needs protection from the
+	// camera stopping at the same time.
+	std::lock_guard<std::mutex> stop_lock(camera_stop_mutex_);
+
+	Request *request = completed_request->request;
+	delete completed_request;
+
+	assert(request);
+
+	if (rcams_[request->cookie()].stat != RCrunning) return;
+	
+	for (auto const &p : buffers) {
+		struct dma_buf_sync dma_sync {};
+		dma_sync.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ;
+
+		auto it = mapped_buffers_.find(p.second);
+		if (it == mapped_buffers_.end())
+			throw std::runtime_error("failed to identify queue request buffer");
+
+		int ret = ::ioctl(p.second->planes()[0].fd.get(), DMA_BUF_IOCTL_SYNC, &dma_sync);
+		if (ret)
+			throw std::runtime_error("failed to sync dma buf on queue request");
+
+		if (request->addBuffer(p.first, p.second) < 0)
+			throw std::runtime_error("failed to add buffer to request in QueueRequest");
+	}
+	{
+		std::lock_guard<std::mutex> lock(control_mutex_);
+		request->controls().merge(rcams_[request->cookie()].cntls, ControlList::MergePolicy::OverwriteExisting);
+		rcams_[request->cookie()].cntls.clear();
+	}
+
+	if (rcams_[request->cookie()].cam->queueRequest(request) < 0) {
+		throw std::runtime_error("queueRequest() failed to queue request ");
+	}
+}
+
+void RCam::initVideoStream(AVFormatContext *fmt_ctx, const NetworkWriterPtr& qptr, json::value& parms)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	// filter setup
+	char args[512];
+	int ret = 0;
+	AVFilterContext *fgctxSrc = nullptr; //always Source at that point in time
+	AVFilterContext *fgctxDst = nullptr; //always Destionation at that point in time
+	AVFilterContext *fgctxTmp = nullptr; //the saved end of filter chain at end of each loop so overlay if used can have it for main and source for overlay
+
+	AVFilterGraph *fg = avfilter_graph_alloc();
+	std::vector<AVFilterContext *> fctxin {};
+	StreamInfo rsi {};
+	std::string name;
+	bool raw {false};
+	
+	int layer = 0;
+	json::array stream_def {};
+
+	if (parms.is_object()) {
+		raw = true;
+		stream_def.push_back(parms);
+	} else {
+		if (!parms.is_array()) {
+			throw std::runtime_error("initStream() parms not array or object!");
+			}
+		stream_def = parms.get_array();
+	}
+	
+	std::string sstr = raw ? "_s" + std::to_string(layer) : "_l" + std::to_string(layer);
+	std::string lstr = raw ? " stream: " + std::to_string(layer) : " layer: " + std::to_string(layer);
+
+	if (stream_def.empty()) 
+		throw std::runtime_error("initStream() parms is empty!");
+
+	CamStrm rcs {};
+	for (auto it = stream_def.begin();it < stream_def.end();it++, layer++) {
+		json::value source = getCfgValue("/Source", *it);
+		if (source.is_null()) 
+			throw std::runtime_error("Source is not found for layer " + lstr + "!");
+		CamStrm cs(json::value_to<int>(source));  
+
+		StreamConfiguration const &streamcfg = rcams_[cs.getCamera()].cfg->at(cs.getStream()); 
+		StreamInfo si = getStreamInfo(streamcfg);
+		
+		if (!layer) {//save main layer streaminfo
+			rsi = si;
+			rcs = cs;  
+		}
+		snprintf(args, sizeof(args), "video_size=%dx%d:pix_fmt=%d:time_base=1/1000000:pixel_aspect=0/1", 
+			si.w, si.h, si.pix); //TODO make pixel converter
+		name = "in" + sstr;  
+		ret = avfilter_graph_create_filter(&fgctxSrc, avfilter_get_by_name("buffer"), name.c_str(), args, NULL, fg);
+		if (ret < 0) throw std::runtime_error("libav: untable to create buffer for" + lstr + "!"); 
+
+		camstrm_fgctx_[cs.getCamStrm()].push_back(fgctxSrc);
+		fctxin.push_back(fgctxSrc);
+		
+		// pixel format convert filter
+		if (streamcfg.pixelFormat != libcamera::formats::YUV420) {
+			snprintf(args, sizeof(args), "pix_fmts=%s", av_get_pix_fmt_name(AV_PIX_FMT_YUV420P));
+			name =  "format" + sstr;  
+			ret = avfilter_graph_create_filter(&fgctxDst, avfilter_get_by_name("format"), name.c_str(), args, NULL, fg);
+			if (ret < 0) throw std::runtime_error("libav: unable to create format for" +lstr + "!");  
+			ret = avfilter_link(fgctxSrc, 0, fgctxDst, 0);
+			if (ret < 0) throw std::runtime_error("libav: unable to link in to format for" + lstr + "!");  
+			fgctxSrc = fgctxDst; 
+			rsi.pix = AV_PIX_FMT_YUV420P;		
+		}
+
+		json::value fp = getCfgValue("/Crop", *it);
+		if (!fp.is_null()) {
+			Rectangle r{};
+			if (fromArray(r, fp)) {
+				snprintf(args, sizeof(args), "%d:%d:%d:%d", r.width, r.height, r.x, r.y);
+				if (!layer) {
+					rsi.w = r.width;
+					rsi.h = r.height;
+				}
+				name =  "crop" + sstr; 
+				ret = avfilter_graph_create_filter(&fgctxDst, avfilter_get_by_name("crop"), name.c_str(), args, NULL, fg);
+				if (ret < 0) throw std::runtime_error("libav: unable to create crop for" + lstr + "!"); 
+				ret = avfilter_link(fgctxSrc, 0, fgctxDst, 0);
+				if (ret < 0) throw std::runtime_error("libav: unable to link in to crop for" + lstr + "!"); 
+				fgctxSrc = fgctxDst; 
+			}
+		}
+		fp = getCfgValue("/Scale", *it);
+		if (!fp.is_null()) {
+			Size s{}; 
+			if (fromArray(s, fp)) {
+				snprintf(args, sizeof(args), "%d:%d", s.width, s.height);
+				if (!layer) {
+					rsi.w = s.width;
+					rsi.h = s.height;
+				}
+				name = "scale" +  sstr; 
+				ret = avfilter_graph_create_filter(&fgctxDst, avfilter_get_by_name("scale"), name.c_str(), args, NULL, fg);
+				if (ret < 0) throw std::runtime_error("libav: unable to create scaler for" + lstr + "!"); 
+				ret = avfilter_link(fgctxSrc, 0, fgctxDst, 0);
+				if (ret < 0) throw std::runtime_error("libav: unable to link in to scaler for" + lstr + "!"); 
+				fgctxSrc = fgctxDst; 
+			}
+		}
+		fp = getCfgValue("/Overlay", *it);
+		if (!fp.is_null()) {
+			if (!layer) {
+				logger_.Log(LogLevel::ERROR, "overlay invalid on layer 0!");
+			} else { 
+				Point p{};
+				if (fromArray(p, fp)) {
+					snprintf(args, sizeof(args), "x=%d:y=%d:eval=init", p.x, p.y);
+					name = "overlay" + sstr;
+					ret = avfilter_graph_create_filter(&fgctxDst, avfilter_get_by_name("overlay"), name.c_str(), args, NULL, fg);
+					if (ret < 0) throw std::runtime_error("libav: unable to create overlay for" + lstr + "!"); 
+					ret = avfilter_link(fgctxTmp, 0, fgctxDst, 0);
+					if (ret < 0) throw std::runtime_error("libav: unable to link in to main for" + lstr + "!"); 
+					ret = avfilter_link(fgctxSrc, 0, fgctxDst, 1);
+					if (ret < 0) throw std::runtime_error("libav: unable to link in to overlay for" + lstr + "!"); 
+					fgctxSrc = fgctxDst; 
+				}
+			} 
+		}
+		fgctxTmp = fgctxSrc;
+	}			
+
+	ret = avfilter_graph_create_filter(&fgctxDst, avfilter_get_by_name("buffersink"), "sink", NULL, NULL, fg);
+	if (ret < 0) throw std::runtime_error("libav: untable to create sink buffer");
+
+	enum AVPixelFormat pf_enum[] = {AV_PIX_FMT_YUV420P, AV_PIX_FMT_NONE};  //TODO use lookup func?
+	ret = av_opt_set_int_list(fgctxDst, "pix_fmts", pf_enum, AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
+	if (ret < 0) throw std::runtime_error("libav: untable to set sink format list"); 
+	ret = avfilter_link(fgctxSrc, 0, fgctxDst, 0);
+    if (ret < 0) throw std::runtime_error("libav: link overlay filter to sink buffer failed!");
+    ret = avfilter_graph_config(fg, NULL);
+    if (ret < 0) throw std::runtime_error("libav: configure filter graph failed!");
+    fgctx_.push_back(fg);
+ 
+ // video codex setup
+	json::value cp = getCfgValue("/0/0/CodecParms", json::value{stream_def});
+	
+	json::value codecv = getCfgValue("/Format", cp);
+	std::string codec_name = (codecv.is_null() ? (raw ? "yuv4" : "libx264") : json::value_to<std::string>(codecv));
+	//WEK make setting type unique (and for h264 normal and low latancy)
+	const AVCodec *codec = avcodec_find_encoder_by_name(codec_name.c_str());
+	if (!codec)
+		throw std::runtime_error("libav: cannot find video encoder " + codec_name);
+		
+	auto codec_ctx = avcodec_alloc_context3(codec);
+	
+	if (!codec_ctx)
+		throw std::runtime_error("libav: Cannot allocate video context");
+
+	codec_ctx->width = rsi.w;
+	codec_ctx->height = rsi.h;
+	// usec timebase
+	codec_ctx->time_base = { 1, 1000 * 1000 };
+	codec_ctx->pix_fmt = rsi.pix;
+
+
+	codec_ctx->color_primaries = rsi.cp;
+	codec_ctx->color_trc = rsi.ct;
+	codec_ctx->colorspace = rsi.cs;
+	codec_ctx->color_range = rsi.cr;
+	
+//	codec->framerate = { (int)(options->framerate_a[cam].value_or(DEF_FRAMERATE) * 1000), 1000 };  // code sample from rpicam
+
+//this logic need to be fixed as when VFR (usb and csi with frameduration) you get total length wrong by 33 seconds
+/*	std::string loc = getLocation(rcams_[rcs.getCamera()].cam);
+	json::value val = getCfgValue("/Cameras/" + loc + "/Controls/FrameDurationLimits");
+	if (!val.is_null()) {
+		if (val.is_array()) {
+			if (val.at(0) == val.at(1))
+				codec_ctx->framerate = {(1000000 / json::value_to<int>(val.at(0))),1000};
+			else 
+				throw std::runtime_error("FrameDurationLimits not set to fixed FPS!");
+		} 
+		else
+			throw std::runtime_error("FrameDurationLimits not array!");
+	} 
+	else 
+		codec_ctx->framerate = {30, 1000}; */
+	
+	if ("libx264" == codec_name) {
+		codec_ctx->me_range = 16;
+		codec_ctx->me_cmp = 1; // No chroma ME
+		codec_ctx->me_subpel_quality = 0;
+		codec_ctx->thread_count = 0;
+		
+		auto ll = getCfgValue("/LowLatency", parms);
+		if (!ll.is_null() && ll.as_bool()) {
+			codec_ctx->thread_type = FF_THREAD_SLICE;
+			codec_ctx->slices = 4;
+			codec_ctx->refs = 1;
+			av_opt_set(codec_ctx->priv_data, "preset", "ultrafast", 0);
+			av_opt_set(codec_ctx->priv_data, "tune", "zerolatency", 0);
+		} else {
+			codec_ctx->thread_type = FF_THREAD_FRAME;
+			codec_ctx->slices = 1;
+			codec_ctx->max_b_frames = 1;
+			av_opt_set(codec_ctx->priv_data, "preset", "superfast", 0);
+			av_opt_set(codec_ctx->priv_data, "partitions", "i8x8,i4x4", 0);
+		}
+		
+		av_opt_set(codec_ctx->priv_data, "weightp", "none", 0);
+		av_opt_set(codec_ctx->priv_data, "weightb", "0", 0);
+		av_opt_set(codec_ctx->priv_data, "motion-est", "dia", 0);
+		av_opt_set(codec_ctx->priv_data, "sc_threshold", "0", 0);
+		av_opt_set(codec_ctx->priv_data, "rc-lookahead", "0", 0);
+		av_opt_set(codec_ctx->priv_data, "mixed_ref", "0", 0);
+	 
+
+		codec_ctx->profile = FF_PROFILE_UNKNOWN;
+		auto pv = getCfgValue("/CodecProfile", parms);
+		if (!pv.is_null()) {
+			std::string profile = json::value_to<std::string>(pv);
+			const AVCodecDescriptor *desc = avcodec_descriptor_get(codec_ctx->codec_id);
+			for (const AVProfile *cp = desc->profiles; cp && cp->profile != FF_PROFILE_UNKNOWN; cp++) {
+				if (!strncasecmp(profile.c_str(), cp->name, profile.size())) {
+					codec_ctx->profile = cp->profile;
+					break;
+				}
+			}
+			if (codec_ctx->profile == FF_PROFILE_UNKNOWN)
+				throw std::runtime_error("libav: no such profile " + profile);
+		} 
+	
+	//std::string level; from opts
+/*	codec->level = options->level.empty() ? FF_LEVEL_UNKNOWN : std::stof(options->level) * 10;
+	codec->level = options->level_a[cam].value_or(codec->level); */
+		json::value pl = getCfgValue("ProfileLevel", parms);
+		if (pl.is_null())
+			codec_ctx->level =	FF_LEVEL_UNKNOWN;
+		else
+			codec_ctx->level = json::value_to<int>(pl);
+
+
+//unsigned int intra; from opts	
+//	codec->gop_size = options->intra ? options->intra : (int)(options->framerate_a[cam].value_or(DEF_FRAMERATE));
+		json::value gop = getCfgValue("GOPSize", parms);
+		if (!gop.is_null()) {
+			codec_ctx->gop_size = json::value_to<int>(gop);
+		} else {
+			codec_ctx->gop_size = 60;
+		}
+
+		json::value crfv = getCfgValue("/CRF", cp);
+		if (!crfv.is_null()) {
+			int crf = json::value_to<int>(crfv);
+			av_opt_set(codec_ctx->priv_data, "crf", std::to_string(crf).c_str(), 0);
+			av_opt_set(codec_ctx->priv_data, "preset", "medium", 0);
+		} 
+		
+		json::value brv = getCfgValue("/BitRate", cp);
+		if (!brv.is_null()) {
+			int br = json::value_to<int>(brv) * 1000;
+			codec_ctx->bit_rate = br;
+			codec_ctx->rc_max_rate = br;
+			codec_ctx->rc_buffer_size = br / 30;
+			if (qptr) qptr->setRate(br);
+		}
+	
+//TODO have generic encoder options???
+//std::string libav_video_codec_opts;
+/*	if (!options->libav_video_codec_opts.empty())
+	{
+		const std::string &opts = options->libav_video_codec_opts;
+		for (std::string::size_type i = 0, n = 0; i != std::string::npos; i = n)
+		{
+			n = opts.find(';', i);
+			const std::string opt = opts.substr(i, n - i);
+			if (n != std::string::npos)
+				n++;
+			if (opt.empty())
+				continue;
+			std::string::size_type kn = opt.find('=');
+			const std::string key = opt.substr(0, kn);
+			const std::string value = (kn != std::string::npos) ? opt.substr(kn + 1) : "";
+			int ret = av_opt_set(codec, key.c_str(), value.c_str(), AV_OPT_SEARCH_CHILDREN);
+			if (ret < 0)
+			{
+				char err[AV_ERROR_MAX_STRING_SIZE];
+				av_strerror(ret, err, sizeof(err));
+				throw std::runtime_error("libav: codec option error " + opt + ": " + err);
+			}
+		}
+	} */
+	//WEK lossless 27.2 time bigger file and 15% more cpu :( 
+/*	if (raw) {
+		codec_ctx->qmin = 0;
+		codec_ctx->qmax = 0;
+	} */
+	}
+	if (fmt_ctx->oformat->flags & AVFMT_GLOBALHEADER) {
+		codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+	} 
+	
+	int rc = avcodec_open2(codec_ctx, codec, nullptr);
+	if (rc < 0)
+		throw std::runtime_error("libav: unable to open video codec: " + std::to_string(rc));
+		
+	AVStream *strm = addStream(fmt_ctx, codec_ctx);
+		
+//WEKbuf save both 
+
+	codec_to_output_.insert({codec_ctx, {fmt_ctx, strm, qptr}});
+	for (AVFilterContext *fctx : fctxin) {
+		filter_codec_ctx_.insert({fctx, {fgctxDst, codec_ctx}});
+    }	
+} 
+
+StreamInfo RCam::getStreamInfo(const StreamConfiguration& cfg)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	StreamInfo si;
+
+	si.w = cfg.size.width;
+	si.h = cfg.size.height;
+
+	static const std::map< PixelFormat , AVPixelFormat> pix_map = {
+		{ libcamera::formats::YUV420 ,AV_PIX_FMT_YUV420P },
+		{ libcamera::formats::YUYV ,AV_PIX_FMT_YUYV422 },  //segfault wo sensor | unable to open raw codec
+	}; 
+	auto it_pf = pix_map.find(cfg.pixelFormat);
+		if (it_pf == pix_map.end())
+			throw std::runtime_error("libav: no match for pixel format " + cfg.pixelFormat.toString());
+		si.pix = it_pf->second;
+	
+
+	if (cfg.colorSpace) {
+		using libcamera::ColorSpace; 
+
+		static const std::map<ColorSpace::Primaries, AVColorPrimaries> pri_map = {
+			{ ColorSpace::Primaries::Smpte170m, AVCOL_PRI_SMPTE170M },
+			{ ColorSpace::Primaries::Rec709, AVCOL_PRI_BT709 },
+			{ ColorSpace::Primaries::Rec2020, AVCOL_PRI_BT2020 },
+		};
+
+		static const std::map<ColorSpace::TransferFunction, AVColorTransferCharacteristic> tf_map = {
+			{ ColorSpace::TransferFunction::Linear, AVCOL_TRC_LINEAR },
+			{ ColorSpace::TransferFunction::Srgb, AVCOL_TRC_IEC61966_2_1 },
+			{ ColorSpace::TransferFunction::Rec709, AVCOL_TRC_BT709 },
+		};
+
+		static const std::map<ColorSpace::YcbcrEncoding, AVColorSpace> cs_map = {
+			{ ColorSpace::YcbcrEncoding::None, AVCOL_SPC_UNSPECIFIED },
+			{ ColorSpace::YcbcrEncoding::Rec601, AVCOL_SPC_SMPTE170M },
+			{ ColorSpace::YcbcrEncoding::Rec709, AVCOL_SPC_BT709 },
+			{ ColorSpace::YcbcrEncoding::Rec2020, AVCOL_SPC_BT2020_CL },
+		};
+
+		
+		auto it_p = pri_map.find(cfg.colorSpace->primaries);
+		if (it_p == pri_map.end())
+			throw std::runtime_error("libav: no match for colour primaries in " + cfg.colorSpace->toString());
+		si.cp = it_p->second;
+
+		auto it_tf = tf_map.find(cfg.colorSpace->transferFunction);
+		if (it_tf == tf_map.end())
+			throw std::runtime_error("libav: no match for transfer function in " + cfg.colorSpace->toString());
+		si.ct = it_tf->second;
+
+		auto it_cs = cs_map.find(cfg.colorSpace->ycbcrEncoding);
+		if (it_cs == cs_map.end())
+			throw std::runtime_error("libav: no match for ycbcr encoding in " + cfg.colorSpace->toString());
+		si.cs = it_cs->second;
+
+		si.cr =
+			cfg.colorSpace->range == ColorSpace::Range::Full ? AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
+	}
+	return si;
+
+}
+
+void RCam::filterFrame(AVFilterContext *fctx, AVFrame *frame)
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	assert(fctx);
+	
+	int ret;
+	ret = av_buffersrc_add_frame_flags(fctx, frame, AV_BUFFERSRC_FLAG_KEEP_REF);
+	if (ret < 0) throw std::runtime_error("libav: error sending frame to filter: " + std::to_string(ret));
+	AVFrame *fframe = av_frame_alloc();
+	FilterCtxs fc = filter_codec_ctx_[fctx];
+	do {	
+		ret = av_buffersink_get_frame(fc.outfctx, fframe);
+
+		if (!(ret >= 0 || ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)) 
+			throw std::runtime_error("libav: error getting flitered frame: " + std::to_string(ret));
+		if (ret >= 0) {
+			encodeFrame(fc.cctx, fframe);
+			av_frame_unref(fframe); 
+		}
+	} while (!(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF));
+	av_frame_free(&fframe);
+}
+
+bool RCam::allFormatsOpen()
+{
+//	fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, __PRETTY_FUNCTION__);
+	for (const auto& pair : format_opened_) {
+		if (!pair.second) return false;
+	}
+	return true;
+}

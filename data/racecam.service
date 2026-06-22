@@ -1,0 +1,23 @@
+[Unit]
+Description=RaceCam daemon
+After=network.target
+
+[Service]
+Type=simple
+User=<USER>
+WorkingDirectory=<USERHOME>
+# Group=racecam
+# SupplementaryGroups=audio plugdev gpio input
+# DevicePolicy=auto
+Environment="XDG_RUNTIME_DIR=/run/user/<USERNUM>"
+# Environment="HOME=/home/username"
+# Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+# Environment="LD_LIBRARY_PATH=/home/username/my_project_folder/libs"
+ExecStart=/usr/bin/racecamd
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/home/wkeeling/racecam/logs/RaceCamd.log
+StandardError=append:/home/wkeeling/racecam/logs/RaceCamd.log
+
+[Install]
+WantedBy=multi-user.target

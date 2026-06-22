@@ -1,0 +1,124 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "brcm,bcm2712";
+	fragment@0 {
+		target = <&i2s_clk_producer>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+	fragment@1 {
+		target-path = "/";
+		__overlay__ {
+			dmic_codec: dmic-codec {
+				#sound-dai-cells = <0>;
+				compatible = "dmic-codec";
+				status = "okay";
+			};
+		};
+	};
+	fragment@2 {
+		target = <&sound>;
+		sound_overlay: __overlay__ {
+			compatible = "simple-audio-card";
+			simple-audio-card,format = "i2s";
+			simple-audio-card,name = "RacecamMic";
+			simple-audio-card,bitclock-slave = <&dailink0_slave>;
+			simple-audio-card,frame-slave = <&dailink0_slave>;
+			simple-audio-card,widgets = "Microphone", "Microphone Jack";
+			status = "okay";
+			simple-audio-card,cpu {
+				sound-dai = <&i2s_clk_producer>;
+				dai-tdm-slot-width = <32>;
+				dai-tdm-slot-num = <2>;
+			};
+			dailink0_slave: simple-audio-card,codec {
+				#sound-dai-cells = <0>;
+				sound-dai = <&dmic_codec>;
+			};
+		};
+	};
+	fragment@3 {
+		target-path = "/chosen";
+		__overlay__ {
+			power: power {
+				hat_current_supply = <2500>;
+			};
+		};
+	};
+
+	fragment@4 {
+		target-path = "/";
+		__overlay__ {
+			racecam_btns {
+				compatible = "gpio-keys";
+				pinctrl-names = "default";
+				pinctrl-0 = <&racecam_btn_pins>;
+//				status = "okay";
+				Button1 {
+					label = "BTN1";
+					linux,code = <1>;
+					gpios = <&gpio 26 1>;
+				};
+				Button2 {
+					label = "BTN2";
+					linux,code = <2>;
+					gpios = <&gpio 16 1>;
+				};
+				Button3 {
+					label = "BTN3";
+					linux,code = <3>;
+					gpios = <&gpio 12 1>;
+				};
+			};
+		};
+	};
+	fragment@5 {
+		target = <&gpio>;
+		__overlay__ {
+			racecam_btn_pins: racecam_btn_pins {
+				brcm,pins = <26 16 12>;
+				brcm,function = <0>;
+				brcm,pull = <2>;
+			};
+		};
+	};
+	fragment@6 {
+		target-path = "/";
+		__overlay__ {
+			racecam_leds {
+				compatible = "gpio-leds";
+				pinctrl-names = "default";
+				pinctrl-0 = <&racecam_led_pins>;
+				status = "okay";
+				led1 {
+					label = "LED1";
+					gpios = <&gpio 13 0>;
+					linux,default-trigger = "none";
+				};
+				led2 {
+					label = "LED2";
+					gpios = <&gpio 15 0>;
+					linux,default-trigger = "none";
+				};
+			};
+		};
+	};
+	fragment@7 {
+		target = <&gpio>;
+		__overlay__ {
+			racecam_led_pins: racecam_led_pins {
+				brcm,pins = <13 15>;
+				brcm,function = <1>;
+				brcm,pull = <0>;
+			};
+		};
+	};
+	__overrides__ {
+		card-name = <&sound_overlay>, "simple-audio-card,name";
+		mode0 = <&power>, "hat_current_supply:0=3000";
+		mode1 = <&power>, "hat_current_supply:0=5000";
+	};
+};
